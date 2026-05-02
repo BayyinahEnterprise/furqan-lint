@@ -166,19 +166,24 @@ than silent.
   handlers that don't all return) requires richer translation;
   v0.3.1 documents the limitation and pins it as a fixture rather
   than introducing a half-measure.
-- **Aliased `Optional` imports.** `from typing import Optional as MyOpt;
-  -> MyOpt[X]` is treated as a non-Optional return type. The matcher
-  recognises the bare `Optional` name and the qualified
-  `typing.Optional` / `t.Optional` forms; arbitrary aliases need
-  symbol-table tracking (parse imports, build alias map, resolve
-  before matching) which is deferred to a future phase. Workaround:
-  use the bare or qualified form, or rename the import to
-  `import typing as t`.
-- **Local classes inside function bodies.** A class defined inside
-  a function body has its methods silently dropped. The v0.3.2
-  nested-class fix added recursive descent through top-level
-  `ClassDef` -> `ClassDef` (so `Outer.Inner.method` is collected);
-  it does NOT extend through `FunctionDef` -> `ClassDef`. The
+- **Aliased `Optional` / `Union` imports.** `from typing import
+  Optional as MyOpt; -> MyOpt[X]` is treated as a non-Optional return
+  type. The same gap applies to `Union`: `from typing import Union as
+  U; -> U[X, None]` and `from somelib import Union; -> Union[X, None]`
+  both bypass the bare-name and `typing.` / `t.` matchers. The matcher
+  recognises the bare `Optional` / `Union` names and the qualified
+  `typing.` / `t.` forms only; arbitrary aliases and same-named imports
+  from non-`typing` modules need symbol-table tracking (parse imports,
+  build alias map, resolve before matching), which is deferred to a
+  future phase. Workaround: use the bare or qualified form, or rename
+  the import to `import typing as t`.
+- **Local classes inside any function or method body.** A class
+  defined inside a function body or a method body has its methods
+  silently dropped. The v0.3.2 nested-class fix added recursive
+  descent through top-level `ClassDef` -> `ClassDef` (so
+  `Outer.Inner.method` is collected); it does NOT extend through
+  `FunctionDef` -> `ClassDef` regardless of whether the
+  `FunctionDef` is at module scope or inside another `ClassDef`. The
   argument for the asymmetry: a local class is a private
   implementation detail (often a closure-like return value), not
   part of the module's public contract that D24 and

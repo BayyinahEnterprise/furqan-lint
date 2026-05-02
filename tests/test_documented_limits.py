@@ -68,7 +68,7 @@ def test_try_body_raises_with_swallowing_handler_is_passed() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Aliased Optional imports
+# Aliased Optional / Union imports
 # ---------------------------------------------------------------------------
 
 def test_aliased_optional_import_fires_false_positive() -> None:
@@ -85,6 +85,24 @@ def test_aliased_optional_import_fires_false_positive() -> None:
     assert result.returncode == 1
     assert "MARAD" in result.stdout
     assert "return_none_mismatch" in result.stdout
+
+
+def test_aliased_union_import_treated_as_typing_union() -> None:
+    """``Union[X, None]`` is treated as Optional regardless of which
+    module the bare ``Union`` name was imported from. The matcher
+    accepts the head by name and does not consult import provenance.
+
+    Documented limitation (v0.3.3): symmetric form of the
+    aliased-Optional limitation. The fixture imports ``Union`` from
+    ``typing`` so it parses cleanly; the behaviour pinned here is
+    that the matcher would treat ``somelib.Union[X, None]`` the
+    same way (silent PASS) because it never looks at where the
+    name came from. Same fix shape as the Optional case
+    (symbol-table tracking).
+    """
+    result = _run_check("aliased_union_import.py")
+    assert result.returncode == 0
+    assert "PASS" in result.stdout
 
 
 # ---------------------------------------------------------------------------

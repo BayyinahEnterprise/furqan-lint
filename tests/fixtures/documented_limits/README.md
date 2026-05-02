@@ -28,16 +28,27 @@ the documentation cannot drift away from the code.
   The function returns None and fires a false-positive
   `return_none_mismatch`. The proper fix needs symbol-table
   tracking (parse imports, build alias map). README registers
-  this under "Aliased Optional imports."
+  this under "Aliased Optional / Union imports."
+- **`aliased_union_import.py`.** Symmetric form for `Union`: a
+  `from somelib import Union; -> Union[X, None]` (or `from typing
+  import Union as U; -> U[X, None]`) bypasses the bare-name and
+  `typing.` / `t.` matchers added in v0.3.2 Finding 1, so a
+  function that returns `None` may PASS silently even though the
+  `Union` head came from a non-`typing` module that has nothing to
+  do with optionality. Same fix shape as the `Optional` case
+  (symbol-table tracking). README registers this under "Aliased
+  Optional / Union imports."
 - **`local_class_in_function.py`.** A class defined inside a
-  function body has its methods silently dropped. The v0.3.2
-  Finding 3 fix added recursive descent through nested top-level
-  classes (`Outer.Inner.method` is now collected); the same
-  descent does NOT extend through `FunctionDef` bodies into local
-  `ClassDef` children. The argument for keeping it: a local class
-  is a private implementation detail used as a closure-like
-  return value, not part of the module's public contract. README
-  registers this under "Local classes inside function bodies."
+  function or method body has its methods silently dropped. The
+  v0.3.2 Finding 3 fix added recursive descent through nested
+  top-level classes (`Outer.Inner.method` is now collected); the
+  same descent does NOT extend through `FunctionDef` bodies into
+  local `ClassDef` children, regardless of whether the
+  `FunctionDef` is at module scope or inside another `ClassDef`.
+  The argument for keeping it: a local class is a private
+  implementation detail used as a closure-like return value, not
+  part of the module's public contract. README registers this
+  under "Local classes inside any function or method body."
 
 ## How to retire a fixture
 

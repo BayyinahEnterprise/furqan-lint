@@ -326,6 +326,23 @@ def _translate_return_annotation(
             span=sp,
         )
 
+    # v0.3.3: degenerate ``Union[None, ...]`` (every arm is ``None``)
+    # resolves to ``type(None)`` at Python runtime per the typing
+    # module's semantics. Translate it as a bare ``TypePath(base="None")``
+    # so a matching ``return None`` body does not fire a false-positive
+    # ``return_none_mismatch``. ``_is_union_with_none`` deliberately
+    # rejects this shape (the predicate is the contract
+    # ``_extract_union_with_none_inner`` can satisfy, which is binary
+    # ``Optional``-equivalence; degenerate Unions need their own
+    # branch). Caught by Fraz's round-6 review of v0.3.2.
+    if _is_all_none_union(node):
+        return TypePath(
+            base="None",
+            layer=None,
+            span=sp,
+            layer_alias_used=None,
+        )
+
     return TypePath(
         base=_annotation_name(node),
         layer=None,
@@ -377,8 +394,8 @@ def _extract_pipe_union_inner(node: ast.BinOp) -> ast.expr:
 
 def _is_union_with_none(node: ast.expr) -> bool:
     """True iff ``node`` is ``Union[..., None]`` or
-    ``typing.Union[..., None]`` (or the ``t.Union`` alias) where any
-    one of the union arms is the ``None`` literal.
+    ``typing.Union[..., None]`` (or the ``t.Union`` alias) where at
+    least one arm is ``None`` AND at least one arm is non-None.
 
     v0.3.2 fix for Finding 1 of Fraz's round-5 review. Older code
     (pre-PEP 604) routinely uses ``Union[X, None]`` as the spelling
@@ -386,12 +403,26 @@ def _is_union_with_none(node: ast.expr) -> bool:
     mypy and pyright treat all three forms identically; v0.3.1's
     matcher only recognised the latter two, producing a false
     positive ``return_none_mismatch`` on the ``Union`` form.
+
+    v0.3.3 boundary fix for Fraz's round-6 review (the IndexError
+    crash on ``Union[None]``, ``Union[None, None]``, and
+    ``Union[None, None, None]``). The predicate is the truthful
+    contract that ``_extract_union_with_none_inner`` can satisfy:
+    if every arm is None, there is no non-None inner type to
+    extract. Degenerate ``Union[None, ...]`` shapes fall through to
+    the normal type-translation path (which renders ``Union`` as a
+    bare ``TypePath`` and treats ``None`` as a valid return) instead
+    of raising an unstructured Python exception that violates the
+    ``errors/marad.py`` structured-diagnosis contract.
     """
     if not isinstance(node, ast.Subscript):
         return False
     if not _is_union_head(node.value):
         return False
-    return _slice_contains_none(node.slice)
+    elts = _slice_elements(node.slice)
+    has_none = any(_is_none_literal(e) for e in elts)
+    has_non_none = any(not _is_none_literal(e) for e in elts)
+    return has_none and has_non_none
 
 
 def _extract_union_with_none_inner(node: ast.Subscript) -> ast.expr:
@@ -406,6 +437,17 @@ def _extract_union_with_none_inner(node: ast.Subscript) -> ast.expr:
     """
     elts = _slice_elements(node.slice)
     non_none = [e for e in elts if not _is_none_literal(e)]
+    # Precondition (enforced by ``_is_union_with_none``): at least
+    # one non-None arm. v0.3.3 added the upstream check after Fraz's
+    # round-6 review caught the IndexError crash on ``Union[None]``,
+    # ``Union[None, None]``, and ``Union[None, None, None]``. This
+    # assertion is defense in depth so a future caller that skips
+    # the predicate fails loudly with a contract message instead of
+    # the cryptic ``IndexError: list index out of range``.
+    assert non_none, (
+        "_extract_union_with_none_inner called on a Union with no "
+        "non-None arms; callers must check _is_union_with_none first"
+    )
     if len(non_none) == 1:
         return non_none[0]
     # Synthesize ``X | Y | ...`` as a left-folded BinOp tree.
@@ -413,6 +455,28 @@ def _extract_union_with_none_inner(node: ast.Subscript) -> ast.expr:
     for arm in non_none[1:]:
         folded = ast.BinOp(left=folded, op=ast.BitOr(), right=arm)
     return folded
+
+
+def _is_all_none_union(node: ast.expr) -> bool:
+    """True iff ``node`` is a ``Union`` subscript whose arms are all
+    the ``None`` literal: ``Union[None]``, ``Union[None, None]``,
+    ``Union[None, None, None]``, etc.
+
+    v0.3.3 boundary helper for Fraz's round-6 review. ``typing.Union``
+    evaluates these forms to ``type(None)`` at runtime, so the
+    semantically correct translation is a bare
+    ``TypePath(base="None")`` rather than a binary ``UnionType``
+    (which has no non-None arm to populate) or a free-form
+    exception (which violates the structured-diagnosis contract).
+    """
+    if not isinstance(node, ast.Subscript):
+        return False
+    if not _is_union_head(node.value):
+        return False
+    elts = _slice_elements(node.slice)
+    if not elts:
+        return False
+    return all(_is_none_literal(e) for e in elts)
 
 
 def _is_union_head(node: ast.expr) -> bool:

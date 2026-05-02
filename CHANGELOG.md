@@ -1,5 +1,85 @@
 # Changelog
 
+## [0.3.3] - 2026-05-02
+
+One blocking finding plus two cleanup items from Fraz's round-6
+review of v0.3.2. The blocking finding (a hard crash on degenerate
+`Union[None, ...]` shapes) was reproduced empirically against the
+v0.3.2 release on three concrete inputs before fixing.
+
+### Fixed
+
+- **`Union[None, ...]` boundary crash (BLOCKER).** v0.3.2's
+  `_extract_union_with_none_inner` raised `IndexError: list index
+  out of range` on `Union[None]`, `Union[None, None]`, and
+  `Union[None, None, None]`. All three are legal Python that mypy
+  accepts (`typing.Union[None]` evaluates to `type(None)` at
+  runtime). Same shape of failure as the original Furqan parser
+  RecursionError bug from round 3: an unstructured Python
+  exception on a shape of legal input the matcher did not
+  anticipate. The fix tightens `_is_union_with_none` to require
+  *both* a `None` arm AND a non-None arm, so the predicate is
+  the truthful contract of what `_extract_union_with_none_inner`
+  can satisfy. Degenerate all-None Unions fall through to the
+  ordinary type-translation path. A defense-in-depth `assert`
+  inside `_extract_union_with_none_inner` names the precondition
+  so a future caller that skips the predicate fails loudly with
+  a contract message instead of `IndexError`.
+- **Aliased `Union` imports documented.** v0.3.2's Finding 1
+  matcher accepts the bare `Union` head by name without checking
+  import provenance, so `from somelib import Union; -> Union[X,
+  None]` is treated as `typing.Union[X, None]` even when
+  `somelib.Union` is unrelated. Symmetric to the existing
+  aliased-`Optional` limitation. README's "Aliased Optional
+  imports" entry is now "Aliased Optional / Union imports" and
+  covers both. New fixture `tests/fixtures/documented_limits/aliased_union_import.py`
+  pins the current behaviour. Same fix shape as the Optional
+  case (symbol-table tracking), deferred to a future phase.
+- **Local-class limitation extended to method bodies.** The
+  README's "Local classes inside function bodies" entry was
+  rephrased to "Local classes inside any function or method
+  body." The underlying behaviour was already symmetric (the
+  function walker does not descend into nested `ClassDef`
+  regardless of whether the parent `FunctionDef` is at module
+  scope or inside another `ClassDef`); only the documentation
+  needed to catch up.
+
+### Added
+
+- `tests/test_round6_fixes.py` with 7 tests pinning:
+  - 3 tests on each degenerate Union shape (no crash on
+    translate, no crash through full pipeline).
+  - `_is_union_with_none` rejects all-None Unions (predicate
+    truthfulness).
+  - `_is_union_with_none` still accepts the v0.3.2 Finding 1 happy
+    path (negative test against an over-correction).
+  - The defense-in-depth assertion fires with a contract-naming
+    message when called on a Union with no non-None arms.
+  - End-to-end pipeline runs clean on the degenerate input.
+- `tests/test_documented_limits.py` gains
+  `test_aliased_union_import_treated_as_typing_union` (+1 test)
+  pinning the new fixture.
+- `tests/fixtures/documented_limits/aliased_union_import.py` (new
+  fixture). `tests/fixtures/documented_limits/README.md` updated
+  with the new entry and the rephrased Local-classes entry.
+
+### Tests
+
+- 108 -> 116 (+8). All v0.3.2 tests pass identically.
+
+### Unchanged
+
+- The v0.3.2 Finding 1, 2, 3 fixes (Union recognition, string
+  forward-references, nested-class method collection). The v0.3.3
+  boundary fix tightens the predicate of Finding 1; it does not
+  weaken any of the recognition shapes added in v0.3.2.
+- All other documented limitations and their fixtures.
+- `_extract_union_with_none_inner`'s positive-path return shape
+  (single non-None arm returns directly; 2+ non-None arms
+  left-fold into `BinOp(BitOr)`).
+
+---
+
 ## [0.3.2] - 2026-05-02
 
 Three findings from Fraz's round-5 review of v0.3.1, all reproduced
