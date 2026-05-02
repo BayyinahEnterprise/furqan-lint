@@ -1,0 +1,4 @@
+furqan>=0.10.1
+
+[dev]
+pytest>=8.0

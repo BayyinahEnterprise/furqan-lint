@@ -1,0 +1,2 @@
+[console_scripts]
+furqan-lint = furqan_lint.cli:main

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "furqan-lint"
+version = "0.1.0"
+description = "Structural-honesty checks for Python, powered by Furqan"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [
+    { name = "Bilal Syed Arfeen" },
+    { name = "Fraz Ashraf" },
+]
+dependencies = [
+    "furqan>=0.10.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+furqan-lint = "furqan_lint.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/BayyinahEnterprise/furqan-lint"
+Documentation = "https://tryfurqan.com"
+
+[tool.setuptools.packages.find]
+where = ["src"]
