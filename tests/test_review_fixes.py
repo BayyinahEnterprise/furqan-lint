@@ -248,7 +248,13 @@ def test_bug5_fake_optional_attribute_no_longer_matched() -> None:
     """An annotation like ``Some.lib.Optional[str]`` should NOT be
     treated as ``typing.Optional[str]``. After v0.3.0, a function
     with such an annotation that returns None fires
-    return_none_mismatch."""
+    return_none_mismatch.
+
+    v0.3.1 also asserts the diagnostic prose renders the full dotted
+    path (``FakeOptional.Optional``) rather than just the leaf attr.
+    Without that, the fix suggestion read ``Optional[Optional]``,
+    which is incoherent.
+    """
     src = (
         "class FakeOptional:\n"
         "    def __class_getitem__(cls, item): return None\n"
@@ -258,6 +264,11 @@ def test_bug5_fake_optional_attribute_no_longer_matched() -> None:
     module = translate_source(src, "<t>")
     diags = check_return_none(module)
     assert len(diags) == 1
+    diagnosis = diags[0].diagnosis
+    assert "FakeOptional.Optional" in diagnosis
+    fix = diags[0].minimal_fix
+    assert "FakeOptional.Optional" in fix
+    assert "Optional[Optional]" not in fix
 
 
 def test_bug5_typing_optional_still_recognised() -> None:

@@ -108,6 +108,11 @@ empirically and fixed:
 
 ## Remaining limitations
 
+Each limitation here has a fixture in `tests/fixtures/documented_limits/`
+and a test in `tests/test_documented_limits.py` pinning the current
+behaviour, so any change (in either direction) is intentional rather
+than silent.
+
 - **D11 monkey-patch.** The Optional detection still swaps
   `status_coverage._is_integrity_incomplete_union` inside a context
   manager (now lock-serialised, but still process-global). The
@@ -130,6 +135,23 @@ empirically and fixed:
   exhaustive `match` (with a `case _:` arm) as guaranteed coverage.
   Future work could splice the catch-all case into the prior
   `IfStmt`'s `else_body`.
+- **Exception-driven fall-through.** `try` bodies are spliced as
+  always-running. A function whose only return is inside a `try`
+  block is not flagged by D24 even though an exception in that block
+  would prevent reaching the return. mypy and similar type-checkers
+  do model this; furqan-lint does not yet. The conservative fix
+  (wrap `try.body` as maybe-runs only when there are exception
+  handlers that don't all return) requires richer translation;
+  v0.3.1 documents the limitation and pins it as a fixture rather
+  than introducing a half-measure.
+- **Aliased `Optional` imports.** `from typing import Optional as MyOpt;
+  -> MyOpt[X]` is treated as a non-Optional return type. The matcher
+  recognises the bare `Optional` name and the qualified
+  `typing.Optional` / `t.Optional` forms; arbitrary aliases need
+  symbol-table tracking (parse imports, build alias map, resolve
+  before matching) which is deferred to a future phase. Workaround:
+  use the bare or qualified form, or rename the import to
+  `import typing as t`.
 
 ## License
 

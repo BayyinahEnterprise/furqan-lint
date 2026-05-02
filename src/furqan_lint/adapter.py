@@ -300,11 +300,21 @@ def _annotation_name(node: ast.expr) -> str:
     ``"Unknown"`` and the diagnostic prose for return_none_mismatch
     suggests changing the type to ``Optional[Unknown]``, which is
     not actionable.
+
+    v0.3.1: ``Attribute`` nodes render the full dotted path
+    (``weird.lib.Optional`` rather than just ``Optional``). Without
+    this, the diagnostic for a return-None inside a function annotated
+    ``-> weird.lib.Optional[str]`` says ``declares -> Optional`` and
+    suggests ``Optional[Optional]`` as the fix, which is incoherent.
+    The substantive check (whether the annotation is
+    ``typing.Optional`` for the matcher) is done elsewhere by
+    ``_is_optional``; this function is for prose rendering only.
     """
     if isinstance(node, ast.Name):
         return node.id
     if isinstance(node, ast.Attribute):
-        return node.attr
+        root = _annotation_name(node.value)
+        return f"{root}.{node.attr}" if root != "Unknown" else node.attr
     if isinstance(node, ast.Constant):
         return str(node.value)
     if isinstance(node, ast.Subscript):

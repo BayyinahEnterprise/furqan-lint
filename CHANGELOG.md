@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.3.1] - 2026-05-02
+
+Three small items from Fraz's round-4 review of v0.3.0. The bulk of
+v0.3.1 is documentation; one substantive prose fix, two limitations
+surfaced and pinned as fixtures.
+
+### Fixed
+
+- **Multi-segment annotation rendering (Quality).** `_annotation_name`
+  now recurses into `ast.Attribute.value` and renders the full
+  dotted path (`weird.lib.Optional`) rather than just the leaf attr
+  (`Optional`). The substantive Bug 5 fix in v0.3.0 correctly
+  rejected `weird.lib.Optional[X]` from the `_is_optional` matcher,
+  but the diagnostic prose still read `declares -> Optional` and
+  suggested `Optional[Optional]` as the fix, which was incoherent.
+  v0.3.1 produces `declares -> FakeOptional.Optional` with fix text
+  `Optional[FakeOptional.Optional]`. The Bug 5 regression test now
+  asserts the prose substring rather than only the marad count.
+
+### Documentation
+
+- **Two `Remaining limitations` entries surfaced.** v0.3.0 introduced
+  one consequence of its compound-statement fix (`match` cases
+  wrapped as maybe-runs, so structurally exhaustive matches
+  under-claim coverage) under `Remaining limitations`, but two
+  others were buried in the adapter docstring or absent entirely:
+  - **Exception-driven fall-through.** `try` bodies are spliced as
+    always-running. A function whose only return is inside a `try`
+    block is not flagged by D24 even though an exception in that
+    block would prevent reaching the return.
+  - **Aliased `Optional` imports.** `from typing import Optional as
+    MyOpt; -> MyOpt[X]` is treated as a non-Optional return type.
+    The matcher recognises the bare `Optional` name and the
+    qualified `typing.Optional` / `t.Optional` forms only.
+  Both are pre-existing behaviours; the v0.3.0 fix tightening made
+  them more visible. v0.3.1 surfaces them in the README at the same
+  level as the existing limitations.
+- **`tests/fixtures/documented_limits/` directory.** Each
+  `Remaining limitations` entry that has a concrete reproducer now
+  has a fixture and a test in `tests/test_documented_limits.py`
+  pinning the current behaviour. A future fix that closes the
+  limitation breaks the test deliberately; a regression to even
+  worse behaviour also breaks it. The discipline is borrowed from
+  Bayyinah's adversarial gauntlet directories.
+
+### Tests
+
+- 3 new tests in `tests/test_documented_limits.py` (two
+  exception-driven fall-through, one aliased Optional). The Bug 5
+  regression test gains two prose-substring assertions. Total: 93
+  (was 90).
+
 ## [0.3.0] - 2026-05-02
 
 Six fixes from Fraz's three-round review of v0.2.0. All findings
