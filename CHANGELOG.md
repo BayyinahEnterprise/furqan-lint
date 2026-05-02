@@ -1,5 +1,94 @@
 # Changelog
 
+## [0.4.1] - 2026-05-02
+
+Corrective fixes from Fraz's round-8 review of v0.4.0. One CRITICAL,
+two HIGH, two MEDIUM, two LOW. All findings reproduced empirically
+against v0.4.0 before fixing.
+
+### Fixed
+
+- **CRITICAL: Pre-commit hook installation.** The hook now declares
+  ``furqan`` as an ``additional_dependency`` via the canonical
+  GitHub URL, so ``pre-commit install`` actually resolves the
+  dependency. Without this, pip read ``furqan>=0.11.0`` from
+  ``pyproject.toml``, queried PyPI (which only hosts ``furqan==0.10.1``),
+  and failed resolution. The hook shipped in v0.4.0 in a non-functional
+  state.
+- **HIGH: GitHub Action version drift.** ``action.yml`` now installs
+  furqan-lint at ``${{ github.action_ref }}`` so a user pinning
+  the action to a specific tag gets the matching code from that tag
+  rather than whatever happens to be on ``main`` at install time. The
+  ``furqan-lint-version`` input was removed; it can return when
+  furqan-lint is on PyPI and the install step switches from git URL
+  to ``pip install furqan-lint==<version>``.
+- **MEDIUM: Bare-Union diagnostic prose.** The v0.3.4 fix collapsed
+  ``Optional`` and ``Union`` into one branch and could end up
+  recommending ``Union[X]`` (well-formed but degenerate - typing
+  folds a one-arm Union to ``X``). v0.4.1 splits the two cases:
+  bare ``Union`` now suggests ``Union[X, None]``, ``Optional[X]``,
+  or ``X | None`` since the user is returning ``None``.
+- **LOW: CI em-dash check locale.** The em-dash regex is now run
+  under ``LC_ALL=C.UTF-8`` because GNU ``grep -P`` fails on some
+  default GitHub runner locales when the pattern contains hex-escape
+  sequences. Without the prefix, the gate could pass spuriously.
+
+### Changed
+
+- **HIGH: D11 monkey-patch retired.** ``runner.py`` now passes the
+  Python-Optional predicate to ``check_status_coverage`` via the
+  upstream ``producer_predicate=`` keyword (available since
+  ``furqan>=0.11.0``) instead of monkey-patching
+  ``status_coverage._is_integrity_incomplete_union``. Removed
+  ``import threading``, the ``contextmanager`` import,
+  ``_predicate_lock``, and the entire ``_python_optional_mode``
+  context manager. The ``_is_optional_union`` helper is preserved
+  with its body unchanged; the docstring now references the
+  ``producer_predicate`` keyword. Closes the full lifecycle of a
+  round-1 audit finding (v0.1.0 monkey-patch via context manager
+  -> v0.3.0 added threading lock for safety -> v0.4.1 upstream
+  ``producer_predicate=`` keyword retires the patch entirely).
+- The Bug 4 thread-safety regression test in
+  ``test_review_fixes.py`` was rewritten to pin the new invariant:
+  the global ``status_coverage._is_integrity_incomplete_union``
+  must never be touched at runtime. Old test was a stopgap pinning
+  the lock around the patch.
+
+### Added
+
+- **MEDIUM: Zero-return functions documented.** A function that
+  declares a return type but has no ``return`` statement at all is
+  silently passed by D24 (the existing skip-on-zero-returns rule
+  defers to ring-close R3, which furqan-lint does not yet run).
+  Documented at all four canonical surfaces per the framework
+  four-place pattern: README "Remaining limitations," this
+  CHANGELOG entry, fixture at
+  ``tests/fixtures/documented_limits/zero_return_function.py``,
+  and pinning test
+  ``test_documented_limits.py::test_zero_return_function_is_silently_passed``.
+- Static test verifying ``.pre-commit-hooks.yaml`` declares
+  ``furqan`` in ``additional_dependencies``.
+- Network-dependent functional test (marked ``slow`` and ``network``;
+  skipped under ``pytest -m "not network"``) that verifies the hook
+  installs in a clean venv. Markers registered in ``pyproject.toml``.
+- Regression test pinning ``github.action_ref`` in ``action.yml``.
+- v0.4.1 bare-Union prose test asserting the fix string contains
+  ``Union[X, None]`` and does NOT contain the degenerate
+  ``Union[X]`` form.
+- ``LC_ALL=C.UTF-8`` assertion in the CI em-dash workflow test.
+- "Closed in v0.4.1" section in README documenting the retired
+  monkey-patch and the now-installable pre-commit hook.
+
+### Tests
+
+- 5 new tests across ``test_action.py`` (1 static pre-commit dep
+  check, 1 functional install test, 1 action_ref pin test) and
+  ``test_round7_fixes.py`` (1 v0.4.1 bare-Union prose test). The
+  Bug 4 thread-safety test was replaced with a kwarg-usage test;
+  net-1 in ``test_review_fixes.py``. Locale assertion added to an
+  existing CI-workflow test.
+- Total: 150 (149 deselected under ``pytest -m "not network"``).
+
 ## [0.4.0] - 2026-05-02
 
 Distribution and CI infrastructure. No new checker logic. The tool

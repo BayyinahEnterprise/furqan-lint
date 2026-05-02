@@ -47,7 +47,7 @@ jobs:
 
       - name: Em-dash check
         run: |
-          if grep -rPn '[\x{2013}\x{2014}]' src/ tests/ README.md; then
+          if LC_ALL=C.UTF-8 grep -rPn '[\x{2013}\x{2014}]' src/ tests/ README.md; then
             echo "Em-dash or en-dash found in src/, tests/, or README.md"
             exit 1
           fi

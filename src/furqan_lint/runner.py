@@ -1,17 +1,22 @@
 """Run structural checkers on a translated Python ``Module``.
 
-Three checkers cross the language boundary cleanly as of v0.2.0:
+Three checkers cross the language boundary cleanly:
 
 * **D24 (all-paths-return).** No adaptation needed. Every typed Python
   function should reach a ``return`` on every control-flow path; the
   Furqan checker reads ``fn.return_type`` and walks ``fn.statements``.
-* **D11 (status-coverage).** The Furqan check is hard-coded to
-  recognise ``Integrity | Incomplete`` as the producer pattern. The
-  Python equivalent is ``Optional[X]`` (i.e. ``X | None``). We
-  monkey-patch the producer predicate inside a context manager so the
-  check sees the Python pattern, then restore the original on exit.
-  DEFECT 3 FIX: scoping via context manager prevents cross-
-  contamination if Furqan's own test suite runs in the same process.
+* **D11 (status-coverage).** As of v0.4.1, D11 uses the upstream
+  ``producer_predicate`` keyword-only parameter on
+  ``check_status_coverage`` (available since furqan v0.11.0) instead
+  of monkey-patching ``status_coverage._is_integrity_incomplete_union``.
+  The adapter helper :func:`_is_optional_union` is passed as the
+  predicate so the check sees ``Optional[X]`` (translated to
+  ``UnionType(X, None)``) as the Python equivalent of Furqan's
+  ``Integrity | Incomplete`` producer pattern. Closes the full
+  lifecycle of a round-1 audit finding (v0.1.0 monkey-patch via
+  context manager -> v0.3.0 added threading lock for safety ->
+  v0.4.1 upstream ``producer_predicate=`` keyword retires the
+  patch entirely).
 * **return_none_mismatch.** Python-native checker that closes Phase 1
   Gap 1: a function declaring a non-Optional return type that returns
   None on some path is a type mismatch, not a satisfied D24 path.
@@ -19,27 +24,11 @@ Three checkers cross the language boundary cleanly as of v0.2.0:
 
 from __future__ import annotations
 
-import threading
-from contextlib import contextmanager
-from typing import Iterator
-
-from furqan.checker import status_coverage
 from furqan.checker.all_paths_return import check_all_paths_return
+from furqan.checker.status_coverage import check_status_coverage
 from furqan.parser.ast_nodes import Module, UnionType
 
 from furqan_lint.return_none import check_return_none
-
-
-# Process-global lock that serialises entry into _python_optional_mode.
-# The context manager monkey-patches a module-level attribute on
-# furqan.checker.status_coverage; without the lock, two threads
-# entering concurrently would interleave save-and-restore and
-# permanently corrupt the patched predicate (verified via probe;
-# see CHANGELOG v0.3.0). The lock is a stopgap; the structural fix
-# is upstream support for a producer_predicate parameter on
-# check_status_coverage, which is registered as a remaining limitation
-# in the README.
-_predicate_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -52,34 +41,13 @@ def _is_optional_union(rt: object) -> bool:
     Treats ``Optional[X]`` (translated to ``UnionType(X, None)``) as
     the Python equivalent of Furqan's ``Integrity | Incomplete``
     producer pattern, for the purposes of D11's status-coverage walk.
+    Passed to ``check_status_coverage`` via the ``producer_predicate``
+    keyword (furqan>=0.11.0).
     """
     if not isinstance(rt, UnionType):
         return False
     names = {rt.left.base, rt.right.base}
     return "None" in names
-
-
-@contextmanager
-def _python_optional_mode() -> Iterator[None]:
-    """Temporarily patch ``status_coverage._is_integrity_incomplete_union``
-    to the Python-aware predicate, restoring the original on exit.
-
-    The patch is scoped so any subsequent call to ``check_status_coverage``
-    that does not pass through this context manager (e.g. Furqan's own
-    test suite running in the same process) sees the original behaviour.
-
-    A process-global lock serialises concurrent entry. Without the
-    lock, two threads entering would interleave save-and-restore and
-    leak the patched predicate permanently. With the lock, throughput
-    for parallel callers is constrained but correctness is preserved.
-    """
-    with _predicate_lock:
-        original = status_coverage._is_integrity_incomplete_union
-        status_coverage._is_integrity_incomplete_union = _is_optional_union
-        try:
-            yield
-        finally:
-            status_coverage._is_integrity_incomplete_union = original
 
 
 # ---------------------------------------------------------------------------
@@ -100,9 +68,10 @@ def check_python_module(module: Module) -> list[tuple[str, object]]:
     for d in check_all_paths_return(module):
         diagnostics.append(("all_paths_return", d))
 
-    with _python_optional_mode():
-        for d in status_coverage.check_status_coverage(module):
-            diagnostics.append(("status_coverage", d))
+    for d in check_status_coverage(
+        module, producer_predicate=_is_optional_union
+    ):
+        diagnostics.append(("status_coverage", d))
 
     for d in check_return_none(module):
         diagnostics.append(("return_none_mismatch", d))

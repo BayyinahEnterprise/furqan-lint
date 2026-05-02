@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "furqan-lint"
-version = "0.4.0"
+version = "0.4.1"
 description = "Structural-honesty checks for Python, powered by Furqan"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,3 +31,9 @@ Issues = "https://github.com/BayyinahEnterprise/furqan-lint/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "network: requires network access",
+    "slow: takes several seconds",
+]

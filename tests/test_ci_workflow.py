@@ -58,7 +58,11 @@ def test_ci_workflow_includes_version_sync() -> None:
 
 def test_ci_workflow_includes_emdash_check() -> None:
     """The em-dash policy lives in the CI workflow, not in code, so
-    the regex literal must appear in the workflow YAML."""
+    the regex literal must appear in the workflow YAML.
+
+    v0.4.1 also pins the locale prefix: ``LC_ALL=C.UTF-8`` is
+    required because GNU grep -P fails on some default GitHub
+    runner locales when the regex contains hex-escape sequences."""
     text = CI_PATH.read_text(encoding="utf-8")
     # Must scan src/, tests/, README.md per the documented policy.
     assert "src/" in text
@@ -66,3 +70,9 @@ def test_ci_workflow_includes_emdash_check() -> None:
     assert "README.md" in text
     # The regex used to detect en-dash (U+2013) and em-dash (U+2014).
     assert "x{2013}" in text or "x{2014}" in text
+    # Locale prefix added in v0.4.1.
+    assert "LC_ALL=C.UTF-8" in text, (
+        "Em-dash check must run under LC_ALL=C.UTF-8; "
+        "without the locale prefix, GNU grep -P fails on "
+        "some default GitHub runner locales"
+    )

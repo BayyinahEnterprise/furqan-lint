@@ -20,8 +20,6 @@ from __future__ import annotations
 
 import subprocess
 import sys
-import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -35,7 +33,7 @@ from furqan_lint.additive import (
 )
 from furqan_lint.adapter import translate_source
 from furqan_lint.return_none import check_return_none
-from furqan_lint.runner import _python_optional_mode, check_python_module
+from furqan_lint.runner import check_python_module
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -224,20 +222,44 @@ def test_bug3_cli_diff_returns_2_on_dynamic_all(tmp_path: Path) -> None:
 # Bug 4 - thread-safety
 # ---------------------------------------------------------------------------
 
-def test_bug4_concurrent_context_managers_do_not_leak_predicate() -> None:
+def test_bug4_d11_uses_producer_predicate_kwarg() -> None:
+    """v0.4.1 retired the monkey-patch entirely. D11 status-coverage
+    now passes the Python-Optional predicate via the upstream
+    ``producer_predicate`` keyword (furqan>=0.11.0). The global
+    ``status_coverage._is_integrity_incomplete_union`` attribute
+    must never be touched at runtime - if any code path mutates it,
+    Furqan's own test suite running in the same process would see
+    the wrong predicate.
+
+    The original v0.3.0 thread-safety test was a stopgap pinning the
+    lock that protected the monkey-patch. With the patch retired,
+    the right invariant to pin is "the global is never touched."
+    """
     original = status_coverage._is_integrity_incomplete_union
+    original_id = id(original)
 
-    def worker() -> None:
-        with _python_optional_mode():
-            time.sleep(0.02)
+    src = (
+        "from typing import Optional\n"
+        "def validate(data: str) -> Optional[dict]:\n"
+        "    if not data:\n"
+        "        return None\n"
+        "    return {'value': data}\n"
+        "def run(data: str) -> dict:\n"
+        "    return validate(data)\n"
+    )
+    module = translate_source(src, "<test>")
+    diags = check_python_module(module)
 
-    threads = [threading.Thread(target=worker) for _ in range(8)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    assert status_coverage._is_integrity_incomplete_union is original
+    assert id(status_coverage._is_integrity_incomplete_union) == original_id, (
+        "Runner mutated status_coverage._is_integrity_incomplete_union; "
+        "v0.4.1 must use producer_predicate= kwarg instead of patching."
+    )
+    # Sanity: the kwarg path still produces the expected D11 diagnostic
+    # on this canonical Optional-collapse fixture.
+    s_diags = [d for n, d in diags if n == "status_coverage"]
+    assert any(getattr(d, "diagnosis", "").find("validate") != -1 for d in s_diags), (
+        "Expected a status_coverage diagnostic naming 'validate'"
+    )
 
 
 # ---------------------------------------------------------------------------

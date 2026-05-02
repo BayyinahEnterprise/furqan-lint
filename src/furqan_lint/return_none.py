@@ -94,11 +94,22 @@ def _suggested_fix(return_type: object) -> str:
     type argument, and the suggestion now names that explicitly.
     """
     name = _type_name(return_type)
-    if name in ("Optional", "Union"):
+    if name == "Optional":
         return (
-            f"Bare '{name}' is not valid typing syntax. "
-            f"Use {name}[X] (e.g., Optional[str]) or X | None "
-            f"to declare an optional return type."
+            "Bare 'Optional' is not valid typing syntax. "
+            "Use Optional[X] (e.g., Optional[str]) or X | None "
+            "to declare an optional return type."
+        )
+    if name == "Union":
+        # ``Union`` requires at least two arms. ``Union[X]`` is
+        # well-formed but degenerate (typing folds it to ``X``);
+        # the actionable suggestion is ``Union[X, None]`` because
+        # the function is returning None and so wants an Optional.
+        return (
+            "Bare 'Union' is not valid typing syntax. "
+            "Use Union[X, None] (e.g., Union[int, None]), "
+            "Optional[X], or X | None to declare an optional "
+            "return type."
         )
     return (
         f"Either change the return type to "

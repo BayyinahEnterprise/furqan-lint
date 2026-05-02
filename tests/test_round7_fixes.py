@@ -194,3 +194,35 @@ def test_round7_normal_type_path_still_uses_optional_suggestion() -> None:
         f"suggestion. The v0.3.4 special-case must not regress on "
         f"the canonical happy path."
     )
+
+
+def test_bare_union_suggests_union_x_none_not_union_x() -> None:
+    """v0.4.1 refinement of the bare-Union prose. The v0.3.4
+    helper merged Optional and Union into one branch and could
+    end up recommending ``Union[X]`` (well-formed but degenerate -
+    typing folds it to ``X``). The user is returning ``None``,
+    so the actionable suggestion is a Union that includes None:
+    ``Union[X, None]``, or equivalently ``Optional[X]`` or
+    ``X | None``.
+    """
+    from furqan_lint.return_none import _suggested_fix
+    from furqan.parser.ast_nodes import SourceSpan, TypePath
+
+    rt = TypePath(
+        base="Union",
+        layer=None,
+        span=SourceSpan(file="<t>", line=1, column=0),
+        layer_alias_used=None,
+    )
+    fix = _suggested_fix(rt)
+    assert "Union[X, None]" in fix, (
+        f"v0.4.1: bare-Union fix must include 'Union[X, None]', "
+        f"got {fix!r}"
+    )
+    # Must NOT recommend the degenerate one-arm Union[X] form
+    # standalone. We allow the substring 'Union[X' as part of
+    # 'Union[X, None]' but disallow the closed form 'Union[X]'.
+    assert "Union[X]" not in fix, (
+        f"v0.4.1: bare-Union fix should NOT suggest the "
+        f"degenerate Union[X] form, got {fix!r}"
+    )

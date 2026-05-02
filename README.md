@@ -124,6 +124,22 @@ MARAD  example.py
     declares -> str but returns None on at least one path.
 ```
 
+## Closed in v0.4.1
+
+- **D11 monkey-patch retired.** The producer-predicate hack went
+  through three lifecycle stages: a stopgap monkey-patch in v0.1.0
+  on `status_coverage._is_integrity_incomplete_union`, a scoped
+  context manager in v0.3.0, and a `threading.Lock` for safety in
+  v0.3.0. v0.4.1 retires the patch entirely by passing the
+  Python-Optional predicate via the upstream `producer_predicate=`
+  keyword on `check_status_coverage`, available since
+  `furqan>=0.11.0`. Closes the full lifecycle of a round-1 audit
+  finding.
+- **Pre-commit hook installability.** The hook now declares
+  `furqan` as an `additional_dependency` via git URL, so
+  `pre-commit install` can resolve the dependency that PyPI does
+  not yet host.
+
 ## Closed in v0.3.5
 
 Two corrective fixes promoting documented limitations to fixes:
@@ -204,12 +220,6 @@ and a test in `tests/test_documented_limits.py` pinning the current
 behaviour, so any change (in either direction) is intentional rather
 than silent.
 
-- **D11 monkey-patch.** The Optional detection still swaps
-  `status_coverage._is_integrity_incomplete_union` inside a context
-  manager (now lock-serialised, but still process-global). The
-  structural fix is upstream support for a `producer_predicate`
-  parameter on `check_status_coverage`. `contextvars.ContextVar`
-  is the per-context-isolated alternative if upstream cooperates.
 - **`self.method()` calls.** The adapter resolves `self.foo()` to the
   bare method name `foo`, the same as a plain `foo()` call. This is
   not a bug today but will need revisiting if the adapter ever stores
@@ -263,6 +273,13 @@ than silent.
   someone refactors the pipe path to require distinct arms. Full
   symmetric tightening across the three optional spellings is a
   v0.4.0 candidate. Pinned as `tests/fixtures/documented_limits/redundant_pipe_none.py`.
+
+- **Zero-return functions.** A function that declares a return
+  type but has no `return` statement at all is silently passed.
+  D24 checks that every *existing* return path is covered; the
+  absence of any return is a separate check (ring-close R3) that
+  furqan-lint does not yet run. mypy reports this as "Missing
+  return statement"; furqan-lint will when R3 is wired.
 
 ## License
 

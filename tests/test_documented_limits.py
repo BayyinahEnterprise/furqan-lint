@@ -116,3 +116,32 @@ def test_local_class_in_function_methods_not_collected() -> None:
 
 # ---------------------------------------------------------------------------
 # Redundant None arms in PEP 604 unions (v0.3.4 / round-7 Observation 2)
+# ---------------------------------------------------------------------------
+# (Pinning tests for this limit were retired in v0.3.5 when the limit
+# was promoted to a fix; the comment marker is preserved for grep
+# discoverability across the audit history.)
+
+
+# ---------------------------------------------------------------------------
+# Zero-return functions (v0.4.1 documented limit)
+# ---------------------------------------------------------------------------
+
+def test_zero_return_function_is_silently_passed() -> None:
+    """A function declaring a return type with no ``return`` statement
+    on any path is silently passed.
+
+    Documented limitation (v0.4.1): D24 skips functions whose
+    return-statement count is zero, deferring to ring-close R3.
+    furqan-lint does not yet run R3, so the zero-return case is
+    not flagged. mypy reports it as "Missing return statement";
+    callers who want this flagged should run mypy alongside
+    furqan-lint.
+
+    This pinning test asserts the *current* silent-pass behaviour
+    so any future change (in either direction) must be intentional.
+    Closes the four-place-pattern gap identified in v0.4.1
+    pre-flight self-review (Finding 7).
+    """
+    result = _run_check("zero_return_function.py")
+    assert result.returncode == 0
+    assert "PASS" in result.stdout
