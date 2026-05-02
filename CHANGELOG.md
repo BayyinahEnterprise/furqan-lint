@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.3.5] - 2026-05-02
+
+Two corrective fixes promoting documented limitations to fixes.
+Both items reproduced empirically against v0.3.4 before fixing.
+
+### Fixed
+
+- **try/except control flow modelling.** ``try.body`` and
+  ``orelse`` are now combined into a single "success path" and
+  wrapped with the handler chain in a synthetic ``IfStmt`` shape
+  whose ``else_body`` is a right-folded chain of handler bodies.
+  D24 now fires correctly when a function's only return path is
+  inside a ``try`` block whose except handler falls through (the
+  canonical mypy "Missing return statement" shape, documented as
+  "Exception-driven fall-through" since v0.3.1). The control case
+  ``try/except/else where every branch returns`` continues to PASS
+  because both halves of the synthetic IfStmt all-paths-return.
+  Returns inside ``finally`` continue to cover all paths because
+  ``finalbody`` is spliced unconditionally. New helper:
+  ``_build_try_handler_chain``. Per the project's stated decision,
+  the unmatched-exception case is treated as exit-via-propagation,
+  not fall-through.
+- **PEP 604 ``None | None`` symmetry.** Now translates to a bare
+  ``TypePath(base="None")``, mirroring the v0.3.3
+  ``_is_all_none_union`` discipline (``Union[None]``) and the
+  v0.3.4 ``_is_none_literal`` early branch
+  (``Optional[None]``). All three optional-spelling paths produce
+  structurally identical AST for the all-None case. Added an
+  ``_is_none_literal`` early branch to the pipe-union arm of
+  ``_translate_return_annotation``. Documented in v0.3.4 as a
+  v0.4.0 candidate; promoted in v0.3.5 because the fix shape was
+  symmetric with the existing two paths and required no new
+  infrastructure.
+
+### Changed
+
+- Removed the "Exception-driven fall-through" entry from the
+  README's "Remaining limitations" section.
+- Removed ``tests/fixtures/documented_limits/try_body_no_exception_modeling.py``
+  (the closed limit). The other try-related fixture
+  (``try_body_only_returns_in_block.py``) is preserved because it
+  pins a different limit (D24's skip-on-zero-returns rule for
+  ring-close R3 territory), which is unaffected by the v0.3.5 fix.
+- Removed ``tests/fixtures/documented_limits/redundant_pipe_none.py``
+  (the v0.3.4 PEP 604 pin) and the corresponding two pinning tests.
+
+### Tests
+
+- 10 try/except regression tests in ``tests/test_round8_fixes.py``
+  (probe11 and probe12 shapes, finally-return, multi-handler with
+  one falling through, bare except, return_none inside try, nested
+  try in if).
+- 4 PEP 604 None|None symmetric tightening tests in the same file.
+- 3 doc-limit tests removed: 1 for the closed try-body limit and 2
+  for the closed PEP 604 redundant-None limit.
+- Total: 136.
+
 ## [0.3.4] - 2026-05-02
 
 Three quality-tier observations from Fraz's round-7 review of

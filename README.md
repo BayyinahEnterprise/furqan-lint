@@ -72,6 +72,23 @@ MARAD  example.py
     declares -> str but returns None on at least one path.
 ```
 
+## Closed in v0.3.5
+
+Two corrective fixes promoting documented limitations to fixes:
+
+- **Exception-driven fall-through.** `try`/`except` bodies are now
+  modelled as maybe-runs (the success path = `try.body + orelse`
+  becomes the body of a synthetic `IfStmt`; handlers chain into the
+  `else_body`). D24 now correctly flags the false-negative case
+  where a function's only return path is inside a `try` block whose
+  except handler falls through (the canonical mypy "Missing return
+  statement" shape). Documented as a known limit since v0.3.1.
+- **PEP 604 `None | None`.** Now translates to bare
+  `TypePath("None")`, the same shape `Optional[None]` (v0.3.4) and
+  `Union[None]` (v0.3.3) produce. All three optional-spelling paths
+  are now structurally identical for the all-None case. Documented
+  as a v0.4.0 candidate in v0.3.4.
+
 ## Closed in v0.3.2
 
 Three findings from a round-5 review of v0.3.1, all reproduced
@@ -157,15 +174,6 @@ than silent.
   exhaustive `match` (with a `case _:` arm) as guaranteed coverage.
   Future work could splice the catch-all case into the prior
   `IfStmt`'s `else_body`.
-- **Exception-driven fall-through.** `try` bodies are spliced as
-  always-running. A function whose only return is inside a `try`
-  block is not flagged by D24 even though an exception in that block
-  would prevent reaching the return. mypy and similar type-checkers
-  do model this; furqan-lint does not yet. The conservative fix
-  (wrap `try.body` as maybe-runs only when there are exception
-  handlers that don't all return) requires richer translation;
-  v0.3.1 documents the limitation and pins it as a fixture rather
-  than introducing a half-measure.
 - **Aliased `Optional` / `Union` imports.** `from typing import
   Optional as MyOpt; -> MyOpt[X]` is treated as a non-Optional return
   type. The same gap applies to `Union`: `from typing import Union as

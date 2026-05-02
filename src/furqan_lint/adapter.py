@@ -310,6 +310,23 @@ def _translate_return_annotation(
 
     if _is_pipe_union_with_none(node):
         inner = _extract_pipe_union_inner(node)
+        # v0.3.5: ``None | None`` (and chains of None like
+        # ``None | None | None``) collapse to type(None). The
+        # extractor returns ``node.left`` which for ``None | None``
+        # is itself None; pre-v0.3.5 the path produced
+        # ``UnionType(None, None)``, a structurally degenerate
+        # binary union that arrived at the right user-visible answer
+        # incidentally. Mirror the v0.3.3 ``_is_all_none_union`` and
+        # v0.3.4 ``Optional[None]`` discipline: bare TypePath("None")
+        # so all three optional-spelling paths produce structurally
+        # identical AST for the all-None case.
+        if _is_none_literal(inner):
+            return TypePath(
+                base="None",
+                layer=None,
+                span=sp,
+                layer_alias_used=None,
+            )
         return UnionType(
             left=TypePath(
                 base=_annotation_name(inner),
@@ -626,12 +643,47 @@ def _translate_body(
         elif isinstance(node, (ast.With, ast.AsyncWith)):
             result.extend(_translate_body(node.body, filename))
         elif isinstance(node, ast.Try):
-            result.extend(_translate_body(node.body, filename))
-            for handler in node.handlers:
-                inner = _translate_body(handler.body, filename)
-                if inner:
-                    result.append(_maybe_runs_if(inner, handler, filename))
-            result.extend(_translate_body(node.orelse, filename))
+            # v0.3.5: model try/except control flow correctly.
+            # Pre-v0.3.5 spliced ``try.body`` and ``orelse`` as
+            # always-running, which made D24 silently certify
+            # functions whose only return path was inside a try
+            # block whose except handler fell through. The fix
+            # closes the "Exception-driven fall-through" limitation
+            # documented since v0.3.1.
+            #
+            # Encoding: a try statement has two coherent exit
+            # families: the success path (try.body + orelse) which
+            # runs when no exception is raised, and the handler
+            # paths (one per except clause) which run when their
+            # matched exception fires. To make D24 reach the right
+            # answer when every explicit path returns (the
+            # try-except-else-all-return shape mypy passes), we
+            # encode this as a single ``IfStmt`` whose body is the
+            # success path and whose ``else_body`` chains the
+            # handlers. D24's all-paths-return predicate then sees
+            # both halves and concludes coverage iff every branch
+            # returns. The unmatched-exception case is deliberately
+            # not modelled - it propagates, which is an exit not a
+            # fall-through.
+            #
+            # finally always runs and is spliced unconditionally.
+            success_body = tuple(
+                _translate_body(node.body, filename)
+                + _translate_body(node.orelse, filename)
+            )
+            handler_chain = _build_try_handler_chain(
+                node.handlers, filename
+            )
+            if success_body or handler_chain:
+                sp = _span(filename, node.lineno, node.col_offset)
+                result.append(
+                    IfStmt(
+                        condition=IdentExpr(name="__opaque__", span=sp),
+                        body=success_body,
+                        span=sp,
+                        else_body=handler_chain,
+                    )
+                )
             result.extend(_translate_body(node.finalbody, filename))
         elif isinstance(node, ast.Match):
             for case in node.cases:
@@ -658,6 +710,49 @@ def _maybe_runs_if(
         span=sp,
         else_body=(),
     )
+
+def _build_try_handler_chain(
+    handlers: list,
+    filename: str,
+) -> tuple:
+    """Build a right-folded ``IfStmt`` chain for a list of
+    ``ast.ExceptHandler`` nodes, suitable for use as the
+    ``else_body`` of a try-statement encoding.
+
+    The last handler's body is spliced directly as the deepest
+    leaf, NOT wrapped in another IfStmt. The reasoning: after all
+    handlers have been considered, if none matched, the exception
+    propagates - that is an exit, not a fall-through. D24's
+    contract is fall-through detection; treating "no handler
+    matches" as covered (because propagation exits the function)
+    matches the project's stated decision not to model exception
+    flow explicitly. Each non-last handler is wrapped as
+    ``IfStmt(opaque, head_body, chain_for_rest)`` so that for D24
+    to conclude all-paths-return on the exception family, every
+    handler's body must independently all-paths-return.
+
+    v0.3.5: replaces the pre-v0.3.5 list of independent maybe-runs
+    IfStmts. The chain shape is what lets D24 conclude that
+    ``try/except/else where every branch returns`` does in fact
+    all-paths-return.
+    """
+    if not handlers:
+        return ()
+    last_body = tuple(_translate_body(handlers[-1].body, filename))
+    accum = last_body
+    for handler in reversed(handlers[:-1]):
+        h_body = tuple(_translate_body(handler.body, filename))
+        sp = _span(filename, handler.lineno, handler.col_offset)
+        accum = (
+            IfStmt(
+                condition=IdentExpr(name="__opaque__", span=sp),
+                body=h_body,
+                span=sp,
+                else_body=accum,
+            ),
+        )
+    return accum
+
 
 
 def _extract_calls(
