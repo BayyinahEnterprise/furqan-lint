@@ -72,9 +72,30 @@ MARAD  example.py
     declares -> str but returns None on at least one path.
 ```
 
-## Closed in v0.2.0
+## Closed in v0.3.0
 
-These were known limitations in v0.1.0 and are now addressed:
+Six findings from a three-round review of v0.2.0, all reproduced
+empirically and fixed:
+
+- **Compound-statement blind spot.** `for`, `while`, `with`, `try`,
+  and `match` bodies are now translated, so `return None` inside
+  any of them is caught by `return_none_mismatch`. Loop and
+  `except` bodies wrap as maybe-runs ifs so D24 doesn't
+  over-claim coverage.
+- **Additive surface gaps.** `MAX_RETRIES: int = 5` and `A, B = 1, 2`
+  are now visible to the additive checker. Annotated `__all__`
+  declarations are also read.
+- **Dynamic `__all__` cascade.** A non-static `__all__` now raises
+  `DynamicAllError` and the CLI exits 2 with an `INDETERMINATE`
+  result, rather than silently treating the surface as empty.
+- **D11 thread-safety.** A `threading.Lock` serialises concurrent
+  entry to the monkey-patched-predicate context manager.
+- **`Optional` over-match.** `weird.lib.Optional[X]` is no longer
+  treated as `typing.Optional[X]`.
+- **`int | str` rendering.** Diagnostic prose for non-Optional
+  unions no longer says `Optional[Unknown]`.
+
+## Closed in v0.2.0
 
 - **D24 return-None blind spot.** A function declaring a non-Optional
   return type that returns `None` is now caught by the
@@ -87,10 +108,12 @@ These were known limitations in v0.1.0 and are now addressed:
 
 ## Remaining limitations
 
-- **D11 monkey-patch.** The Optional detection swaps
+- **D11 monkey-patch.** The Optional detection still swaps
   `status_coverage._is_integrity_incomplete_union` inside a context
-  manager. Phase 3 should add a `producer_predicate` parameter to
-  `check_status_coverage` upstream so the patch can be retired.
+  manager (now lock-serialised, but still process-global). The
+  structural fix is upstream support for a `producer_predicate`
+  parameter on `check_status_coverage`. `contextvars.ContextVar`
+  is the per-context-isolated alternative if upstream cooperates.
 - **`self.method()` calls.** The adapter resolves `self.foo()` to the
   bare method name `foo`, the same as a plain `foo()` call. This is
   not a bug today but will need revisiting if the adapter ever stores
@@ -101,7 +124,12 @@ These were known limitations in v0.1.0 and are now addressed:
   mapping) that standard Python does not provide.
 - **Return-type expression inference.** `return_none_mismatch` only
   catches the `None` literal. A `-> int` function returning `"hello"`
-  is not caught. Phase 3+.
+  is not caught.
+- **Exhaustive `match` recognition.** Each case body wraps as a
+  maybe-runs `IfStmt`, so D24 cannot recognise a structurally
+  exhaustive `match` (with a `case _:` arm) as guaranteed coverage.
+  Future work could splice the catch-all case into the prior
+  `IfStmt`'s `else_body`.
 
 ## License
 

@@ -19,6 +19,7 @@ Three checkers cross the language boundary cleanly as of v0.2.0:
 
 from __future__ import annotations
 
+import threading
 from contextlib import contextmanager
 from typing import Iterator
 
@@ -27,6 +28,18 @@ from furqan.checker.all_paths_return import check_all_paths_return
 from furqan.parser.ast_nodes import Module, UnionType
 
 from furqan_lint.return_none import check_return_none
+
+
+# Process-global lock that serialises entry into _python_optional_mode.
+# The context manager monkey-patches a module-level attribute on
+# furqan.checker.status_coverage; without the lock, two threads
+# entering concurrently would interleave save-and-restore and
+# permanently corrupt the patched predicate (verified via probe;
+# see CHANGELOG v0.3.0). The lock is a stopgap; the structural fix
+# is upstream support for a producer_predicate parameter on
+# check_status_coverage, which is registered as a remaining limitation
+# in the README.
+_predicate_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -54,13 +67,19 @@ def _python_optional_mode() -> Iterator[None]:
     The patch is scoped so any subsequent call to ``check_status_coverage``
     that does not pass through this context manager (e.g. Furqan's own
     test suite running in the same process) sees the original behaviour.
+
+    A process-global lock serialises concurrent entry. Without the
+    lock, two threads entering would interleave save-and-restore and
+    leak the patched predicate permanently. With the lock, throughput
+    for parallel callers is constrained but correctness is preserved.
     """
-    original = status_coverage._is_integrity_incomplete_union
-    status_coverage._is_integrity_incomplete_union = _is_optional_union
-    try:
-        yield
-    finally:
-        status_coverage._is_integrity_incomplete_union = original
+    with _predicate_lock:
+        original = status_coverage._is_integrity_incomplete_union
+        status_coverage._is_integrity_incomplete_union = _is_optional_union
+        try:
+            yield
+        finally:
+            status_coverage._is_integrity_incomplete_union = original
 
 
 # ---------------------------------------------------------------------------

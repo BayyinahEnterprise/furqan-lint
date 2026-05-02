@@ -122,7 +122,7 @@ def _check_file(path: Path) -> int:
 
 
 def _check_additive(old_path: Path, new_path: Path) -> int:
-    from furqan_lint.additive import check_additive_api
+    from furqan_lint.additive import DynamicAllError, check_additive_api
 
     try:
         old_source = old_path.read_text(encoding="utf-8")
@@ -139,6 +139,16 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
         line = e.lineno if e.lineno is not None else 0
         print(f"SYNTAX ERROR  {e.filename or new_path}:{line}")
         print(f"  {e.msg}")
+        return 2
+    except DynamicAllError as e:
+        path = new_path if e.where == "new" else old_path
+        print(f"INDETERMINATE  {path} (additive-only)")
+        print(f"  {e}")
+        print(
+            "  Refusing to certify a public surface that cannot be "
+            "statically read. Replace the dynamic __all__ assignment "
+            "with a literal list or tuple of string literals."
+        )
         return 2
 
     if not diagnostics:

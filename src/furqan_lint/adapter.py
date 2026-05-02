@@ -252,12 +252,23 @@ def _translate_return_annotation(
 
 
 def _is_optional(node: ast.expr) -> bool:
-    """True iff ``node`` is ``Optional[X]`` or ``typing.Optional[X]``."""
-    if isinstance(node, ast.Subscript):
-        if isinstance(node.value, ast.Name) and node.value.id == "Optional":
-            return True
-        if isinstance(node.value, ast.Attribute) and node.value.attr == "Optional":
-            return True
+    """True iff ``node`` is ``Optional[X]``, ``typing.Optional[X]``,
+    or ``t.Optional[X]`` (a common ``import typing as t`` alias).
+
+    Older versions accepted any ``Attribute.Optional``, so an
+    annotation like ``weird.lib.Optional[X]`` would be misclassified
+    as ``typing.Optional[X]``. v0.3.0 requires the attribute's root
+    to be a single ``Name`` whose id is ``typing`` or ``t``.
+    """
+    if not isinstance(node, ast.Subscript):
+        return False
+    if isinstance(node.value, ast.Name) and node.value.id == "Optional":
+        return True
+    if isinstance(node.value, ast.Attribute):
+        attr = node.value
+        if attr.attr == "Optional" and isinstance(attr.value, ast.Name):
+            if attr.value.id in ("typing", "t"):
+                return True
     return False
 
 
@@ -282,7 +293,14 @@ def _extract_pipe_union_inner(node: ast.BinOp) -> ast.expr:
 
 
 def _annotation_name(node: ast.expr) -> str:
-    """Best-effort short name for any annotation expression."""
+    """Best-effort short rendering of an annotation expression.
+
+    PEP 604 unions like ``int | str`` recurse into both arms and join
+    with ``|``. Without this branch the BinOp falls through to
+    ``"Unknown"`` and the diagnostic prose for return_none_mismatch
+    suggests changing the type to ``Optional[Unknown]``, which is
+    not actionable.
+    """
     if isinstance(node, ast.Name):
         return node.id
     if isinstance(node, ast.Attribute):
@@ -291,6 +309,8 @@ def _annotation_name(node: ast.expr) -> str:
         return str(node.value)
     if isinstance(node, ast.Subscript):
         return _annotation_name(node.value)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        return f"{_annotation_name(node.left)} | {_annotation_name(node.right)}"
     return "Unknown"
 
 
@@ -302,11 +322,35 @@ def _translate_body(
     body: list[ast.stmt],
     filename: str,
 ) -> list:
-    """Extract ``ReturnStmt`` and ``IfStmt`` only.
+    """Translate a Python statement list into Furqan ``ReturnStmt``
+    and ``IfStmt`` nodes (the only statement shapes Furqan's AST has).
 
-    Every other statement type (assignments, expressions, loops, ...)
-    is silently skipped. The two checkers wired in Phase 1 only
-    inspect returns and conditional branching.
+    Compound statements are translated structurally so the inner
+    return statements remain visible to the checkers, but D24's
+    all-paths-return analysis is not over-claimed:
+
+    * ``for``, ``while``, ``async for`` -> wrapped in an ``IfStmt``
+      with an opaque condition and an empty ``else_body``. D24 sees
+      this as "may not run," which matches the runtime semantics
+      (the iterable may be empty or the condition may be false).
+    * ``with`` and ``async with`` -> body spliced into the parent
+      statement list. The body always executes (modulo exceptions,
+      which D24 explicitly does not model).
+    * ``try`` -> body and ``finalbody`` are spliced (always run);
+      the ``orelse`` clause is also spliced (runs when the body
+      completes without exception); each ``except`` handler is
+      wrapped as ``IfStmt(opaque, ..., ())`` since handlers may not
+      run on the actual control-flow path.
+    * ``match`` -> each case body is wrapped as ``IfStmt(opaque,
+      ..., ())``. Phase 3+ may special-case an exhaustive ``case _:``
+      arm to splice into the previous IfStmt's ``else_body`` so D24
+      can recognise total matches; the conservative shape is fine
+      for now (it under-claims completeness, never over-claims).
+
+    Anything else (assignments, expression statements, ``raise``,
+    ``import``, ``pass``, ``break``, ``continue``, ``global``,
+    ``nonlocal``) is silently skipped: the checkers wired into the
+    runner do not inspect these forms.
     """
     result: list = []
     for node in body:
@@ -326,7 +370,49 @@ def _translate_body(
                     else_body=tuple(_translate_body(node.orelse, filename)),
                 )
             )
+        elif isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
+            inner = _translate_body(node.body, filename)
+            # for/while-else clauses run when the loop terminates
+            # without break. They are equally "may run" for our
+            # purposes. Splice into the maybe-runs IfStmt body.
+            inner.extend(_translate_body(node.orelse, filename))
+            if inner:
+                result.append(_maybe_runs_if(inner, node, filename))
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            result.extend(_translate_body(node.body, filename))
+        elif isinstance(node, ast.Try):
+            result.extend(_translate_body(node.body, filename))
+            for handler in node.handlers:
+                inner = _translate_body(handler.body, filename)
+                if inner:
+                    result.append(_maybe_runs_if(inner, handler, filename))
+            result.extend(_translate_body(node.orelse, filename))
+            result.extend(_translate_body(node.finalbody, filename))
+        elif isinstance(node, ast.Match):
+            for case in node.cases:
+                inner = _translate_body(case.body, filename)
+                if inner:
+                    result.append(_maybe_runs_if(inner, case, filename))
     return result
+
+
+def _maybe_runs_if(
+    inner: list,
+    source_node: ast.AST,
+    filename: str,
+) -> "IfStmt":
+    """Wrap ``inner`` in an ``IfStmt(opaque, inner, ())`` so D24
+    treats the body as "may or may not execute" rather than as a
+    guaranteed control-flow path."""
+    line = getattr(source_node, "lineno", 0)
+    col = getattr(source_node, "col_offset", 0)
+    sp = _span(filename, line, col)
+    return IfStmt(
+        condition=IdentExpr(name="__opaque__", span=sp),
+        body=tuple(inner),
+        span=sp,
+        else_body=(),
+    )
 
 
 def _extract_calls(
