@@ -72,6 +72,28 @@ MARAD  example.py
     declares -> str but returns None on at least one path.
 ```
 
+## Closed in v0.3.2
+
+Three findings from a round-5 review of v0.3.1, all reproduced
+empirically and fixed:
+
+- **`Union[X, None]` recognition.** `Union[X, None]`,
+  `Union[None, X]`, `Union[X, Y, None]`, and the `typing.Union` /
+  `t.Union` aliased forms are now treated as Optional. Older
+  codebases (pre-PEP 604) routinely use `Union[X, None]` and were
+  producing false-positive `return_none_mismatch` diagnostics.
+- **String forward-reference annotations.** PEP 484 string
+  annotations like `-> "Optional[User]"` (the canonical
+  `TYPE_CHECKING` idiom for breaking circular imports) are now
+  parsed and recursed into. Pre-v0.3.2 the literal string was
+  treated as a bare type name.
+- **Nested class methods.** Methods of `Outer.Inner.method`,
+  `Outer.Mid.Inner.method`, etc. are now collected via recursive
+  descent through nested `ClassDef` bodies. Pre-v0.3.2 the descent
+  stopped at one level and inner-class methods were silently
+  dropped, producing false-negative D24 and `return_none_mismatch`
+  on a common Python idiom.
+
 ## Closed in v0.3.0
 
 Six findings from a three-round review of v0.2.0, all reproduced
@@ -152,6 +174,18 @@ than silent.
   before matching) which is deferred to a future phase. Workaround:
   use the bare or qualified form, or rename the import to
   `import typing as t`.
+- **Local classes inside function bodies.** A class defined inside
+  a function body has its methods silently dropped. The v0.3.2
+  nested-class fix added recursive descent through top-level
+  `ClassDef` -> `ClassDef` (so `Outer.Inner.method` is collected);
+  it does NOT extend through `FunctionDef` -> `ClassDef`. The
+  argument for the asymmetry: a local class is a private
+  implementation detail (often a closure-like return value), not
+  part of the module's public contract that D24 and
+  `return_none_mismatch` exist to enforce. If a real-world
+  regression demonstrates otherwise, extend the function walker to
+  descend into local `ClassDef` bodies and call
+  `_collect_class_methods`.
 
 ## License
 

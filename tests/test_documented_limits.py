@@ -85,3 +85,25 @@ def test_aliased_optional_import_fires_false_positive() -> None:
     assert result.returncode == 1
     assert "MARAD" in result.stdout
     assert "return_none_mismatch" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Local classes inside function bodies
+# ---------------------------------------------------------------------------
+
+def test_local_class_in_function_methods_not_collected() -> None:
+    """A class defined inside a function body has its methods
+    silently dropped, even though the v0.3.2 nested-class fix
+    (Finding 3) collects methods of nested top-level classes.
+
+    Documented limitation: a local class is a private
+    implementation detail; D24 and ``return_none_mismatch`` exist
+    to keep the public contract honest, so silent passes on
+    locally-scoped classes are deliberate. If a future fixture
+    demonstrates a real regression caused by this, extend the
+    function walker to also descend into nested
+    ``ClassDef``-inside-``FunctionDef``.
+    """
+    result = _run_check("local_class_in_function.py")
+    assert result.returncode == 0
+    assert "PASS" in result.stdout

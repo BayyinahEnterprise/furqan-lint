@@ -29,6 +29,15 @@ the documentation cannot drift away from the code.
   `return_none_mismatch`. The proper fix needs symbol-table
   tracking (parse imports, build alias map). README registers
   this under "Aliased Optional imports."
+- **`local_class_in_function.py`.** A class defined inside a
+  function body has its methods silently dropped. The v0.3.2
+  Finding 3 fix added recursive descent through nested top-level
+  classes (`Outer.Inner.method` is now collected); the same
+  descent does NOT extend through `FunctionDef` bodies into local
+  `ClassDef` children. The argument for keeping it: a local class
+  is a private implementation detail used as a closure-like
+  return value, not part of the module's public contract. README
+  registers this under "Local classes inside function bodies."
 
 ## How to retire a fixture
 

@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.3.2] - 2026-05-02
+
+Three findings from Fraz's round-5 review of v0.3.1, all reproduced
+empirically against v0.3.1 before fixing. One adjacent observation
+pinned as a documented limitation.
+
+### Fixed
+
+- **`Union[X, None]` recognition (MAJOR).** The matcher now
+  accepts `Union[X, None]`, `Union[None, X]`, `Union[X, Y, None]`,
+  and the `typing.Union` / `t.Union` aliased forms as Optional.
+  Pre-v0.3.2 the matcher only handled `Optional[X]` and `X | None`;
+  pre-PEP 604 codebases (still common) routinely use `Union[X, None]`
+  and were producing a false-positive `return_none_mismatch`.
+  New helpers: `_is_union_with_none`, `_extract_union_with_none_inner`,
+  `_is_union_head`, `_slice_elements`, `_slice_contains_none`,
+  `_is_none_literal`. The 3+ arm Union case collapses the non-None
+  arms to a `BinOp(BitOr)` shape so Furqan's binary `UnionType` can
+  represent it.
+- **String forward-reference annotations (MAJOR).** When
+  `_translate_return_annotation` sees an `ast.Constant` with a
+  string value, the value is parsed via `ast.parse(..., mode='eval')`
+  and the translator recurses into the resulting expression. The
+  TYPE_CHECKING / PEP 484 forward-reference idiom (`-> "Optional[User]"`)
+  no longer produces a false positive. Unparseable strings fall
+  through gracefully to a bare `TypePath`.
+- **Nested class methods (MAJOR).** `_translate_module` now calls
+  a new recursive helper `_collect_class_methods` instead of a
+  single-level inline loop. Methods of `Outer.Inner.method`,
+  `Outer.Mid.Inner.method`, etc. are now collected and visible
+  to D24 and `return_none_mismatch`. Pre-v0.3.2, descent stopped
+  at one level and inner-class methods were silently dropped.
+
+### Documented
+
+- **Local classes inside function bodies.** A class defined inside
+  a function body still has its methods silently dropped. The
+  argument for keeping it: a local class is a private
+  implementation detail (closure-like return value), not part of
+  the module's public contract. Pinned as
+  `tests/fixtures/documented_limits/local_class_in_function.py`
+  with a corresponding entry in `test_documented_limits.py`.
+  README updated under "Remaining limitations."
+
+### Tests
+
+- 14 new regression tests in `tests/test_round5_fixes.py`.
+- 1 new pinning test in `tests/test_documented_limits.py`.
+- Total: 108.
+
 ## [0.3.1] - 2026-05-02
 
 Three small items from Fraz's round-4 review of v0.3.0. The bulk of
