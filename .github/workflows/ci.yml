@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Verify version sync
+        run: |
+          python -c "
+          from furqan_lint import __version__
+          import sys
+          if sys.version_info >= (3, 11):
+              import tomllib
+          else:
+              import tomli as tomllib
+          with open('pyproject.toml', 'rb') as f:
+              v = tomllib.load(f)['project']['version']
+          assert __version__ == v, f'{__version__} != {v}'
+          print(f'Version sync OK: {__version__}')
+          "
+
+      - name: Em-dash check
+        run: |
+          if grep -rPn '[\x{2013}\x{2014}]' src/ tests/ README.md; then
+            echo "Em-dash or en-dash found in src/, tests/, or README.md"
+            exit 1
+          fi
+          echo "Em-dash check: clean"

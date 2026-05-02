@@ -1,0 +1,7 @@
+- id: furqan-lint
+  name: furqan-lint
+  description: Structural-honesty checks for Python
+  entry: furqan-lint check
+  language: python
+  types: [python]
+  additional_dependencies: []

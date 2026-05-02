@@ -1,10 +1,12 @@
 # furqan-lint
 
+[![CI](https://github.com/BayyinahEnterprise/furqan-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/BayyinahEnterprise/furqan-lint/actions/workflows/ci.yml)
+
 Structural-honesty checks for Python, powered by [Furqan](https://tryfurqan.com).
 
 `furqan-lint` translates Python source into the Furqan AST and runs the
 subset of Furqan checkers whose semantics carry across language boundaries
-into idiomatic Python. v0.2.0 ships four checks:
+into idiomatic Python. Four checks ship today:
 
 - **D24 (all-paths-return)** every control-flow path through a typed
   function reaches a return statement.
@@ -26,7 +28,12 @@ into idiomatic Python. v0.2.0 ships four checks:
 pip install furqan-lint
 ```
 
-Requires Python 3.10+ and `furqan>=0.10.1`.
+Requires Python 3.10+ and `furqan>=0.11.0`. Furqan is not yet on PyPI; install it from GitHub:
+
+```bash
+pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
+pip install furqan-lint
+```
 
 ## Usage
 
@@ -36,6 +43,51 @@ furqan-lint check path/to/directory/
 furqan-lint diff old_version.py new_version.py
 furqan-lint version
 ```
+
+## CI Integration
+
+Two ways to wire furqan-lint into your workflow.
+
+### GitHub Action
+
+Three lines in your workflow file run the structural checks on every
+push or pull request:
+
+```yaml
+# .github/workflows/furqan-lint.yml
+name: Furqan Lint
+on: [push, pull_request]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: BayyinahEnterprise/furqan-lint@v0.4.0
+        with:
+          path: src/
+```
+
+Inputs (all optional):
+- `path` -- file or directory to check. Default: `.`
+- `python-version` -- Python version to use. Default: `3.12`
+- `furqan-lint-version` -- pinned version to install. Default: install
+  latest from `main`.
+
+### Pre-Commit Hook
+
+Run the same checks locally on every `git commit` against staged
+Python files:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/BayyinahEnterprise/furqan-lint
+    rev: v0.4.0
+    hooks:
+      - id: furqan-lint
+```
+
+Then `pre-commit install`. Failures block the commit.
 
 ## Example
 

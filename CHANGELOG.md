@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.4.0] - 2026-05-02
+
+Distribution and CI infrastructure. No new checker logic. The tool
+becomes adoptable: three lines of YAML to wire it into a GitHub
+Actions workflow, or three lines for a pre-commit hook.
+
+### Added
+
+- **GitHub Action.** ``action.yml`` at the repo root provides a
+  composite action: ``uses: BayyinahEnterprise/furqan-lint@v0.4.0``
+  with optional ``path``, ``python-version``, and
+  ``furqan-lint-version`` inputs. Composite-runs (no Docker
+  image), so cold-start is dominated by setup-python and pip
+  install rather than container pull. Furqan is installed from
+  GitHub (v0.11.1 pinned) since it is not yet on PyPI.
+- **Pre-commit hook.** ``.pre-commit-hooks.yaml`` declares a
+  single hook ``id: furqan-lint`` that runs ``furqan-lint check``
+  scoped to ``types: [python]``. Users add three lines to
+  ``.pre-commit-config.yaml`` to wire it in.
+- **CI workflow.** ``.github/workflows/ci.yml`` runs the test
+  suite on Python 3.10, 3.11, 3.12, and 3.13 in a matrix on every
+  push and pull request to ``main``. Three quality gates per
+  matrix cell: pytest (the 136 prior tests + 9 new structural
+  tests), version-sync between ``__version__`` and
+  ``pyproject.toml``, and an em-dash check across ``src/``,
+  ``tests/``, and ``README.md``. CHANGELOG.md is intentionally
+  excluded from the em-dash scan to avoid breaking on legitimate
+  prior entries.
+- **PyPI publishing scaffolding.** ``scripts/publish.sh`` is a
+  documented build/upload script using ``build`` and ``twine``.
+  NOT to be run by automation - PyPI credentials are held only by
+  the project lead. ``pyproject.toml`` metadata verified for PyPI
+  readiness: ``Repository`` and ``Issues`` URLs added under
+  ``[project.urls]``.
+- **CI badge.** README displays the CI workflow status at the
+  top.
+
+### Changed
+
+- ``pyproject.toml`` dependency bumped from ``furqan>=0.10.1`` to
+  ``furqan>=0.11.0``. The project has been verified to work with
+  furqan v0.11.1 (the version the GitHub Action installs).
+- README's intro line "v0.2.0 ships four checks" is now version-
+  agnostic ("Four checks ship today") so it stops aging out at
+  every release. Install instructions now show how to install
+  Furqan from GitHub before installing furqan-lint, since Furqan
+  is not on PyPI.
+
+### Tests
+
+- 5 new structural tests in ``tests/test_action.py`` for
+  ``action.yml`` and ``.pre-commit-hooks.yaml`` shape.
+- 4 new structural tests in ``tests/test_ci_workflow.py`` for the
+  CI matrix, version-sync gate, and em-dash gate.
+- Total: 145.
+
 ## [0.3.5] - 2026-05-02
 
 Two corrective fixes promoting documented limitations to fixes.
