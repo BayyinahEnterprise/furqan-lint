@@ -70,10 +70,11 @@ def test_function_without_return_type_skipped_d24() -> None:
 
 
 def test_return_none_satisfies_d24_path_coverage() -> None:
-    """KNOWN PHASE 1 GAP: ``return None`` is a return statement and
-    therefore satisfies D24's path coverage even when the declared
-    type is non-Optional. D22 (return-type match) would catch this in
-    Phase 2."""
+    """``return None`` is a return statement and therefore still
+    satisfies D24's path coverage. The type mismatch is caught by
+    the v0.2.0 ``return_none_mismatch`` checker, not by D24. This
+    test pins both halves of that contract: D24 stays silent;
+    return_none_mismatch fires."""
     src = (
         "def f(x: int) -> str:\n"
         "    if x:\n"
@@ -83,6 +84,7 @@ def test_return_none_satisfies_d24_path_coverage() -> None:
     module = translate_source(src, "<test>")
     diags = check_python_module(module)
     assert _by_checker(diags, "all_paths_return") == []
+    assert len(_by_checker(diags, "return_none_mismatch")) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -182,9 +184,11 @@ def test_cli_syntax_error_returns_2(tmp_path: Path) -> None:
 
 
 def test_cli_version_prints_version() -> None:
+    from furqan_lint import __version__
+
     result = _run_cli("version")
     assert result.returncode == 0
-    assert "0.1.0" in result.stdout
+    assert __version__ in result.stdout
     assert "furqan-lint" in result.stdout
 
 

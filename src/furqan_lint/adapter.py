@@ -333,23 +333,56 @@ def _extract_calls(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     filename: str,
 ) -> list[CallRef]:
-    """Collect call references inside a function body.
+    """Extract calls from a function's DIRECT body only.
 
-    Phase 1 gap: ``ast.walk`` recurses into nested function bodies, so
-    a call inside a closure is attributed to the enclosing function.
-    Documented in Section 8 of the implementation prompt.
+    Does not descend into nested function definitions (closures,
+    inner functions). Does not collect calls from the enclosing
+    function's decorator list, since those are evaluated at
+    definition time, not invoked from inside the body.
+
+    Lambdas are NOT treated as nested functions: calls inside a
+    lambda body count as calls of the enclosing function.
+    Rationale: lambdas are inline expressions, not separate scopes
+    the user reasons about independently.
+
+    Phase 2 fix for Phase 1 Gap 5.
     """
     calls: list[CallRef] = []
-    for child in ast.walk(node):
-        if isinstance(child, ast.Call):
-            name = _call_name(child)
+
+    def _walk(n: ast.AST, is_root: bool) -> None:
+        # Stop at any nested FunctionDef / AsyncFunctionDef /
+        # ClassDef. Their bodies are separate scopes and their
+        # calls are attributed to the inner definition (or to
+        # nothing, if the inner def is itself a method whose
+        # methods get extracted at module level).
+        if not is_root and isinstance(
+            n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ):
+            return
+        if isinstance(n, ast.Call):
+            name = _call_name(n)
             if name:
                 calls.append(
                     CallRef(
                         path=(name,),
-                        span=_span(filename, child.lineno, child.col_offset),
+                        span=_span(filename, n.lineno, n.col_offset),
                     )
                 )
+        for child in ast.iter_child_nodes(n):
+            # Skip the enclosing function's own decorators when
+            # walking the root node.
+            if (
+                is_root
+                and isinstance(
+                    n, (ast.FunctionDef, ast.AsyncFunctionDef)
+                )
+                and hasattr(n, "decorator_list")
+                and child in n.decorator_list
+            ):
+                continue
+            _walk(child, is_root=False)
+
+    _walk(node, is_root=True)
     return calls
 
 

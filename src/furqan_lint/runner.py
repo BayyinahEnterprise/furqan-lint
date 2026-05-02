@@ -1,6 +1,6 @@
-"""Run Phase 1 structural checkers on a translated Python ``Module``.
+"""Run structural checkers on a translated Python ``Module``.
 
-Two checkers cross the language boundary cleanly:
+Three checkers cross the language boundary cleanly as of v0.2.0:
 
 * **D24 (all-paths-return).** No adaptation needed. Every typed Python
   function should reach a ``return`` on every control-flow path; the
@@ -12,6 +12,9 @@ Two checkers cross the language boundary cleanly:
   check sees the Python pattern, then restore the original on exit.
   DEFECT 3 FIX: scoping via context manager prevents cross-
   contamination if Furqan's own test suite runs in the same process.
+* **return_none_mismatch.** Python-native checker that closes Phase 1
+  Gap 1: a function declaring a non-Optional return type that returns
+  None on some path is a type mismatch, not a satisfied D24 path.
 """
 
 from __future__ import annotations
@@ -22,6 +25,8 @@ from typing import Iterator
 from furqan.checker import status_coverage
 from furqan.checker.all_paths_return import check_all_paths_return
 from furqan.parser.ast_nodes import Module, UnionType
+
+from furqan_lint.return_none import check_return_none
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +68,7 @@ def _python_optional_mode() -> Iterator[None]:
 # ---------------------------------------------------------------------------
 
 def check_python_module(module: Module) -> list[tuple[str, object]]:
-    """Run Phase 1 structural checks on a translated Python ``Module``.
+    """Run all structural checks on a translated Python ``Module``.
 
     Returns a list of ``(checker_name, diagnostic)`` tuples. ``diagnostic``
     is either a :class:`furqan.errors.marad.Marad` (a violation) or a
@@ -79,5 +84,8 @@ def check_python_module(module: Module) -> list[tuple[str, object]]:
     with _python_optional_mode():
         for d in status_coverage.check_status_coverage(module):
             diagnostics.append(("status_coverage", d))
+
+    for d in check_return_none(module):
+        diagnostics.append(("return_none_mismatch", d))
 
     return diagnostics

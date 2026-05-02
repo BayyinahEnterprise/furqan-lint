@@ -1,0 +1,132 @@
+"""Return-None type checker for Python.
+
+Closes Phase 1 Gap 1. Furqan's D24 (all-paths-return) treats
+``return None`` as a satisfied return path, because the existence of
+a ``ReturnStmt`` is what D24 inspects. The Python-level type mismatch
+``-> str`` paired with ``return None`` is therefore invisible to D24.
+This Phase 2 checker closes that gap directly.
+
+What fires:
+
+* a function declares a non-Optional return type AND the body
+  contains ``return None`` or a bare ``return`` on some path.
+
+What does not fire:
+
+* the return type is ``Optional[X]`` or ``X | None`` (None is
+  declared);
+* the return type is ``-> None`` (None is the declared type);
+* the function has no return-type annotation.
+"""
+
+from __future__ import annotations
+
+from furqan.errors.marad import Marad
+from furqan.parser.ast_nodes import (
+    FunctionDef,
+    IfStmt,
+    Module,
+    ReturnStmt,
+    TypePath,
+    UnionType,
+)
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+def check_return_none(module: Module) -> list[Marad]:
+    """Return one :class:`Marad` per function that declares a
+    non-Optional return type but returns None on some path."""
+    diagnostics: list[Marad] = []
+    for fn in module.functions:
+        if fn.return_type is None:
+            continue
+        if _allows_none(fn.return_type):
+            continue
+        if _has_none_return(fn.statements):
+            diagnostics.append(_mismatch_marad(fn))
+    return diagnostics
+
+
+# ---------------------------------------------------------------------------
+# Type predicates
+# ---------------------------------------------------------------------------
+
+def _allows_none(return_type: object) -> bool:
+    """True iff the declared return type permits ``None``.
+
+    The adapter translates ``Optional[X]`` and ``X | None`` to
+    :class:`UnionType` with one arm whose ``base`` is ``"None"``.
+    A bare ``-> None`` annotation translates to a
+    :class:`TypePath` with ``base == "None"``.
+    """
+    if isinstance(return_type, UnionType):
+        names = {return_type.left.base, return_type.right.base}
+        return "None" in names
+    if isinstance(return_type, TypePath):
+        return return_type.base == "None"
+    return False
+
+
+def _type_name(return_type: object) -> str:
+    """Best-effort short rendering of a return-type clause."""
+    if isinstance(return_type, TypePath):
+        return return_type.base
+    if isinstance(return_type, UnionType):
+        return f"{return_type.left.base} | {return_type.right.base}"
+    return "Unknown"
+
+
+# ---------------------------------------------------------------------------
+# Body walking
+# ---------------------------------------------------------------------------
+
+def _has_none_return(statements: tuple) -> bool:
+    """True iff any return statement in the (possibly nested) body
+    returns ``None``.
+
+    The adapter maps both ``return None`` and bare ``return`` (no
+    value) to ``ReturnStmt(value=IdentExpr(name="__none__"))``.
+    :class:`IdentExpr` exposes the marker on the ``name`` attribute
+    (verified against furqan==0.10.1).
+    """
+    for stmt in statements:
+        if isinstance(stmt, ReturnStmt):
+            value = stmt.value
+            if getattr(value, "name", None) == "__none__":
+                return True
+        if isinstance(stmt, IfStmt):
+            if _has_none_return(stmt.body):
+                return True
+            if _has_none_return(stmt.else_body):
+                return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Diagnostic construction
+# ---------------------------------------------------------------------------
+
+def _mismatch_marad(fn: FunctionDef) -> Marad:
+    type_text = _type_name(fn.return_type)
+    return Marad(
+        primitive="return_none_mismatch",
+        diagnosis=(
+            f"Function '{fn.name}' at line {fn.span.line} declares "
+            f"-> {type_text} but returns None on at least one path. "
+            f"None is not compatible with the declared return type."
+        ),
+        location=fn.span,
+        minimal_fix=(
+            f"Either change the return type to "
+            f"Optional[{type_text}], or replace the None return "
+            f"with a value of type {type_text}."
+        ),
+        regression_check=(
+            f"After the fix, re-run `furqan-lint check <file>` and "
+            f"confirm function '{fn.name}' produces zero "
+            f"return_none_mismatch marads."
+        ),
+    )
