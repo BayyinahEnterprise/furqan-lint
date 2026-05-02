@@ -38,6 +38,16 @@ the documentation cannot drift away from the code.
   do with optionality. Same fix shape as the `Optional` case
   (symbol-table tracking). README registers this under "Aliased
   Optional / Union imports."
+- **`redundant_pipe_none.py`.** `int | None | None` and
+  `None | None` are accepted today (mypy / pyright collapse the
+  redundant arm; the matcher arrives at the right answer for
+  incidental reasons) but not structurally defended the way the
+  `Union[None]` path is in v0.3.3 and the `Optional[None]` path
+  is in v0.3.4. The intermediate AST is a binary `UnionType`
+  whose arms may both be `None` after inner extraction; this
+  shape would break the day someone refactors the pipe path to
+  require distinct arms. README registers this under "Redundant
+  `None` arms in PEP 604 unions."
 - **`local_class_in_function.py`.** A class defined inside a
   function or method body has its methods silently dropped. The
   v0.3.2 Finding 3 fix added recursive descent through nested

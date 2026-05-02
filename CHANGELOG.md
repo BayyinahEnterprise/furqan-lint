@@ -1,5 +1,85 @@
 # Changelog
 
+## [0.3.4] - 2026-05-02
+
+Three quality-tier observations from Fraz's round-7 review of
+v0.3.3, none blocking. All three are asymmetries between code
+paths that currently produce correct answers but for incidental
+reasons rather than structural ones. v0.3.4 closes the two
+structural ones and pins the third as a documented limitation.
+
+### Fixed
+
+- **`Optional[None]` symmetry with v0.3.3 `Union[None]`.** The
+  Optional path produced `UnionType(left=TypePath("None"),
+  right=TypePath("None"))` on `Optional[None]`, while the v0.3.3
+  Union path produced a bare `TypePath(base="None")` on
+  `Union[None]`. Both arrived at correct answers (no diagnostic
+  fires either way), but only the Union path was structurally
+  defended; a binary union of identical types is not semantically
+  meaningful and would break the day someone refactors the matcher
+  to require distinct arms. v0.3.4 mirrors the v0.3.3 discipline:
+  `_translate_return_annotation` short-circuits `Optional[None]`
+  to bare `TypePath(base="None")` (`typing.Optional[None]`
+  evaluates to `type(None)` at Python runtime). Caught by
+  Observation 1.
+- **Bare `Optional` and bare `Union` no longer suggest invalid
+  fixes.** A function declared `-> Optional` (no subscript) with
+  a `return None` body produced a `return_none_mismatch` whose
+  `minimal_fix` suggested `Optional[Optional]`, which is invalid
+  typing syntax (mypy rejects bare `Optional` with "Bare Optional
+  is not allowed"). The same incoherent suggestion applied to
+  bare `Union`. v0.3.4 introduces `_suggested_fix` in
+  `return_none.py` that detects the bare-name case and suggests
+  the real fix (add a type argument: `Optional[X]` or `X | None`).
+  Caught by Observation 3.
+
+### Added
+
+- `tests/test_round7_fixes.py` with 7 tests pinning the two
+  structural fixes:
+  - 4 tests on `Optional[None]` translation (bare `TypePath`,
+    not binary `UnionType`, end-to-end PASS, and a negative test
+    that `Optional[str]` still produces the expected
+    `UnionType(str, None)` shape).
+  - 3 tests on `_suggested_fix` (bare `Optional` produces
+    helpful prose without the `Optional[Optional]` artifact, bare
+    `Union` produces the symmetric helpful prose, and a negative
+    test that normal `TypePath`s still get the canonical
+    `Optional[<name>]` suggestion).
+- `tests/test_documented_limits.py` gains
+  `test_round7_redundant_pipe_none_passes` (+1 test) pinning the
+  current correct-but-incidental behaviour on PEP 604 redundant
+  `None` arms (Observation 2). New fixture
+  `tests/fixtures/documented_limits/redundant_pipe_none.py`.
+  README and `tests/fixtures/documented_limits/README.md` updated
+  with the new entry.
+
+### Tests
+
+- 116 -> 124 (+8). All v0.3.3 tests pass identically.
+
+### Unchanged
+
+- The v0.3.3 `Union[None, ...]` boundary fix (`_is_union_with_none`
+  predicate, `_is_all_none_union` helper, defense-in-depth
+  assertion). The v0.3.4 Optional short-circuit applies the same
+  discipline pattern to a parallel code path.
+- `Optional[X]` for non-`None` `X` translates to
+  `UnionType(X, None)` exactly as before.
+- All other documented limitations and their fixtures.
+
+### Deferred
+
+- **PEP 604 redundant `None` arms** (Observation 2). `int | None
+  | None` and `None | None` are correctly accepted today; the
+  intermediate AST is incidentally correct but not structurally
+  defended the way the `Union[None]` and `Optional[None]` paths
+  are. Full symmetric tightening across the three optional
+  spellings is a v0.4.0 candidate.
+
+---
+
 ## [0.3.3] - 2026-05-02
 
 One blocking finding plus two cleanup items from Fraz's round-6

@@ -274,6 +274,24 @@ def _translate_return_annotation(
 
     if _is_optional(node):
         inner = _extract_optional_inner(node)
+        # v0.3.4: ``Optional[None]`` resolves to ``type(None)`` at
+        # Python runtime (``typing.Optional[X]`` is defined as
+        # ``Union[X, None]``, so ``Optional[None]`` is
+        # ``Union[None, None]`` is ``type(None)``). Translate as a
+        # bare ``TypePath(base="None")`` to mirror the v0.3.3
+        # ``_is_all_none_union`` discipline applied to ``Union[None]``.
+        # Without this short-circuit the Optional path produces a
+        # binary ``UnionType`` with both arms None, which is not
+        # semantically meaningful and would break the day someone
+        # refactors the matcher to require distinct arms. Caught by
+        # Fraz's round-7 review (Observation 1).
+        if _is_none_literal(inner):
+            return TypePath(
+                base="None",
+                layer=None,
+                span=sp,
+                layer_alias_used=None,
+            )
         return UnionType(
             left=TypePath(
                 base=_annotation_name(inner),

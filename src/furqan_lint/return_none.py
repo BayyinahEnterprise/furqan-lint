@@ -79,6 +79,34 @@ def _type_name(return_type: object) -> str:
     return "Unknown"
 
 
+def _suggested_fix(return_type: object) -> str:
+    """Generate the ``minimal_fix`` string with awareness of
+    malformed bare annotations.
+
+    v0.3.4 fix for Fraz's round-7 review (Observation 3). When the
+    user writes a bare ``Optional`` or bare ``Union`` (no
+    subscript), the adapter translates the annotation as a plain
+    ``TypePath`` whose ``base`` is the literal string ``"Optional"``
+    or ``"Union"``. The pre-v0.3.4 inline f-string would then
+    suggest ``Optional[Optional]`` as the minimal fix, which is
+    not valid typing syntax (mypy rejects bare ``Optional`` with
+    "Bare Optional is not allowed"). The real bug is the missing
+    type argument, and the suggestion now names that explicitly.
+    """
+    name = _type_name(return_type)
+    if name in ("Optional", "Union"):
+        return (
+            f"Bare '{name}' is not valid typing syntax. "
+            f"Use {name}[X] (e.g., Optional[str]) or X | None "
+            f"to declare an optional return type."
+        )
+    return (
+        f"Either change the return type to "
+        f"Optional[{name}], or replace the None return "
+        f"with a value of type {name}."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Body walking
 # ---------------------------------------------------------------------------
@@ -119,11 +147,7 @@ def _mismatch_marad(fn: FunctionDef) -> Marad:
             f"None is not compatible with the declared return type."
         ),
         location=fn.span,
-        minimal_fix=(
-            f"Either change the return type to "
-            f"Optional[{type_text}], or replace the None return "
-            f"with a value of type {type_text}."
-        ),
+        minimal_fix=_suggested_fix(fn.return_type),
         regression_check=(
             f"After the fix, re-run `furqan-lint check <file>` and "
             f"confirm function '{fn.name}' produces zero "

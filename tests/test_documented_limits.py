@@ -125,3 +125,29 @@ def test_local_class_in_function_methods_not_collected() -> None:
     result = _run_check("local_class_in_function.py")
     assert result.returncode == 0
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Redundant None arms in PEP 604 unions (v0.3.4 / round-7 Observation 2)
+# ---------------------------------------------------------------------------
+
+def test_round7_redundant_pipe_none_passes() -> None:
+    """``int | None | None`` and ``None | None`` are accepted
+    today. mypy and pyright collapse the redundant arm; the
+    matcher arrives at the right answer for incidental reasons
+    (the existing PEP 604 path recognises the outer BinOp as
+    None-containing and translates correctly). The intermediate
+    AST is a binary ``UnionType`` whose arms may both be ``None``
+    after inner extraction; this is correct today and would
+    break the day someone refactors the pipe path to require
+    distinct arms.
+
+    Pinning test, not a behavioural change. v0.4.0 may apply
+    the v0.3.3 / v0.3.4 short-circuit discipline to the PEP 604
+    pipe path as well; until then this fixture pins the current
+    correct-but-incidental behaviour so a future refactor cannot
+    silently regress it.
+    """
+    result = _run_check("redundant_pipe_none.py")
+    assert result.returncode == 0
+    assert "PASS" in result.stdout
