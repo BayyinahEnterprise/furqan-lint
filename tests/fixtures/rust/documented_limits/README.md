@@ -38,10 +38,6 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
   stripped during translation; the return type is treated as
   `-> str`. D24's path-coverage logic is unaffected; a future
   borrow-pattern checker would need lifetime preservation.
-- **`empty_or_panic_only_body.rs`.** Functions with empty bodies
-  or bodies containing only `panic!()` / `todo!()` /
-  `unimplemented!()` are PASS in v0.7.0. The Rust analogue of
-  Python's R3 (zero-return ring-close) is deferred to v0.7.1.
 - **`closure_with_annotated_return.rs`.** `closure_expression`
   nodes are skipped for D24, D11, AND R3 in Phase 2 (v0.7.1).
   The outer function is checked normally; the closure body is
@@ -68,6 +64,15 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
   to trait method declarations because there is no body to
   analyse. The retirement procedure cleans up exactly this kind
   of "limit that turned out to be permanent."
+- `empty_or_panic_only_body.rs` removed: closed by R3
+  (zero-return). v0.7.1 wires upstream
+  `furqan.checker.check_ring_close` (filtered to R3-shaped
+  diagnostics) which catches every case the limit pinned. The
+  fixture's structural pattern (annotated return type + empty
+  or `;`-terminated macro-only body) translates to
+  `statements=()`, which check_ring_close fires R3 on. The
+  cases now live as `failing/r3_*.rs` fixtures with assertions
+  inverted from "silent PASS" to "fires R3."
 
 ## How to retire a fixture
 

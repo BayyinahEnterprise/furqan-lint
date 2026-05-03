@@ -373,11 +373,6 @@ Each Rust limit has a fixture in
   D24's path-coverage logic is unaffected; a future borrow-pattern
   checker would need lifetime preservation. Pinned as
   `tests/fixtures/rust/documented_limits/lifetime_param_return.rs`.
-- **Empty or panic-only bodies.** Functions with empty bodies or
-  bodies containing only `panic!()` / `todo!()` / `unimplemented!()`
-  are PASS in v0.7.0. The Rust analogue of Python's R3 (zero-return
-  ring-close) is deferred to v0.7.1. Pinned as
-  `tests/fixtures/rust/documented_limits/empty_or_panic_only_body.rs`.
 - **Closures with annotated return types.** `closure_expression`
   nodes are skipped for D24, D11, AND R3 in v0.7.1. The outer
   function is checked normally; the closure body is opaque.
