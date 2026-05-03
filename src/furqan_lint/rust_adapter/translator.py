@@ -120,6 +120,20 @@ class RustParseError(Exception):
         self.kind = kind
 
 
+class RustExtrasNotInstalled(ImportError):
+    """Raised by ``parse_file`` when the ``[rust]`` extra is missing
+    from the install (i.e., ``tree_sitter`` and/or
+    ``tree_sitter_rust`` cannot be imported).
+
+    Subclasses ``ImportError`` so callers that catch ``ImportError``
+    broadly still work; the typed name lets the CLI distinguish a
+    missing-extra case from an unrelated import bug.
+
+    The exception message is the install hint itself, so the CLI
+    can simply ``print(str(exc))`` to stderr.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -777,7 +791,7 @@ def _text(node: Node) -> bytes:
     translation, so the bytes are always present. The assertion
     converts the strict-mypy union narrowing into a runtime check.
     """
-    text = node.text
+    text: bytes | None = node.text
     assert text is not None, f"node.text was None for {node.type}"
     return text
 

@@ -21,6 +21,16 @@ _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_0: frozenset[str] = frozenset(
     }
 )
 
+# v0.7.0.1 added RustExtrasNotInstalled (typed exception for the
+# missing-[rust]-extra case). Snapshot grows additively.
+_RUST_ADAPTER_PUBLIC_SURFACE_v0_7_0_1: frozenset[str] = frozenset(
+    {
+        "parse_file",
+        "RustParseError",
+        "RustExtrasNotInstalled",
+    }
+)
+
 
 def test_rust_adapter_public_surface_is_superset_of_v0_7_0_baseline() -> None:
     """``furqan_lint.rust_adapter.__all__`` must include every name
@@ -49,3 +59,17 @@ def test_rust_adapter_baseline_names_are_callable_or_class() -> None:
         assert callable(obj) or isinstance(
             obj, type
         ), f"rust_adapter.{name} is not callable or a class: {obj!r}"
+
+
+def test_rust_adapter_public_surface_is_superset_of_v0_7_0_1_baseline() -> None:
+    """v0.7.0.1 added ``RustExtrasNotInstalled`` to the surface;
+    every later release must remain a superset of the v0.7.0.1
+    baseline as well as the v0.7.0 baseline."""
+    from furqan_lint import rust_adapter
+
+    current = frozenset(rust_adapter.__all__)
+    missing = _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_0_1 - current
+    assert not missing, (
+        f"rust_adapter.__all__ removed names from the v0.7.0.1 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )

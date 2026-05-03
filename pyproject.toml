@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "furqan-lint"
-version = "0.7.0"
+version = "0.7.0.1"
 description = "Structural-honesty checks for Python, powered by Furqan"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -135,6 +135,16 @@ ignore_missing_imports = true
 # typed surface (parser._get_parser, translator.translate_tree)
 # so the rest of the source remains strictly typed.
 module = ["tree_sitter", "tree_sitter_rust"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# tomli is the Python 3.10 fallback for the stdlib tomllib; on a
+# clean install of [dev] without tomli pre-installed (e.g., a fresh
+# venv on Python 3.10), mypy --strict cannot find stubs for it and
+# fails the strict gate. Suppress the missing-stubs check; the
+# import itself is type-safe (we only call _tomllib.load(handle)
+# and _tomllib.TOMLDecodeError, both well-typed at runtime).
+module = "tomli"
 ignore_missing_imports = true
 
 [tool.coverage.run]

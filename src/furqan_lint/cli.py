@@ -161,7 +161,10 @@ def _check_rust_file(path: Path) -> int:
     a ring-close R3 equivalent.
     """
     try:
-        from furqan_lint.rust_adapter import RustParseError
+        from furqan_lint.rust_adapter import (
+            RustExtrasNotInstalled,
+            RustParseError,
+        )
         from furqan_lint.rust_adapter import parse_file as parse_rust
     except ImportError:
         print(
@@ -176,6 +179,13 @@ def _check_rust_file(path: Path) -> int:
 
     try:
         module = parse_rust(path)
+    except RustExtrasNotInstalled as e:
+        # The package itself imported, but tree_sitter / tree_sitter_rust
+        # could not be imported when parse_file probed for them. Print
+        # the typed exception's message (the install hint) rather than
+        # dumping a Python traceback.
+        print(str(e), file=sys.stderr)
+        return 1
     except RustParseError as e:
         print(f"PARSE ERROR  {path}:{e.line}")
         print(f"  {e.kind}")

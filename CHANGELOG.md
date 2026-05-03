@@ -1,5 +1,136 @@
 # Changelog
 
+## [0.7.0.1] - 2026-05-03
+
+Corrective release for two HIGH-severity findings from Bilal's
+fresh-instance review of the v0.7.0 patch. Both were silent on
+my own validation pass because of validator bias (transitive
+dependencies and call-time imports that did not surface in the
+sandbox where v0.7.0 was built).
+
+### Fixed
+
+- **HIGH: mypy --strict failed on a clean install (Issue 1).**
+  The v0.7.0 ``[dev]`` install resolves to a venv where ``tomli``
+  is not always present (it is a transitive of mypy on Python
+  3.10 but not on 3.11+). Without ``tomli`` installed, mypy
+  --strict emitted ``Cannot find implementation or library stub
+  for module named "tomli"`` at ``edition.py:24``, failing
+  gate-4 of section 5. Fix: added ``[[tool.mypy.overrides]]
+  module = "tomli" ignore_missing_imports = true`` to
+  ``pyproject.toml``. The override is pinned by a regression test
+  in ``tests/test_v0_7_0_1_corrective.py`` so a future cleanup
+  cannot silently drop it.
+- **HIGH: ``furqan-lint check foo.rs`` without [rust] crashed with
+  a Python traceback (Issue 2).** The CLI guard in
+  ``_check_rust_file`` wrapped only the package import
+  (``from furqan_lint.rust_adapter import ...``), not the call
+  to ``parse_rust(path)``. The actual ``import tree_sitter``
+  fired deep inside ``parser._get_parser`` on first call, and
+  surfaced as an uncaught ``ModuleNotFoundError`` traceback,
+  violating prompt section 3.3 ("Do not crash with
+  ``ModuleNotFoundError``"). Fix: added
+  ``RustExtrasNotInstalled`` (a typed ``ImportError`` subclass)
+  to the rust_adapter public surface; ``parse_file`` now probes
+  the ``tree_sitter`` and ``tree_sitter_rust`` imports at its
+  entry point and re-raises any ``ImportError`` as
+  ``RustExtrasNotInstalled`` carrying the install hint. The CLI
+  catches this typed exception around the ``parse_rust(path)``
+  call and prints a one-line install hint to stderr, exit 1.
+  Pinned by three regression tests in
+  ``tests/test_v0_7_0_1_corrective.py``.
+
+### Added
+
+- **``RustExtrasNotInstalled`` typed exception** in
+  ``furqan_lint.rust_adapter.translator``, exported from
+  ``furqan_lint.rust_adapter``. Subclasses ``ImportError``;
+  message is the install hint itself. Snapshot test in
+  ``tests/test_rust_public_surface_additive.py`` extended with
+  a v0.7.0.1 baseline that includes this name (additive
+  superset of the v0.7.0 baseline).
+- **``tests/test_v0_7_0_1_corrective.py``** (4 unit tests).
+  (1) Asserts pyproject.toml has a tomli mypy override.
+  (2) Asserts ``RustExtrasNotInstalled`` is exported and
+  subclasses ``ImportError``.
+  (3) Asserts ``parse_file`` raises ``RustExtrasNotInstalled``
+  when ``tree_sitter`` is not importable (uses ``sys.meta_path``
+  injection to simulate the missing extra).
+  (4) Asserts the CLI emits the install hint to stderr and
+  returns exit 1 without dumping a traceback when
+  ``RustExtrasNotInstalled`` is raised.
+
+### Tests
+
+- 214 passed (was 210 in v0.7.0). Delta: +4.
+- 176 unit + 38 integration (1 also network-marked).
+
+### Process notes (validator-bias self-disclosure)
+
+Both findings landed silently on my v0.7.0 validation because:
+
+1. **Issue 1**: my sandbox already had ``tomli`` installed (a
+   transitive of mypy on Python 3.10), so mypy resolved the
+   import without needing the override. A fresh contributor
+   venv on 3.11+ without tomli would not. The lesson is that
+   "mypy --strict passes" is not a sufficient gate; it must be
+   "mypy --strict passes on a clean install of [dev,rust]
+   from scratch", which is what fresh-instance review is for.
+2. **Issue 2**: I tested the CLI dispatch path with extras
+   installed and never simulated the missing-extras case
+   empirically. The lazy-import gate I did test
+   (``python3 -X importtime``) proves that ``cli`` does not
+   load tree_sitter, but does NOT prove that ``cli`` handles
+   tree_sitter being missing at call time. Different gate,
+   different test required.
+
+Both lessons saved as feedback memories for future releases.
+
+### Five Questions (per Bayyinah Engineering Discipline Framework v2.0 section 11.3)
+
+1. **Smallest input demonstrating the fix works?**
+   For Issue 2:
+   ```bash
+   pip uninstall tree_sitter tree_sitter_rust
+   echo "fn f() -> i32 { 42 }" > /tmp/foo.rs
+   furqan-lint check /tmp/foo.rs
+   ```
+   On v0.7.0: Python traceback ending with
+   ``ModuleNotFoundError: No module named 'tree_sitter'``,
+   exit 1. On v0.7.0.1: one line
+   ``Rust support not installed. Run: pip install furqan-lint[rust]``,
+   exit 1, no traceback.
+
+2. **Smallest input demonstrating the bug pre-fix?**
+   Same input, on v0.7.0: 12-line Python traceback dumping
+   the call stack down to ``parser.py:35``.
+
+3. **What this fix does NOT do?**
+   (a) Does not bump the minimum Python to 3.11 (which would
+       eliminate the tomli dependency entirely). 3.10 remains
+       supported.
+   (b) Does not change the behaviour when a partial extras
+       install (e.g., tree_sitter present but tree_sitter_rust
+       missing) occurs; the typed exception fires identically
+       in either case.
+   (c) Does not add a ``furqan-lint --install-extras`` helper
+       command; the user must run pip themselves.
+
+4. **New code paths and their boundaries?**
+   ``parse_file`` gained a 7-line probe block at its entry
+   (try/except importing tree_sitter and tree_sitter_rust,
+   raising ``RustExtrasNotInstalled`` with the install hint).
+   ``_check_rust_file`` gained a 6-line except-block catching
+   ``RustExtrasNotInstalled`` and emitting a clean stderr
+   message + exit 1. The translator gained the
+   ``RustExtrasNotInstalled`` class (8 lines including
+   docstring). All boundaries pinned by the 4-test corrective
+   regression suite.
+
+5. **Limits retired and added?**
+   Retired: none. Added: none. v0.7.0.1 is a corrective
+   release; the documented-limits inventory is unchanged.
+
 ## [0.7.0] - 2026-05-03
 
 Feature release: Rust adapter Phase 1. New language support behind

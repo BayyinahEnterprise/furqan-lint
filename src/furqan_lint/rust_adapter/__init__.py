@@ -10,6 +10,14 @@ Python-only install path remains unaffected. tree-sitter is imported
 lazily inside ``parse_file``; importing this package alone does not
 trigger a ``tree_sitter`` import.
 
+If ``parse_file`` is called and tree-sitter is missing, it raises
+``RustExtrasNotInstalled`` (a subclass of ``ImportError``) with the
+install hint as its message. The CLI catches this typed exception
+and prints a calm one-line install hint instead of dumping a Python
+traceback. v0.7.0.1 fix: in v0.7.0 the missing-extras case
+crashed with a raw ModuleNotFoundError traceback because the
+deferred import inside ``parser._get_parser`` was not wrapped.
+
 Public surface
 ==============
 
@@ -17,6 +25,9 @@ Public surface
   return the translated Furqan ``Module``.
 * ``RustParseError``: raised when the Rust source contains a syntax
   error or missing tokens; the CLI converts this to exit code 2.
+* ``RustExtrasNotInstalled``: raised when the ``[rust]`` extra is
+  missing from the install. CLI converts to exit code 1 plus the
+  install hint.
 
 Everything else (the parser singleton, the translator internals,
 the edition resolver) is intentionally not exported. v0.7.x can
@@ -32,26 +43,42 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from furqan.parser.ast_nodes import Module
 
-from furqan_lint.rust_adapter.translator import RustParseError
+from furqan_lint.rust_adapter.translator import (
+    RustExtrasNotInstalled,
+    RustParseError,
+)
 
-__all__ = ("RustParseError", "parse_file")
+__all__ = ("RustExtrasNotInstalled", "RustParseError", "parse_file")
 
 
 def parse_file(path: Path) -> Module:
     """Parse ``path`` as Rust source and return a Furqan ``Module``.
 
-    Lazy-imports ``furqan_lint.rust_adapter.parser`` and
-    ``furqan_lint.rust_adapter.translator`` so that the broader
-    ``furqan_lint`` package can be imported without the
-    ``tree_sitter`` runtime dependency. If tree-sitter or
-    tree-sitter-rust is missing, the underlying ``parser._get_parser``
-    raises ``ImportError`` and the CLI converts that to a
-    user-facing install hint.
+    Probes the ``tree_sitter`` and ``tree_sitter_rust`` imports
+    at the entry point of this function. If either is missing,
+    raises ``RustExtrasNotInstalled`` (a subclass of ``ImportError``)
+    with the install hint as its message. The CLI catches this typed
+    exception and prints a one-line install hint without a Python
+    traceback.
 
     Raises ``RustParseError`` if the source contains a syntax error
     (recoverable parse errors and missing tokens are both caught
     via ``tree.root_node.has_error``).
     """
+    # Fix (a) for v0.7.0.1: probe the extras imports here so the
+    # call site (not just the package import) trips on missing
+    # extras. Without this, the ImportError fires deep inside
+    # parser._get_parser and surfaces as a raw traceback to the
+    # user, violating prompt section 3.3 ("Do not crash with
+    # ModuleNotFoundError").
+    try:
+        import tree_sitter  # noqa: F401  - presence probe only
+        import tree_sitter_rust  # noqa: F401  - presence probe only
+    except ImportError as e:
+        raise RustExtrasNotInstalled(
+            "Rust support not installed. Run: pip install furqan-lint[rust]"
+        ) from e
+
     from furqan_lint.rust_adapter.edition import edition_for
     from furqan_lint.rust_adapter.parser import parse_file as _parse_file
     from furqan_lint.rust_adapter.translator import translate_tree
