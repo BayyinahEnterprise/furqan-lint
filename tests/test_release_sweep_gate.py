@@ -42,7 +42,7 @@ The gate is intentionally narrow. It does NOT check:
   scope).
 - Source code docstrings that describe per-version semantics
   with specific reasoning ("v0.7.0 translator emits ...";
-  "v0.7.2 widens the predicate to ..."; etc.) — these are
+  "v0.7.2 widens the predicate to ..."; etc.) are
   intentional historical anchors, not stale claims.
 
 The gate's job is to catch the failure mode where "Phase 2"
