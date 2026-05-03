@@ -20,12 +20,6 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
 
 ## Inventory
 
-- **`macro_invocation_body.rs`.** A function whose body is a single
-  macro invocation (`todo!()`, `unimplemented!()`, etc.) is treated
-  as opaque. The current implementation cannot see through macro expansion. The
-  Python adapter's R3 catches the analogous Python case
-  (`def f() -> int: pass`); the Rust analogue is deferred to
-  v0.7.1.
 - **`trait_object_return.rs`.** A function returning
   `Box<dyn Trait>` is translated to a `TypePath` that ignores the
   trait-object payload. Trait-object polymorphism is out of scope
@@ -73,6 +67,21 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
   `statements=()`, which check_ring_close fires R3 on. The
   cases now live as `failing/r3_*.rs` fixtures with assertions
   inverted from "silent PASS" to "fires R3."
+
+## Retired in v0.7.3
+
+- `macro_invocation_body.rs` removed: the limit it pinned (a
+  function whose body is a single macro invocation evaluates as
+  opaque to R3) was the same underlying limit as
+  `r3_panic_as_tail_expression.rs`. Both pinned the v0.7.0
+  R1 translator behavior: tail expressions become synthesized
+  opaque ReturnStmts, regardless of whether the tail expression
+  is a diverging macro. The two fixtures pinned one limit, not
+  two. Consolidated into `r3_panic_as_tail_expression.rs` whose
+  pinning test now parametrizes over the diverging-macro family
+  (panic, todo, unimplemented, unreachable). The README
+  "Remaining limitations" section now has one bullet for this
+  limit instead of two.
 
 ## How to retire a fixture
 

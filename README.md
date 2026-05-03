@@ -361,12 +361,6 @@ Each Rust limit has a fixture in
 `tests/fixtures/rust/documented_limits/` and a pinning test in
 `tests/test_rust_correctness.py`.
 
-- **Macro-invocation bodies.** A function whose body is a single
-  macro invocation (`todo!()`, `unimplemented!()`, etc.) is treated
-  as opaque. The current implementation cannot see through macro expansion. The
-  Python adapter's R3 catches the analogous Python case
-  (`def f() -> int: pass`); the Rust analogue is deferred to
-  v0.7.1. Pinned as `tests/fixtures/rust/documented_limits/macro_invocation_body.rs`.
 - **Trait-object return types.** Functions returning `Box<dyn Trait>`
   are translated to a `TypePath` that ignores the trait-object
   payload. Trait-object polymorphism is out of scope; a future
