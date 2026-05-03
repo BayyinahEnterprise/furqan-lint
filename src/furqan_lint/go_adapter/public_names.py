@@ -22,18 +22,17 @@ def extract_public_names(path: Path | str) -> frozenset[str]:
     The goast binary emits ``public_names`` as an ordered list of
     every identifier whose first rune is uppercase, regardless of
     declaration kind: top-level functions, type names, var/const
-    names, AND method names (without receiver-type qualification
-    -- see the documented limit pinned by
-    ``method_conflation_v1.go`` / ``method_conflation_v2.go``;
-    fixed in v0.8.2 by emitting qualified method names).
+    names, AND method names. As of v0.8.2, method names are
+    emitted with receiver-type qualification (``Counter.Foo``,
+    ``Logger.Foo``); v0.8.1's bare-name false-negative (where
+    distinct ``Foo`` methods on different receivers collapsed
+    into one ``Foo`` entry, masking the removal of one of them)
+    was retired in v0.8.2 by the goast change in
+    ``cmd/goast/main.go``\'s ``receiverTypeName`` helper.
 
     Returns a frozenset so the caller can pass it directly to
     :func:`furqan_lint.additive.compare_name_sets` without
-    additional conversion. The frozenset collapse is also where
-    the method-name conflation false-negative manifests: two
-    distinct ``Foo`` methods on different receivers become one
-    ``Foo`` entry in the set, and removing one method while the
-    other remains is invisible to the diff.
+    additional conversion.
 
     Raises whatever the underlying ``parse_file`` raises:
     :class:`furqan_lint.go_adapter.GoExtrasNotInstalled` when the
