@@ -133,3 +133,32 @@ def test_extract_public_names_skips_methods_in_impl(tmp_path: Path) -> None:
     assert names == frozenset({"Counter"})
     assert "new" not in names
     assert "increment" not in names
+
+
+def test_extract_public_names_raises_on_parse_error(tmp_path: Path) -> None:
+    """v0.8.3: a syntactically broken Rust source raises
+    RustParseError. Prior to v0.8.3, the diff path silently
+    accepted broken input and produced a false MARAD on every
+    name that existed only on the well-formed side.
+    """
+    from furqan_lint.rust_adapter import extract_public_names
+    from furqan_lint.rust_adapter.translator import RustParseError
+
+    src = tmp_path / "broken.rs"
+    src.write_text("pub fn ){ broken")
+    with pytest.raises(RustParseError):
+        extract_public_names(src)
+
+
+def test_extract_public_names_raises_on_truncated_input(tmp_path: Path) -> None:
+    """v0.8.3: truncated function (missing closing brace)
+    raises RustParseError. Tree-sitter is lenient about partial
+    parses; the gate catches what tree-sitter forgives.
+    """
+    from furqan_lint.rust_adapter import extract_public_names
+    from furqan_lint.rust_adapter.translator import RustParseError
+
+    src = tmp_path / "trunc.rs"
+    src.write_text("pub fn foo() {")
+    with pytest.raises(RustParseError):
+        extract_public_names(src)

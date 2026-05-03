@@ -336,3 +336,65 @@ def test_result_predicate_does_not_match_option() -> None:
     assert _is_result_type(rt) is False
     # _is_may_fail_producer fires on either; sanity check the union
     assert _is_may_fail_producer(rt) is True
+
+
+def test_rust_extract_omits_impl_methods() -> None:
+    """v0.8.3 documented limit: extract_public_names omits
+    methods inside ``impl Type { ... }`` blocks.
+
+    The extractor walks only top-level CST root children; impl
+    methods live one level deeper. Asymmetric with goast as of
+    v0.8.2 (which emits qualified method names like
+    ``Counter.increment``); Rust impl-method collection is
+    registered as a v0.8.4 candidate.
+
+    Pin: ``frozenset({"Counter"})`` only -- the two impl
+    methods (``increment``, ``get``) are silently omitted. The
+    pin asserts the empirical behavior; a future v0.8.4 change
+    that adds impl-method collection MUST flip this assertion
+    deliberately, with the matching CHANGELOG ``### Limitations
+    retired`` entry.
+    """
+    if not _rust_extras_present():
+        pytest.skip(_REASON)
+    from furqan_lint.rust_adapter import extract_public_names
+
+    fixture = FIXTURES / "documented_limits" / "impl_methods_omitted.rs"
+    names = extract_public_names(fixture)
+    assert names == frozenset({"Counter"}), f"Expected only 'Counter', got: {sorted(names)}"
+
+
+@pytestmark_rust
+def test_trait_object_return_documented_limit() -> None:
+    """Backfill (v0.8.3): the v0.7.0 fixture
+    ``trait_object_return.rs`` had a header comment and a
+    documented_limits/README entry but no pinning test. The
+    four-place-completeness gate (introduced in v0.8.3 commit
+    5) enforces the test-presence requirement; the backfill
+    happens here so the gate self-test passes against the
+    v0.8.2 substrate.
+
+    Verdict: PASS. The fixture parses cleanly and produces no
+    diagnostics; the limit is that the trait-object payload
+    is not modeled (a future trait-dispatch checker would
+    need to revisit), not that any current checker fires
+    on the file.
+    """
+    result = _run_check("documented_limits/trait_object_return.rs")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PASS" in result.stdout
+
+
+@pytestmark_rust
+def test_lifetime_param_return_documented_limit() -> None:
+    """Backfill (v0.8.3): the v0.7.0 fixture
+    ``lifetime_param_return.rs`` had a header comment and a
+    documented_limits/README entry but no pinning test. Same
+    rationale as test_trait_object_return_documented_limit.
+
+    Verdict: PASS. Lifetimes are stripped during translation;
+    D24's path-coverage logic is unaffected.
+    """
+    result = _run_check("documented_limits/lifetime_param_return.rs")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PASS" in result.stdout

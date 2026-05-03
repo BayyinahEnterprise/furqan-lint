@@ -76,6 +76,12 @@ V0_8_1_SURFACE: frozenset[str] = V0_7_0_SURFACE
 # layers; the top-level furqan_lint surface is unchanged.
 # Aliases V0_7_0_SURFACE per the per-version cadence.
 V0_8_2_SURFACE: frozenset[str] = V0_7_0_SURFACE
+# v0.8.3 corrective release: Rust diff parse-error gate, goast
+# IndexListExpr, impl-methods documented limit, two automated
+# gates, two backfilled Rust pins. None of these touch the
+# top-level furqan_lint surface (all changes live in
+# subpackage / binary / test layers). Aliases V0_7_0_SURFACE.
+V0_8_3_SURFACE: frozenset[str] = V0_7_0_SURFACE
 
 
 def _current_surface() -> frozenset[str]:
@@ -204,5 +210,21 @@ def test_v0_8_2_surface_is_subset_of_current() -> None:
     missing = V0_8_2_SURFACE - current
     assert not missing, (
         f"furqan_lint.__all__ removed names from V0_8_2_SURFACE: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_v0_8_3_surface_is_subset_of_current() -> None:
+    """The v0.8.3 baseline (alias of V0_7_0_SURFACE; the v0.8.3
+    changes are corrective + gates, none touching the top-level
+    surface) must remain a subset of the current
+    furqan_lint.__all__.
+    """
+    import furqan_lint
+
+    current = frozenset(furqan_lint.__all__)
+    missing = V0_8_3_SURFACE - current
+    assert not missing, (
+        f"furqan_lint.__all__ removed names from V0_8_3_SURFACE: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )
