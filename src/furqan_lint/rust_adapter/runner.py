@@ -13,23 +13,21 @@ Wires three checkers (current as of v0.7.2):
 * **D24 (all-paths-return)** via upstream ``check_all_paths_return``.
   Suppressed on functions R3 already fired on (R3 is the more
   specific verdict for the zero-return shape).
-* **D11 (status-coverage on Option- AND Result-returning helpers)**
-  via upstream ``check_status_coverage`` with the local
-  ``_is_may_fail_producer`` predicate. As of v0.7.2, the predicate
-  recognises both ``Option<T>`` (UnionType with a None arm,
-  delegated to the Python runner's ``_is_optional_union``) and
-  ``Result<T, E>`` (UnionType where neither arm is None,
-  recognised by ``_is_result_type``). Shape A per ADR-001 §10
-  Q3 follow-up; Shape B (a single ``_is_may_fail_producer``
-  generalisation across Python and Rust) is deferred until the
-  Go adapter lands and the second cross-language data point
-  clarifies the right abstraction.
+* **D11 (status-coverage on Option-, Result-, and Go-error-
+  returning helpers)** via upstream ``check_status_coverage``
+  with the cross-language ``_is_may_fail_producer`` predicate
+  from ``furqan_lint.runner``. As of v0.8.0, the predicate
+  recognises ``Option<T>``, ``Result<T, E>``, and Go's
+  ``(T, error)`` (Shape B per ADR-002 §10 Q3 follow-up; the
+  predicate moved from this module to ``furqan_lint.runner``
+  when the Go adapter landed and the third cross-language data
+  point confirmed that the generalisation was the right
+  abstraction).
 
 Order: R3 -> D24 -> D11. R3 first so D24 suppression on R3-fired
 functions is reachable. D24 and D11 are independent of each other.
-v0.7.2 changes the D11 producer predicate from
-``_is_optional_union`` (Option-only) to ``_is_may_fail_producer``
-(Option OR Result); the wiring point is unchanged.
+v0.8.0 moved ``_is_may_fail_producer`` to ``furqan_lint.runner``
+as the cross-language home; the wiring point is unchanged.
 """
 
 from __future__ import annotations
@@ -40,9 +38,8 @@ from typing import TYPE_CHECKING
 from furqan.checker.all_paths_return import check_all_paths_return
 from furqan.checker.ring_close import check_ring_close
 from furqan.checker.status_coverage import check_status_coverage
-from furqan.parser.ast_nodes import UnionType
 
-from furqan_lint.runner import _is_optional_union
+from furqan_lint.runner import _is_may_fail_producer
 
 if TYPE_CHECKING:
     from furqan.parser.ast_nodes import Module
@@ -94,56 +91,6 @@ _RUST_KNOWN_TYPES: frozenset[str] = frozenset(
 )
 
 
-def _is_result_type(rt: object) -> bool:
-    """True iff ``rt`` is a Rust ``Result<T, E>`` translated to
-    ``UnionType(TypePath(T), TypePath(E))``.
-
-    Distinguished from ``Option<T>`` by the structural rule that
-    NEITHER arm has base ``"None"``. The v0.7.0 translator
-    represents ``Option<T>`` as ``UnionType(T, TypePath("None"))``
-    and ``Result<T, E>`` as ``UnionType(T, E)`` with concrete type
-    names; this predicate complements ``_is_optional_union``
-    without overlap.
-
-    User-defined two-arm types (e.g. ``Either<L, R>``) translate
-    to ``TypePath`` (not ``UnionType``) because the v0.7.0
-    translator only special-cases ``Result`` and ``Option`` heads;
-    those user types are not flagged by this predicate, which is
-    correct (the Furqan structural-honesty argument applies to
-    ``Result``-shaped may-fail producers, not to arbitrary
-    user-defined sums).
-
-    Shape A per ADR-001 §10 Q3 follow-up: a separate predicate
-    parallel to ``_is_optional_union``. Shape B (a single
-    generalised ``_is_may_fail_producer`` across Python and Rust)
-    is deferred until the Go adapter lands and clarifies whether
-    Go's error-return shape fits the same abstraction.
-    """
-    if not isinstance(rt, UnionType):
-        return False
-    # Furqan AST attrs are Any-typed upstream (no py.typed); the
-    # `Any != "None"` comparisons are bool at runtime but Any to
-    # mypy. Mirror the cast pattern from
-    # furqan_lint.return_none._allows_none.
-    return bool(rt.left.base != "None" and rt.right.base != "None")
-
-
-def _is_may_fail_producer(rt: object) -> bool:
-    """True iff ``rt`` is a may-fail producer in Rust:
-    ``Option<T>`` (the None arm is the failure case) OR
-    ``Result<T, E>`` (the Err arm is the failure case).
-
-    Composed of ``_is_optional_union`` (delegated to the Python
-    runner so the Python and Rust predicates stay in sync on the
-    Option case) and ``_is_result_type``. v0.7.1 D11 used only
-    ``_is_optional_union``; v0.7.2 widens to both shapes so a
-    caller that declares a concrete type but invokes a Result
-    producer is flagged the same way as one invoking an Option
-    producer.
-    """
-    return _is_optional_union(rt) or _is_result_type(rt)
-
-
 def check_rust_module(module: Module) -> list[tuple[str, object]]:
     """Run the v0.7.1 checker pipeline on a translated Rust Module.
 
@@ -173,9 +120,10 @@ def check_rust_module(module: Module) -> list[tuple[str, object]]:
             continue
         diagnostics.append(("all_paths_return", diag))
 
-    # D11: status-coverage on Option- AND Result-returning helpers.
-    # v0.7.2 widens the producer predicate from _is_optional_union
-    # to _is_may_fail_producer (Option OR Result).
+    # D11: status-coverage on Option-, Result-, and (Go) error-
+    # returning helpers. Imports the cross-language
+    # _is_may_fail_producer from furqan_lint.runner (Shape B,
+    # consolidated in v0.8.0 when the Go adapter landed).
     for diag in check_status_coverage(module, producer_predicate=_is_may_fail_producer):
         diagnostics.append(("status_coverage", diag))
 
