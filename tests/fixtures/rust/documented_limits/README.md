@@ -48,9 +48,21 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
   This is a deliberate skip, not an oversight; pinned so that a
   future change to walk `function_signature_item` is intentional.
 - **`closure_with_annotated_return.rs`.** `closure_expression`
-  nodes are skipped in Phase 1 even when the closure has an
-  explicit `-> T` annotation. The outer function is checked
-  normally; the closure body is opaque. Phase 2 may revisit.
+  nodes are skipped for D24, D11, AND R3 in Phase 2 (v0.7.1).
+  The outer function is checked normally; the closure body is
+  opaque. Phase 3 may revisit when there is a concrete
+  user-reported false negative.
+- **`r3_panic_as_tail_expression.rs`.** `panic!()` (or any
+  diverging macro) used as a tail expression with no trailing
+  `;` does NOT fire R3 in v0.7.1, even though the function
+  structurally produces no value. The tree-sitter-rust grammar
+  treats the macro as a tail expression and the v0.7.0
+  translator synthesizes a `ReturnStmt(opaque)` for any tail
+  expression; R3 fires on zero `ReturnStmt`, so it does not
+  fire here. Fixing this would require either a hardcoded
+  diverging-macro allowlist (brittle) or cross-file type
+  inference (out of scope). Phase 3 may revisit if the Rust
+  ecosystem standardizes a `#[diverging]` attribute.
 
 ## How to retire a fixture
 
