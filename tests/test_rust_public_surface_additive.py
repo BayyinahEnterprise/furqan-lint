@@ -52,6 +52,16 @@ _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_0: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFA
 # surface is unchanged -- the constant's existence is the
 # baseline, the name is the audit pin).
 _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_1: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_0_1
+# v0.8.2 adds the additive-only Rust diff path. The new public
+# name is ``extract_public_names`` (called by
+# cli._check_rust_additive alongside
+# furqan_lint.additive.compare_name_sets). Per the per-version
+# cadence, V0_8_2 grows by exactly one name; the union form
+# (vs. an explicit literal set) makes the delta textually
+# visible in the source.
+_RUST_ADAPTER_PUBLIC_SURFACE_v0_8_2: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_1 | {
+    "extract_public_names"
+}
 
 
 def test_rust_adapter_public_surface_is_superset_of_v0_7_0_baseline() -> None:
@@ -164,5 +174,20 @@ def test_rust_adapter_public_surface_is_superset_of_v0_8_1_baseline() -> None:
     missing = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_1 - current
     assert not missing, (
         f"rust_adapter.__all__ removed names from v0.8.1 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_rust_adapter_public_surface_is_superset_of_v0_8_2_baseline() -> None:
+    """The v0.8.2 baseline (v0.8.1 plus extract_public_names)
+    must remain a subset of the current surface. Catches any
+    future removal of the Rust diff path's public entry point.
+    """
+    from furqan_lint import rust_adapter
+
+    current = frozenset(rust_adapter.__all__)
+    missing = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_2 - current
+    assert not missing, (
+        f"rust_adapter.__all__ removed names from v0.8.2 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )

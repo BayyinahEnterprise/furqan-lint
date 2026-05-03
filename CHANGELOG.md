@@ -1,5 +1,235 @@
 # Changelog
 
+## [0.8.2] - 2026-05-03
+
+Feature release. Adds the Rust additive-only diff path
+(``furqan-lint diff old.rs new.rs``) via a new
+``rust_adapter.public_names.extract_public_names`` extractor
+that walks the tree-sitter CST. Fixes the v0.8.1-documented
+Go method-name conflation false-negative by emitting qualified
+method names (``Counter.Foo``, ``Logger.Foo``) from the goast
+binary across four receiver shapes (value, pointer, value
+generic, pointer generic).
+
+Two v0.8.1 documented limits retire: method-name conflation
+(closed by the goast change) and Rust additive-only diff
+not-implemented (closed by the new Rust diff helper). Two
+v0.8.1 anticipatory pin tests flip with their contracts: the
+unqualified-method-name pin in
+``tests/test_go_diff.py`` becomes the qualified-method-name
+pin; the Rust-not-implemented dispatcher test file
+``tests/test_rust_diff_not_implemented.py`` is renamed to
+``tests/test_cli_diff_dispatcher.py`` and its precedence
+assertion is flipped from absence-of-not-impl-string to
+absence-of-Rust-diff-verdict-prefix.
+
+### Added
+
+- **Rust additive-only diff.** ``furqan-lint diff old.rs new.rs``
+  extracts ``pub`` item names from each file via tree-sitter
+  CST walk and reports any names present in ``old`` and
+  absent in ``new``. PASS (exit 0) on additive-only changes;
+  MARAD (exit 1) on removals; PARSE ERROR (exit 2) on parse
+  failure or missing extras. The diagnostic prose's
+  ``minimal_fix`` uses ``pub use <new> as Name;`` re-export
+  hints (Rust idiom).
+- **``extract_public_names(path)``** in
+  ``furqan_lint.rust_adapter`` (re-exported from
+  ``rust_adapter.public_names``). Returns ``frozenset[str]``
+  of unrestricted ``pub`` item names. Skips ``pub(crate)``,
+  ``pub(super)``, ``pub(in path)`` per locked decision 2.
+  Item kinds collected: function_item, struct_item, enum_item,
+  const_item, static_item, type_item, mod_item per locked
+  decision 3 (trait_item out of scope for v0.8.2). Methods
+  inside ``impl`` blocks are NOT collected at the diff layer
+  (mirrors how the v0.8.2 goast change moved Go method handling
+  from collapse-by-name to qualify-at-emit; the Rust adapter
+  takes the symmetric stance: methods are type-private, not
+  name-collapsed).
+- **``_check_rust_additive`` helper** in ``furqan_lint.cli``.
+  Mirror of ``_check_go_additive`` minus the language tag.
+  Catches ``RustExtrasNotInstalled`` (install hint, exit 1)
+  and ``RustParseError`` (exit 2) per the v0.7.0.1 typed-
+  exception pattern. Routes to ``compare_name_sets`` with
+  ``language='rust'``.
+- **goast qualified method-name emission.**
+  ``cmd/goast/main.go`` adds a ``receiverTypeName`` helper
+  handling four receiver shapes (value, pointer, value generic
+  ``T[U]``, pointer generic ``*T[U]``). The
+  ``collectPublicNames`` FuncDecl branch prepends
+  ``Type.`` to the method name when the receiver is non-nil
+  and ``receiverTypeName`` returns non-empty. Bare functions
+  (no receiver) emit unchanged. Locked decision 4. Closes the
+  v0.8.1 method-name conflation false-negative.
+- **9 new tests** across three files:
+  - ``test_rust_public_names.py`` (5): pub-only, pub(crate)
+    skipped, frozenset return type, empty file, methods in
+    impl blocks excluded.
+  - ``test_rust_diff.py`` (4): PASS, MARAD, Rust rename hint
+    prose, compare_name_sets with language='rust' direct unit.
+  - ``test_goast_qualified_methods.py`` (3): all four receiver
+    shapes pinned (value, pointer, value generic, pointer
+    generic).
+
+### Changed
+
+- **CLI dispatcher Guard 2** routes ``.rs`` vs ``.rs`` to
+  ``_check_rust_additive`` (was: exit 2 with the v0.8.1
+  ``Rust diff not implemented`` stub). Cross-language guard
+  (Guard 1) and Go guard (Guard 3) unchanged. Locked decision
+  4 invariant preserved.
+- **Go method-name emission shape.** Methods on receiver type
+  ``T`` now emit as ``T.Method`` instead of bare ``Method``.
+  Distinct methods on different receivers no longer collapse
+  in ``public_names``.
+- **``extract_public_names`` flip in test_go_diff.py.** The
+  v0.8.1 anticipatory pin
+  ``test_extract_public_names_includes_method_names_unqualified``
+  was flipped to
+  ``test_extract_public_names_includes_qualified_method_names``
+  in v0.8.2 commit 3 (alongside the goast change that flipped
+  the contract). Per the v0.8.1 docstring's "v0.8.2 will flip
+  this assertion" note.
+
+### Retired
+
+- **Documented limit: method-name conflation in
+  ``public_names``** (was v0.8.1). Closed by the goast change.
+  Fixtures ``method_conflation_v1.go`` /
+  ``method_conflation_v2.go`` deleted; pinning test
+  ``test_go_diff_method_conflation_documented`` removed;
+  README bullet removed. Replacement positive test:
+  ``test_go_diff_method_conflation_now_detected`` in
+  ``test_go_diff.py`` (uses ``tmp_path`` to avoid recreating
+  documented-limit infrastructure for a closed limit).
+- **Documented limit: Rust additive-only diff
+  not-implemented** (was v0.8.1). Closed by
+  ``_check_rust_additive``. Fixture
+  ``diff_not_implemented.rs`` deleted; README bullet removed.
+- **Test ``test_rust_diff_returns_exit_2_with_v0_8_2_schedule_message``**:
+  retired inline in v0.8.2 commit 2 alongside the Rust diff
+  wiring. Replacement positive verdict:
+  ``test_rust_diff_additive_only_passes`` in
+  ``test_rust_diff.py``.
+- **File rename:** ``tests/test_rust_diff_not_implemented.py``
+  -> ``tests/test_cli_diff_dispatcher.py`` via ``git mv``
+  (history preserved). The two remaining tests (cross-
+  language guard + its precedence pin) stay in the renamed
+  file; the precedence test's name and assertion flip to
+  reflect the v0.8.2 contract (Rust diff IS implemented; the
+  cross-language guard precedence is now over a working
+  helper, not a stub).
+
+### Tests
+
+Test count: 294 (v0.8.1) -> 305 (v0.8.2). Net delta: +11.
+Per the §4 inventory: +9 new (5 rust_public_names + 4 rust_diff
++ 3 qualified_methods - 1 retired
+test_rust_diff_returns_exit_2 - 1 retired
+test_go_diff_method_conflation_documented + 1 added
+test_go_diff_method_conflation_now_detected) + 3 per-version
+baselines (Rust, Go, top-level) = +12; minus 1 absorbed via
+the qualified-name flip (v0.8.1 unqualified pin replaced by
+qualified pin, not duplicated) = +11.
+
+### Note on v0.8.1 CHANGELOG math
+
+The v0.8.1 entry's ``### Tests`` section reported ``test count:
+268 (v0.8.0) -> 291 (v0.8.1). Net delta: +23.`` The actual
+v0.8.1 baseline was **294**, not 291. Per the v0.7.4 corrective
+pattern (CHANGELOG math drift caught in round-18), the v0.8.1
+math is recorded here for the audit trail; the v0.8.1 entry
+itself is preserved as written for historical fidelity. Future
+runs should baseline against 294 (and v0.8.2 baselines against
+305 here for v0.8.3 work).
+
+### §11.3 Five Questions
+
+1. **What's the riskiest assumption in this release?**
+   That the four receiver shapes in goast's ``receiverTypeName``
+   cover all compilable Go method-receiver forms. The
+   IndexListExpr case (multi-parameter generics like
+   ``func (c *T[U, V]) Foo()``) is NOT in the
+   exhaustive switch; it falls through to the default empty-
+   string return, which causes the method to fall back to its
+   bare name (preserving v0.8.1 behavior in that case rather
+   than dropping the method silently). A v0.8.3 follow-up
+   could add IndexListExpr if a real-world consumer surfaces
+   one.
+
+2. **What's the most reversible decision?**
+   The pub(crate) / pub(super) skip (locked decision 2). Three
+   lines in ``_has_unrestricted_pub`` to expand. The most
+   irreversible is the qualified method-name emission shape
+   (``Type.Method``); changing it later breaks every CI pipeline
+   that grepped diff output for the v0.8.2 form.
+
+3. **What did we defer that we shouldn't have?**
+   Nothing in this release. trait_item collection deferral
+   (locked decision 3) is principled (the consumer use case is
+   not yet concrete); IndexListExpr handling is the one
+   incremental gap and it has a documented fall-back.
+
+4. **What's the most surprising thing a fresh-instance
+   reviewer should look for?**
+   The renamed file ``tests/test_cli_diff_dispatcher.py``
+   contains a precedence test whose negative-assertion form
+   was flipped between v0.8.1 and v0.8.2 (was: absence of
+   "Rust diff not implemented"; now: absence of any Rust
+   diff verdict prefix). The invariant being pinned is
+   identical (cross-language guard 1 must come before Rust
+   guard 2); the falsifiability surface changed because the
+   Rust path itself changed. A future regression that broke
+   the guard ordering would still surface here.
+
+5. **What did we learn that should change the next prompt?**
+   The "flip an anticipatory pin in lockstep with the change
+   that flips its contract" pattern saved a gate-failing
+   intermediate state in commit 3. Future prompts should
+   explicitly designate which commit lands which flip; the
+   v0.8.2 prompt §3.4 batched the test flip into commit 4
+   alongside the retirement, but the goast change in commit 3
+   flipped the contract and required the test flip to ride
+   along (otherwise commit 3 would have failed gate 1
+   pytest). Recorded for future planning.
+
+### §5.1 Validator-Bias Self-Disclosure
+
+I am the producer + validator + reporter for the v0.8.2
+series. Load-bearing fresh-instance review questions:
+
+* Does ``extract_public_names`` correctly skip every form of
+  restricted ``pub`` (crate, super, in path) AND collect every
+  unrestricted ``pub`` for all 7 supported item kinds?
+* Does ``receiverTypeName`` produce correct ``Type.Method``
+  emission for all four receiver shapes? Does the empty-string
+  fallback preserve v0.8.1 behavior for unanticipated shapes?
+* Does the renamed ``test_cli_diff_dispatcher.py`` precedence
+  test still falsify on a guard-reordering regression (e.g.
+  if Guard 2 were moved before Guard 1, the test should
+  fail)?
+* Does the flipped Go-diff test
+  ``test_extract_public_names_includes_qualified_method_names``
+  correctly assert the v0.8.2 contract AND fail under the
+  v0.8.1 unqualified emission (verifiable by reverting the
+  goast change)?
+
+### §5.2 Prompt-Grounding Self-Check
+
+§2 commands all returned the expected results before
+implementation began:
+
+* ``parse_source`` exists in rust_adapter/parser.py (NOT
+  ``parse_cst``).
+* ``tree_sitter_languages`` is NOT a project dependency.
+* The v0.8.1 anticipatory pin
+  ``test_extract_public_names_includes_method_names_unqualified``
+  exists in test_go_diff.py.
+* ``method_conflation`` is referenced in
+  go_adapter/public_names.py docstring.
+* ``test_rust_diff_not_implemented.py`` has 3 tests.
+* Baseline pytest: 294 (v0.8.1).
+
 ## [0.8.1] - 2026-05-03
 
 Feature release. Adds the Go additive-only diff path

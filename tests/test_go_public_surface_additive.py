@@ -39,6 +39,12 @@ _GO_ADAPTER_PUBLIC_SURFACE_v0_8_0: frozenset[str] = frozenset(
 _GO_ADAPTER_PUBLIC_SURFACE_v0_8_1: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_0 | {
     "extract_public_names"
 }
+# v0.8.2 changes goast's qualified method-name emission and the
+# CLI's Rust diff path. The go_adapter Python __all__ surface is
+# unchanged in v0.8.2 (the goast emit-format change is a behavior
+# refinement, not a public-surface change). Aliases v0_8_1 per
+# the per-version cadence.
+_GO_ADAPTER_PUBLIC_SURFACE_v0_8_2: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_1
 
 
 def test_go_adapter_public_surface_is_superset_of_v0_8_0_baseline() -> None:
@@ -80,5 +86,20 @@ def test_go_adapter_public_surface_is_superset_of_v0_8_1_baseline() -> None:
     missing = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_1 - current
     assert not missing, (
         f"go_adapter.__all__ removed names from the v0.8.1 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_go_adapter_public_surface_is_superset_of_v0_8_2_baseline() -> None:
+    """The v0.8.2 baseline (alias of v0_8_1; goast emission
+    change is internal, no Go __all__ change in v0.8.2) must
+    remain a subset of the current surface.
+    """
+    from furqan_lint import go_adapter
+
+    current = frozenset(go_adapter.__all__)
+    missing = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_2 - current
+    assert not missing, (
+        f"go_adapter.__all__ removed names from v0.8.2 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )
