@@ -177,3 +177,51 @@ def test_rust_diff_no_extras_emits_install_hint(tmp_path: Path) -> None:
     )
     assert "Rust support not installed" in result.stderr
     assert "Traceback" not in result.stderr, f"traceback in stderr:\n{result.stderr}"
+
+
+def test_rust_diff_returns_exit_2_on_parse_error_old_side(tmp_path: Path) -> None:
+    """v0.8.3: a parse error on the OLD side returns exit 2
+    (PARSE ERROR) on stdout, not exit 1 (false MARAD).
+    """
+    old = tmp_path / "old.rs"
+    new = tmp_path / "new.rs"
+    old.write_text("pub fn ){ broken")
+    new.write_text("pub fn ok() {}\n")
+    result = _run_diff(old, new)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "PARSE ERROR" in result.stdout
+
+
+def test_rust_diff_returns_exit_2_on_parse_error_new_side(tmp_path: Path) -> None:
+    """v0.8.3 (DISCRIMINATING for the round-21 HIGH): a parse
+    error on the NEW side returns exit 2, not exit 1. The
+    v0.8.2 false-MARAD bug surfaced specifically on this side
+    -- a well-formed old.rs with names that the broken new.rs
+    couldn't produce would fire a false 'removed name' MARAD
+    for every old-side name.
+    """
+    old = tmp_path / "old.rs"
+    new = tmp_path / "new.rs"
+    old.write_text("pub fn ok() {}\npub struct Server;\n")
+    new.write_text("pub fn ){ broken")
+    result = _run_diff(old, new)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "PARSE ERROR" in result.stdout
+    # Defensive: the false-MARAD case would have surfaced as
+    # exit 1 with 'ok' or 'Server' in the output. Pin the
+    # absence to catch a regression.
+    assert "MARAD" not in result.stdout
+    assert "'ok'" not in result.stdout
+    assert "'Server'" not in result.stdout
+
+
+def test_rust_diff_returns_exit_2_on_parse_error_both_sides(tmp_path: Path) -> None:
+    """v0.8.3: both sides broken still returns exit 2 (not
+    exit 0 false PASS via empty-set diff)."""
+    old = tmp_path / "old.rs"
+    new = tmp_path / "new.rs"
+    old.write_text("pub fn ){ broken")
+    new.write_text("pub fn ){ also_broken")
+    result = _run_diff(old, new)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "PARSE ERROR" in result.stdout

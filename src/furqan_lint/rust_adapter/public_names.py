@@ -73,6 +73,18 @@ def extract_public_names(path: Path | str) -> frozenset[str]:
     Raises :class:`furqan_lint.rust_adapter.RustExtrasNotInstalled`
     if the ``[rust]`` extra is not installed (the CLI converts
     to exit code 1 plus the install hint).
+
+    Raises :class:`furqan_lint.rust_adapter.RustParseError` if
+    the source contains a syntax error or missing tokens (the
+    CLI converts to exit code 2 plus a PARSE ERROR diagnostic
+    on stdout). The check is delegated to the translator's
+    ``_assert_parses_cleanly`` so the diff path uses the same
+    parse-error definition as the lint path. Added in v0.8.3
+    to close the round-21 HIGH finding: prior to this gate,
+    a malformed ``.rs`` file silently parsed to an empty
+    public-name set, producing a false MARAD on every name
+    that existed in the well-formed file (or a false PASS
+    when both sides were broken).
     """
     # Probe the [rust] extras at the entry point so a missing-
     # extras case raises RustExtrasNotInstalled (caught by the
@@ -90,9 +102,11 @@ def extract_public_names(path: Path | str) -> frozenset[str]:
             "Rust support not installed. Run: pip install furqan-lint[rust]"
         ) from e
     from furqan_lint.rust_adapter.parser import parse_source
+    from furqan_lint.rust_adapter.translator import _assert_parses_cleanly
 
     source_path = Path(path)
     tree = parse_source(source_path.read_bytes())
+    _assert_parses_cleanly(tree, source_path)
     names: set[str] = set()
     for child in tree.root_node.children:
         if child.type not in _PUB_ITEM_TYPES:
