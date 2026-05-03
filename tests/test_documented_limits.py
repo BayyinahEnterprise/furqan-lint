@@ -129,26 +129,3 @@ def test_local_class_in_function_methods_not_collected() -> None:
 
 # ---------------------------------------------------------------------------
 # Redundant None arms in PEP 604 unions (v0.3.4 / round-7 Observation 2)
-
-
-# ---------------------------------------------------------------------------
-# Aliased decorator imports for R3 skip-list (v0.6.0)
-# ---------------------------------------------------------------------------
-
-
-def test_aliased_abstractmethod_fires_r3_false_positive() -> None:
-    """``from abc import abstractmethod as abstract; @abstract`` is
-    NOT recognized by R3's skip-list and the method fires
-    ``zero_return_path`` as a false positive.
-
-    Documented limitation: R3's skip-list resolution in v0.6.0 is
-    name-only. Symbol-table-backed alias resolution is deferred to
-    v0.6.1, at which point this fixture transitions from "fires R3"
-    to "skipped" and the test is updated per the four-step
-    procedure in ``tests/fixtures/documented_limits/README.md``.
-    """
-    result = _run_check("aliased_abstractmethod.py")
-    assert result.returncode == 1
-    assert "MARAD" in result.stdout
-    assert "zero_return_path" in result.stdout
-    assert "function 'required'" in result.stdout

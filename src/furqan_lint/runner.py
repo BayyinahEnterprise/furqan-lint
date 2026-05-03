@@ -1,6 +1,6 @@
 """Run structural checkers on a translated Python ``Module``.
 
-Three checkers cross the language boundary cleanly:
+Four checkers cross the language boundary cleanly:
 
 * **D24 (all-paths-return).** No adaptation needed. Every typed Python
   function should reach a ``return`` on every control-flow path; the
@@ -24,9 +24,9 @@ Three checkers cross the language boundary cleanly:
   zero ``return`` statements. mypy's "Missing return statement" in
   Furqan terms. Walks the raw ``ast.Module`` because Python decorators
   (``@abstractmethod``, ``@overload``) are not preserved in the
-  Furqan translation but are needed for the skip-list. Runs *before*
-  D24 on each function: if R3 fires, the function is excluded from
-  D24's diagnostics for that pass (R3 is the more specific finding).
+  Furqan translation but are needed for the skip-list. R3 and D24 are
+  non-overlapping: D24 fires on partial-path coverage (>=1 return
+  present), R3 fires on zero-return shapes. Both run independently.
 """
 
 from __future__ import annotations
@@ -72,10 +72,12 @@ def check_python_module(
     """Run all structural checks on a translated Python ``Module``.
 
     If ``source_tree`` (the raw ``ast.Module`` the ``module`` was
-    translated from) is supplied, R3 (zero-return) runs first and any
-    function it fires on is excluded from D24's diagnostics for that
-    pass. Without ``source_tree``, R3 is silently skipped (back-compat
-    with v0.5.x callers); D24 still runs as before.
+    translated from) is supplied, R3 (zero-return) runs in addition
+    to the Furqan checkers. R3 and D24 are non-overlapping in
+    practice: D24 only fires when at least one ``return`` is
+    present (partial-path coverage), and R3 only fires when zero
+    ``return`` statements exist. Without ``source_tree``, R3 is
+    silently skipped (back-compat with v0.5.x callers).
 
     Returns a list of ``(checker_name, diagnostic)`` tuples. ``diagnostic``
     is either a :class:`furqan.errors.marad.Marad` (a violation), a
@@ -86,21 +88,13 @@ def check_python_module(
     """
     diagnostics: list[tuple[str, object]] = []
 
-    # R3 first: it's more specific than D24 for the zero-return shape.
-    r3_function_names: set[str] = set()
+    # R3 (zero-return). Non-overlapping with D24: D24 requires at
+    # least one return present, R3 requires zero. Order is independent.
     if source_tree is not None:
         for d in check_zero_return(source_tree):
             diagnostics.append(("zero_return_path", d))
-            r3_function_names.add(d.function_name)
 
-    # D24: skip any function R3 already fired on (the diagnostics
-    # would overlap; R3 is the load-bearing one for this shape).
-    # In practice D24 only fires on partial-path coverage (>=1 return
-    # present), so this suppression is defensive: it prevents future
-    # D24 expansions from double-reporting an R3 finding.
     for d in check_all_paths_return(module):
-        if _d24_diagnostic_in_r3_set(d, r3_function_names):
-            continue
         diagnostics.append(("all_paths_return", d))
 
     for d in check_status_coverage(module, producer_predicate=_is_optional_union):
@@ -110,22 +104,3 @@ def check_python_module(
         diagnostics.append(("return_none_mismatch", d))
 
     return diagnostics
-
-
-def _d24_diagnostic_in_r3_set(diagnostic: object, r3_names: set[str]) -> bool:
-    """True iff the D24 diagnostic is attached to a function whose
-    name is already in ``r3_names`` (i.e., R3 fired on it first).
-
-    Returns ``bool`` rather than ``str | None`` so the consumer-side
-    discipline (D11) is honestly propagated. Conservative: if the
-    diagnostic shape doesn't expose a function name, returns
-    ``False`` and D24 still emits.
-    """
-    name = getattr(diagnostic, "function_name", None)
-    if isinstance(name, str):
-        return name in r3_names
-    fn = getattr(diagnostic, "function", None)
-    inner = getattr(fn, "name", None)
-    if isinstance(inner, str):
-        return inner in r3_names
-    return False

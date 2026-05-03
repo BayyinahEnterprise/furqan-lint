@@ -1,5 +1,146 @@
 # Changelog
 
+## [0.6.1] - 2026-05-02
+
+Round-11 corrective from Fraz. Three tracked findings: an aliased-
+decorator false positive in R3 left over from v0.6.0; doc-staleness
+drift in the project README and the documented-limits README that
+lingered across rounds 6-11; and dead code (`_d24_diagnostic_in_r3_set`)
+introduced in v0.6.0 as defensive suppression that turned out to be
+structurally redundant.
+
+The retirement count for v0.6.1 is one documented limit
+(aliased_abstractmethod), the third in three releases (v0.5.x ->
+v0.6.0 retired two, v0.6.1 retires one).
+
+### Fixed
+
+- **Aliased-decorator skip-list now resolves through a module-level
+  symbol table.** R3's decorator skip-list previously matched only
+  the bare and qualified forms (`@abstractmethod`,
+  `@abc.abstractmethod`, `@overload`, `@typing.overload`). It did
+  not follow `from abc import abstractmethod as abstract` aliases,
+  and a method decorated with the aliased name fired R3 as a false
+  positive. v0.6.1 builds a module-level alias map from top-level
+  `import` and `from ... import ... [as ...]` statements once per
+  call to `check_zero_return`, then resolves bare and dotted
+  decorator names through the map before the skip-list lookup.
+  Covers four import shapes: `from X import Y`, `from X import Y
+  as Z`, `import X`, `import X as Y`.
+- **Stale README bullet for `redundant_pipe_none.py` removed.**
+  The fixture was deleted in v0.3.5 when the redundant-None
+  limit was promoted to a structural fix; the corresponding
+  `Remaining limitations` bullet was left behind and persisted
+  across rounds 6 through 11. Round-11 audit caught it.
+- **Stale README bullet for `aliased_abstractmethod.py` removed.**
+  The bullet was added in v0.6.0 and is now retired by the fix
+  above.
+- **Dead code: `_d24_diagnostic_in_r3_set` removed from
+  `runner.py`.** The helper was added in v0.6.0 as a defensive
+  D24-suppression mechanism for any function R3 had already fired
+  on. Empirically D24 only fires on partial-path coverage (>=1
+  return present) while R3 only fires on zero-return shapes; the
+  two checkers do not overlap and the suppression had no
+  reachable effect. Round-11 audit caught it. The runner now
+  appends D24 diagnostics directly without the suppression
+  branch, and the docstring is updated to document the
+  non-overlap explicitly.
+- **`tests/fixtures/documented_limits/README.md` refreshed.**
+  The Inventory section had not been updated since v0.3.x and
+  was missing the `Retired in v0.6.0` and `Retired in v0.6.1`
+  sections, plus a substantively new four-place-pattern paragraph
+  in the preamble. Now lists the current four active limits and
+  three retirement-by-version sections.
+
+### Limitations retired
+
+- **Aliased decorator imports for R3 skip-list.** Was a v0.6.0
+  documented limit. Closed by the alias-resolution fix above.
+  The fixture `tests/fixtures/documented_limits/aliased_abstractmethod.py`
+  is deleted; the pinning test
+  `test_aliased_abstractmethod_fires_r3_false_positive` is
+  removed; the README bullet is removed; the documented_limits
+  README has a `## Retired in v0.6.1` section recording it.
+
+### Added
+
+- **`tests/test_round11_alias_resolution.py` (12 unit tests).**
+  Pins the symbol-table-backed decorator skip-list across all
+  four import shapes plus negative-control regression checks.
+  Four tests cover alias map construction directly; six cover
+  skip-list resolution through the alias map (positive cases);
+  two cover that direct (non-aliased) recognition still works
+  after the refactor; two are negative-control assertions
+  (unrelated decorator fires; no imports yields no resolution).
+- **`tests/test_readme_drift.py` (2 unit tests).** v3.0-prep
+  structural test that parses the project README's `Remaining
+  limitations` section, extracts every fixture path mentioned
+  in inline code spans, and asserts each path exists on disk.
+  Would have caught the `redundant_pipe_none.py` drift in
+  round 6 and prevented the four rounds of accumulated
+  staleness that round 11 surfaced.
+
+### Tests
+
+- 180 passed (was 167 in v0.6.0). Delta: +13 (= 12 alias + 2
+  drift - 1 retired pin).
+- 153 unit + 27 integration (1 of which is also network-marked).
+
+### Five Questions (per Bayyinah Engineering Discipline Framework v2.0 §11.3)
+
+1. **Smallest input demonstrating the fix works?**
+   ```python
+   from abc import abstractmethod as abstract
+   class C:
+       @abstract
+       def required(self) -> int: ...
+   ```
+   On v0.6.0: R3 fires `zero_return_path` on `required` as a
+   false positive (exit 1). On v0.6.1: PASS, exit 0, because
+   `abstract` now resolves to `abc.abstractmethod` via the
+   alias map and the skip-list match succeeds.
+
+2. **Smallest input demonstrating the bug pre-fix?**
+   Same input, same output, before vs. after. The asymmetry was
+   the failing direction: v0.6.0 was a false positive on a
+   genuinely-abstract method; v0.6.1 correctly skips.
+
+3. **What does this fix NOT do that a reader might expect?**
+   It does not (a) extend symbol-table tracking to
+   `aliased_optional_import.py` or `aliased_union_import.py` in
+   the `return_none` checker; both remain documented limits with
+   their original fixtures and pinning tests. (b) follow imports
+   inside function or class bodies; only top-level
+   `tree.body` `Import` and `ImportFrom` nodes are tracked.
+   Decorators that need such inner imports are exotic enough to
+   defer. (c) close the `from somemodule import abstractmethod`
+   collision case (an unrelated module that happens to export
+   the bare name `abstractmethod`); the alias map records the
+   qualified form `somemodule.abstractmethod` but the skip-list
+   match is short-circuited by the bare-name check before
+   alias resolution runs. This false positive predates v0.6.1
+   and is not made worse by this fix; it is named in the
+   negative-control test for awareness.
+
+4. **New code paths and their boundaries?**
+   `zero_return._build_decorator_alias_map(tree)` walks
+   `tree.body` for `Import` and `ImportFrom`; reads `node.module`
+   and each `alias.asname or alias.name`; emits a
+   `dict[str, str]`. `check_zero_return` calls it once per
+   tree. `_check_function`, `_has_skip_decorator`, and
+   `_decorator_matches_skip_list` thread the dict through.
+   `_decorator_matches_skip_list` adds two new branches: bare
+   `aliases.get(name) in _SKIP_DECORATORS`, and dotted
+   `f"{aliases.get(prefix)}.{suffix}" in _SKIP_DECORATORS`. All
+   four shapes pinned by tests. Boundaries: lambdas excluded
+   (no decorator syntax); inner imports not tracked; module
+   alias map is not propagated across files (no cross-file
+   symbol resolution).
+
+5. **What documented limitations does this retire? Add?**
+   Retires: "Aliased decorator imports for R3 skip-list" (v0.6.0).
+   Adds: none.
+
 ## [0.6.0] - 2026-05-02
 
 Round-10: ring-close R3 (zero-return) checker. The fourth Furqan
