@@ -127,3 +127,115 @@ def test_generic_type_parameters_are_discarded() -> None:
     result = _run_check(fixture)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "PASS" in result.stdout
+
+
+def test_go_r3_not_applicable_documented(tmp_path: Path) -> None:
+    """Documents that R3 (zero-return) is not applicable to Go.
+
+    Three discriminating claims (per the v0.8.1 prompt §3.6):
+
+    1. furqan-lint PASSes the nearest-edge fixture
+       (`NearestEdge() (result int) { return }`). The Go runner
+       does not wire R3, AND the fixture has a `return` keyword
+       so even if R3 were wired it would not fire.
+
+    2. The fixture compiles cleanly under `go build` (verified
+       via a transient go.mod + entry.go in tmp_path). This
+       proves the nearest-edge case is a real compilable shape,
+       not just a syntactic artifact.
+
+    3. The R3 firing condition (annotated return type, no
+       return statement) is rejected by `go build` with
+       'missing return'. This proves the firing condition is
+       unreachable on any compilable Go source: the limit is
+       not a deferral, it is predetermined.
+
+    Claim 1 always runs. Claims 2 and 3 require `go` on PATH;
+    they skip if not found.
+    """
+    import shutil
+
+    fixture = LIMITS_DIR / "r3_compile_rejected.go"
+
+    # Claim 1: furqan-lint PASSes.
+    result = _run_check(fixture)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PASS" in result.stdout
+
+    # Claims 2 and 3 require the Go toolchain.
+    if shutil.which("go") is None:
+        pytest.skip("go toolchain not on PATH; cannot verify compile claims")
+
+    # Claim 2: fixture compiles.
+    build_dir = tmp_path / "build_fixture"
+    build_dir.mkdir()
+    (build_dir / "go.mod").write_text("module r3test\ngo 1.21\n")
+    import shutil as _sh
+
+    _sh.copy(fixture, build_dir / "main.go")
+    (build_dir / "entry.go").write_text("package main\n\nfunc main() { _ = NearestEdge() }\n")
+    result = subprocess.run(
+        ["go", "build", "."],
+        cwd=build_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"Fixture failed to compile: {result.stderr}"
+
+    # Claim 3: zero-return shape is rejected by go build.
+    bad_dir = tmp_path / "build_bad"
+    bad_dir.mkdir()
+    (bad_dir / "go.mod").write_text("module r3bad\ngo 1.21\n")
+    (bad_dir / "main.go").write_text("package main\n\nfunc F() int { }\nfunc main() { _ = F() }\n")
+    result = subprocess.run(
+        ["go", "build", "."],
+        cwd=bad_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "missing return" in result.stderr
+
+
+def test_go_diff_method_conflation_documented() -> None:
+    """Documents the method-name conflation false-negative.
+
+    Removing Logger (and its Logger.Foo method) between v1 and
+    v2 surfaces only `Logger` as removed. The `Foo` method
+    removal is silently lost because `Counter.Foo` still
+    occupies the bare name `Foo` in public_names.
+
+    v0.8.2 will fix this by emitting qualified method names
+    from goast (Counter.Foo and Logger.Foo as distinct entries).
+    The pinning test asserts the v0.8.1 false-negative shape:
+    'Logger' IS reported, 'Foo' (in single quotes, matching the
+    diagnostic prose) is NOT reported.
+    """
+    v1 = LIMITS_DIR / "method_conflation_v1.go"
+    v2 = LIMITS_DIR / "method_conflation_v2.go"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "furqan_lint.cli",
+            "diff",
+            str(v1),
+            str(v2),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    # Logger IS reported (correct: type removed; bare name
+    # 'Logger' disappears from the set).
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "MARAD" in result.stdout
+    assert "'Logger'" in result.stdout
+    # Foo method removal is NOT reported (the documented false-
+    # negative). The diagnostic prose wraps removed names in
+    # single quotes ("Public name 'X' was present..."); checking
+    # for "'Foo'" with quotes ensures we are matching the
+    # diagnostic prose specifically.
+    assert "'Foo'" not in result.stdout
