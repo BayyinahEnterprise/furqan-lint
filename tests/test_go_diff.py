@@ -149,16 +149,23 @@ def test_extract_public_names_returns_frozenset(tmp_path: Path) -> None:
     assert isinstance(names, frozenset)
 
 
-def test_extract_public_names_includes_method_names_unqualified(
+def test_extract_public_names_includes_qualified_method_names(
     tmp_path: Path,
 ) -> None:
-    """Documents that method names are collected WITHOUT receiver
-    qualification. This is the load-bearing pin for the
-    method-conflation false-negative documented in
-    tests/test_go_documented_limits.py (added in v0.8.1 commit 4).
-    A future v0.8.2 fix that emits qualified method names will
-    flip this assertion to expect 'Counter.Foo' and 'Logger.Foo';
-    that flip will be intentional and visible.
+    """v0.8.2: method names are collected WITH receiver-type
+    qualification (Counter.Foo, Logger.Foo). This is the FLIPPED
+    form of the v0.8.1 anticipatory pin
+    test_extract_public_names_includes_method_names_unqualified
+    -- the v0.8.1 docstring explicitly noted "v0.8.2 will flip
+    this assertion".
+
+    The flip is what closes the v0.8.1-documented method-name
+    conflation false-negative: distinct Foo methods on different
+    receivers no longer collapse into one bare 'Foo' entry, so
+    the additive-only diff catches the removal of one of them
+    even when the other persists. The retirement of the
+    method_conflation_v1 / v2 documented-limit fixtures lands
+    in v0.8.2 commit 4.
     """
     from furqan_lint.go_adapter import extract_public_names
 
@@ -171,6 +178,7 @@ def test_extract_public_names_includes_method_names_unqualified(
         "func (l *Logger) Foo() {}\n"
     )
     names = extract_public_names(src)
-    # v0.8.1 contract: method names appear bare, no receiver-type
-    # qualification. Two distinct Foo methods collapse to one.
-    assert names == frozenset({"Counter", "Logger", "Foo"})
+    # v0.8.2 contract: method names are qualified by their
+    # receiver type. Two distinct Foo methods now appear as
+    # distinct names (Counter.Foo and Logger.Foo).
+    assert names == frozenset({"Counter", "Logger", "Counter.Foo", "Logger.Foo"})

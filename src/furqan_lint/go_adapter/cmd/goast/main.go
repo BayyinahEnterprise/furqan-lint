@@ -83,13 +83,59 @@ func main() {
 	}
 }
 
+// receiverTypeName extracts the receiver type's name from a
+// FuncDecl receiver field, handling four shapes:
+//
+//   - *ast.Ident                            => "T"
+//     (func (c T) Foo())
+//   - *ast.StarExpr wrapping *ast.Ident     => "T"
+//     (func (c *T) Foo())
+//   - *ast.IndexExpr wrapping *ast.Ident    => "T"
+//     (func (c T[U]) Foo())
+//   - *ast.StarExpr wrapping *ast.IndexExpr => "T"
+//     (func (c *T[U]) Foo())
+//
+// Returns "" if the receiver shape is not one of the above (e.g.
+// IndexListExpr for multi-parameter generics, or any other
+// surprise the Go grammar might surface). Empty receiver name
+// causes collectPublicNames to fall back to the bare method
+// name -- preserves the v0.8.1 behavior in unexpected cases
+// rather than silently dropping the method.
+func receiverTypeName(field *ast.Field) string {
+	switch t := field.Type.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		switch inner := t.X.(type) {
+		case *ast.Ident:
+			return inner.Name
+		case *ast.IndexExpr:
+			if id, ok := inner.X.(*ast.Ident); ok {
+				return id.Name
+			}
+		}
+	case *ast.IndexExpr:
+		if id, ok := t.X.(*ast.Ident); ok {
+			return id.Name
+		}
+	}
+	return ""
+}
+
 func collectPublicNames(file *ast.File) []string {
 	names := []string{}
 	for _, decl := range file.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
 			if d.Name.IsExported() {
-				names = append(names, d.Name.Name)
+				name := d.Name.Name
+				if d.Recv != nil && len(d.Recv.List) > 0 {
+					recv := receiverTypeName(d.Recv.List[0])
+					if recv != "" {
+						name = recv + "." + name
+					}
+				}
+				names = append(names, name)
 			}
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
