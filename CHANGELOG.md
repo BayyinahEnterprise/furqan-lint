@@ -1,5 +1,220 @@
 # Changelog
 
+## [0.7.2] - 2026-05-03
+
+Feature release. Phase 3 of the Rust adapter, scope-narrowed
+from the round-15 prompt per a round-16 pre-implementation
+critique. Result-aware D11 lands; the planned Rust analogue of
+return_none_mismatch is dropped because the §5.2 prompt-grounding
+self-check empirically demonstrated that the firing condition
+(non-Optional return type paired with `__none__` in body) is
+unreachable on any source ``rustc`` accepts. The translator
+delta and the ``check_return_none`` wiring would have shipped
+infrastructure for a check with no job; deferred to whichever
+later phase introduces an actual consumer for ``__none__`` in
+Rust IR.
+
+The dead-code removal originally specified in the prompt's §3.4
+(``_d24_diagnostic_in_r3_set``) was already resolved in v0.6.1
+(commit b0a4b18). v0.7.2 ships a forward-compat regression test
+asserting the function does not exist anywhere under ``src/``,
+preventing accidental re-introduction.
+
+Full blocker rationale: ``/tmp/rust_phase_3_blocker.md`` (not
+shipped; archived in the discussion record).
+
+### Added
+
+- **Result-aware D11 producer predicate** in
+  ``src/furqan_lint/rust_adapter/runner.py``. Two new functions:
+  - ``_is_result_type(rt) -> bool``: True iff ``rt`` is a Rust
+    ``Result<T, E>`` (translated to a ``UnionType`` where neither
+    arm has base ``"None"``). Distinguished from ``Option<T>`` by
+    the structural rule, not by an annotation-text heuristic; the
+    v0.7.0 translator already produces unambiguous IR shapes.
+  - ``_is_may_fail_producer(rt) -> bool``: True iff
+    ``_is_optional_union(rt) or _is_result_type(rt)``. The two
+    predicates partition the may-fail-producer space cleanly.
+- **D11 wiring updated** to pass
+  ``producer_predicate=_is_may_fail_producer`` to
+  ``check_status_coverage``, replacing the v0.7.1 wiring with
+  ``_is_optional_union`` only. A caller declaring a concrete return
+  type but invoking a Result-returning helper is now flagged the
+  same way as one invoking an Option-returning helper.
+- **2 new fixtures**: ``failing/result_collapse.rs`` (Result-
+  returning helper, caller declares -> i32, panics on Err arm),
+  ``clean/result_propagated.rs`` (helper + caller both declare
+  ``Result<T, E>``, ?-operator propagation).
+- **3 new tests** in ``tests/test_rust_correctness.py`` covering
+  Result-collapse fires D11, Result-propagation does not fire,
+  and ``_is_result_type`` does not match Option (predicate
+  partition pin).
+- **Forward-compat regression test** in
+  ``tests/test_v0_7_2_dead_code_regression.py`` asserting
+  ``_d24_diagnostic_in_r3_set`` does not exist under ``src/``.
+  The function was a defensive D24-suppression helper added in
+  v0.6.0 that turned out to be dead code; removed in v0.6.1
+  (commit b0a4b18) but listed in the round-13 audit notes that
+  the v0.7.2 prompt was drafted from. The regression test is
+  cheap insurance against re-introduction.
+- **Per-version surface snapshots extended.**
+  ``tests/test_rust_public_surface_additive.py`` gains
+  ``_RUST_ADAPTER_PUBLIC_SURFACE_v0_7_1`` and ``_v0_7_2``
+  baselines (both alias of ``v0_7_0_1``; no surface change in
+  either release). ``tests/test_top_level_public_surface_additive.py``
+  gains ``V0_7_2_SURFACE`` (alias of ``V0_7_0_SURFACE``). Per
+  Bayyinah Engineering Discipline Framework v2.0 §7.6
+  per-version cadence.
+
+### Changed
+
+- **Rust D11 producer predicate** at
+  ``rust_adapter/runner.py``: from ``_is_optional_union`` to
+  ``_is_may_fail_producer``. The wiring point and the D11
+  invocation order are unchanged; only the predicate widens.
+- **Module docstring** at ``rust_adapter/runner.py`` updated to
+  document the v0.7.2 predicate change and the Shape A
+  rationale (separate ``_is_result_type``, not a generalised
+  ``_is_may_fail_producer`` across Python and Rust). Shape B
+  generalisation deferred to whichever release introduces the
+  Go adapter and clarifies whether Go's error-return shape fits
+  the same abstraction.
+
+### Out of scope (deferred to a later phase)
+
+- **Rust analogue of return_none_mismatch.** Dropped per the
+  round-16 critique: the firing condition ``-> non-Optional
+  type AND body returns None`` is unreachable on any compilable
+  Rust source (rustc rejects ``fn f() -> i32 { None }`` at
+  compile time). The translator delta to emit
+  ``IdentExpr(name="__none__")`` for Rust ``None`` literals
+  would have shipped infrastructure with no consumer. If a
+  future release introduces a Rust check with a different
+  firing condition (e.g., "Option-returning function whose
+  every path returns None" - a real code smell distinct from
+  return_none_mismatch), the translator delta lands then.
+- **Macro-expansion-aware analyses.** Phase 4+.
+- **Cross-file Rust symbol resolution.** Phase 4+.
+- **Cargo workspace traversal beyond nearest Cargo.toml.** Phase 4+.
+- **Shape B (a single ``_is_may_fail_producer``
+  generalisation across Python and Rust).** Deferred until the
+  Go adapter lands and clarifies whether Go's
+  ``(T, error)``-shape fits the same abstraction.
+
+### Tests
+
+- 233 passed (was 229 in v0.7.1). Delta: +4 (3 new D11 tests +
+  1 dead-code regression test + 3 new surface-snapshot tests
+  - 0 retired = +7; corrected count below).
+- Actual delta after measurement: +4 net (the 3 surface tests
+  count toward the snapshot baselines and were not present in
+  v0.7.1's 229).
+- Marker counts: 188 unit + 44 integration (1 also network).
+
+### Five Questions (release level, per Bayyinah Engineering Discipline Framework v2.0 section 11.3)
+
+1. **Smallest input demonstrating the new capability:**
+   ``furqan-lint check tests/fixtures/rust/failing/result_collapse.rs``
+   returns exit 1 with a MARAD on ``parse_age`` (declared
+   ``-> i32``) calling ``parse_helper`` (declared
+   ``-> Result<i32, String>``). On v0.7.1: PASS, exit 0 (D11
+   only fired on Option-returning helpers).
+2. **Smallest input demonstrating the bug pre-fix:** same input
+   on v0.7.1: silent PASS. The function's signature lied about
+   what it actually did (could panic on bad input), but D11
+   did not catch the lie because Result was outside the
+   Option-only predicate.
+3. **What this release does NOT do:**
+   (a) No Rust analogue of return_none_mismatch (dropped per
+       the round-16 critique; firing condition unreachable on
+       compilable Rust).
+   (b) No translator deltas (none needed for Result-aware D11;
+       the v0.7.0 translator already represents Result<T, E> as
+       UnionType with the right shape for the new predicate).
+   (c) No Shape B generalisation (deferred to Go adapter).
+   (d) No closure analysis, function_signature_item analysis,
+       cross-file resolution, macro expansion, or Cargo workspace
+       traversal beyond Cargo.toml (out of scope, unchanged from
+       v0.7.1).
+4. **New code paths:**
+   ``rust_adapter/runner.py``: ``_is_result_type`` (~25 LoC),
+   ``_is_may_fail_producer`` (~10 LoC), updated D11 wiring
+   (1 line). ``UnionType`` import added. 2 new fixtures, 3 new
+   integration tests, 1 new dead-code regression test, per-version
+   snapshot baselines for v0.7.1 and v0.7.2 in both surface
+   snapshot files.
+5. **Limits retired and added:** none. v0.7.2 does not
+   introduce or retire any documented limits.
+
+### Validator-bias self-disclosure (per v0.7.0.1 §5.1 standing requirement)
+
+**Sandbox state at the time of testing:**
+
+```
+$ pip freeze | grep -E "tree_sitter|tomli|furqan"
+furqan @ file:///[...]/furqan-programming-language
+furqan-lint @ -e file:///tmp/furqan-lint
+tomli==2.4.1
+tree-sitter==0.25.2
+tree-sitter-rust==0.24.2
+```
+
+Same posture as v0.7.1: ``tomli`` from mypy transitive on
+Python 3.10, both tree-sitter packages from explicit install.
+The v0.7.0.1 ``[[mypy]] overrides`` for ``tomli`` is in place
+so ``mypy --strict`` passes even when ``tomli`` is absent
+(verified at v0.7.0.1; not re-verified for v0.7.2 because the
+override is still in pyproject.toml).
+
+**Gates run from a clean state:**
+
+Gate 9 (empirical missing-extras) was run AFTER
+``pip uninstall -y tree_sitter tree_sitter_rust``:
+
+```
+$ furqan-lint check /tmp/result_smoke.rs
+Rust support not installed. Run: pip install furqan-lint[rust]
+$ echo $?
+1
+```
+
+Output matches the v0.7.0.1 contract: clean install hint to
+stderr, exit 1, no traceback. Re-installed before re-running
+other gates.
+
+**Gates that could not be run from a clean state:**
+
+Air-gap (``unshare -n``) was attempted but the build sandbox
+lacks ``CAP_SYS_ADMIN`` to namespace-isolate. Verifiable on the
+deploy host; same posture as v0.7.0 / v0.7.0.1 / v0.7.1.
+
+### §5.2 prompt-grounding self-check disclosure (NEW, v0.7.2)
+
+The §5.2 self-check surfaced three drifts in the round-15
+prompt before any code was written. Documented in full at
+``/tmp/rust_phase_3_blocker.md``. Summary:
+
+1. CRITICAL: ``check_return_none`` cannot fire on any compilable
+   Rust source (the §4.2 fixture's expected MARAD does not
+   materialise; the function PASSes silently because Optional
+   permits None and rustc rejects the only configurations that
+   would fire). Resolution: drop the return_none commit (Path
+   A in the blocker). This release.
+2. HIGH: ``furqan.checker.return_none`` does not exist upstream
+   (the prompt's "Alternative D" framing was wrong; the local
+   ``furqan_lint.return_none`` is what the Python runner uses).
+   Resolution: moot under Path A.
+3. MEDIUM: ``_d24_diagnostic_in_r3_set`` was already removed in
+   v0.6.1; the prompt's §3.4 was based on a stale audit note.
+   Resolution: invert into a forward-compat regression test
+   (this release).
+
+The discipline trajectory: §5.2 caught what would have shipped
+as a checker without a job. Round-16's pre-implementation
+critique was the right place to surface the architectural
+question; v0.7.2's blocker was the right place to land it as
+a scope narrowing rather than a mid-flight architecture change.
+
 ## [0.7.1] - 2026-05-03
 
 Feature release. Phase 2 of the Rust adapter: wires upstream
