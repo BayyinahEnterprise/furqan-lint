@@ -23,6 +23,10 @@ Public surface
 
 * ``parse_file(path)`` -> ``Module``: parse a Rust source file and
   return the translated Furqan ``Module``.
+* ``extract_public_names(path)`` -> ``frozenset[str]``: return
+  the ``pub`` item names declared in ``path``. Used by the
+  additive-only diff path
+  (``furqan-lint diff old.rs new.rs``). Added in v0.8.2.
 * ``RustParseError``: raised when the Rust source contains a syntax
   error or missing tokens; the CLI converts this to exit code 2.
 * ``RustExtrasNotInstalled``: raised when the ``[rust]`` extra is
@@ -30,9 +34,10 @@ Public surface
   install hint.
 
 Everything else (the parser singleton, the translator internals,
-the edition resolver) is intentionally not exported. v0.7.x can
-expand the surface using the ``__all__``-snapshot additive-only
-discipline pinned by ``tests/test_rust_public_surface_additive.py``.
+the edition resolver) is intentionally not exported. v0.7.x and
+later can expand the surface using the ``__all__``-snapshot
+additive-only discipline pinned by
+``tests/test_rust_public_surface_additive.py``.
 """
 
 from __future__ import annotations
@@ -48,7 +53,12 @@ from furqan_lint.rust_adapter.translator import (
     RustParseError,
 )
 
-__all__ = ("RustExtrasNotInstalled", "RustParseError", "parse_file")
+__all__ = (
+    "RustExtrasNotInstalled",
+    "RustParseError",
+    "extract_public_names",
+    "parse_file",
+)
 
 
 def parse_file(path: Path) -> Module:
@@ -86,3 +96,22 @@ def parse_file(path: Path) -> Module:
     tree = _parse_file(path)
     edition = edition_for(path)
     return translate_tree(tree, path.read_bytes(), path, edition=edition)
+
+
+def extract_public_names(path: Path | str) -> frozenset[str]:
+    """Return ``pub`` item names declared in ``path``.
+
+    Lazy-imports
+    ``furqan_lint.rust_adapter.public_names.extract_public_names``
+    so this package's import path does not require tree-sitter to
+    be present (the missing-extras case is handled inside the
+    helper, which raises :class:`RustExtrasNotInstalled` with the
+    install hint).
+    """
+    from furqan_lint.rust_adapter.public_names import (
+        extract_public_names as _extract,
+    )
+
+    if isinstance(path, Path):
+        return _extract(path)
+    return _extract(Path(str(path)))
