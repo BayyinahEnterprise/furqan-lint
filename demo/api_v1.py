@@ -10,10 +10,10 @@ def validate_document(data: dict) -> dict | None:
     return {"title": data["title"], "valid": True}
 
 
-def process_intake(data: dict) -> str:
+def process_intake(data: dict) -> str | None:
     result = validate_document(data)
     if result is None:
-        return "rejected"
+        return None
     return f"accepted: {result['title']}"
 
 
