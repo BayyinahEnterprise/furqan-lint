@@ -1,5 +1,209 @@
 # Changelog
 
+## [0.8.1] - 2026-05-03
+
+Feature release. Adds the Go additive-only diff path
+(``furqan-lint diff old.go new.go``), refactors the Phase-2
+additive checker into a language-agnostic
+``compare_name_sets`` helper plus a Python wrapper, adds a
+cross-language rejection guard plus a Rust diff
+not-implemented guard to the diff dispatcher, documents R3 as
+not-applicable to Go, documents Go method-name conflation in
+``public_names``, and ships per-version baseline constants for
+the top-level, rust_adapter, and go_adapter surface snapshots.
+
+This release also absorbed the v0.7.4 corrective items from
+round-19's review of v0.8.0 (README Go section, Go
+documented_limits scaffolding, v0.7.4 CHANGELOG entry).
+
+### Added
+
+- **Go additive-only diff.** ``furqan-lint diff old.go new.go``
+  extracts uppercase-initial public names from each file via
+  goast and reports any names present in ``old`` and absent in
+  ``new``. PASS (exit 0) on additive-only changes; MARAD (exit
+  1) on removals; PARSE ERROR (exit 2) on goast failure or
+  missing extras. The diagnostic prose's ``minimal_fix`` is
+  language-aware: Go users see ``var Name = <new>``
+  re-export hints rather than Python alias syntax.
+- **Cross-language rejection guard.** A ``foo.py`` vs
+  ``bar.go`` (or any suffix mismatch) returns exit 2 with
+  "Cross-language diff not supported. Old: '<s1>'; new:
+  '<s2>'.". MUST evaluate FIRST in the dispatcher per locked
+  decision 4 so a ``.py`` vs ``.rs`` pair surfaces
+  "cross-language", not "Rust diff not implemented".
+- **Rust diff not-implemented guard.** ``.rs`` vs ``.rs``
+  returns exit 2 with "Rust diff not implemented in v0.8.1.
+  See CHANGELOG for the v0.8.2 schedule." Locked decision 2:
+  Rust diff is deferred to v0.8.2 because the Rust adapter
+  does not yet extract public names (50-100 LoC of tree-sitter
+  CST walking required).
+- **``compare_name_sets(previous, current, filename, *,
+  language="python")``** in ``furqan_lint.additive``.
+  Language-agnostic public-name set diff. Operates on already-
+  collected ``frozenset[str]`` inputs so the same body serves
+  the Python, Go (now), and Rust (future) diff paths.
+  Diagnostic prose dispatched via the module-private
+  ``_RENAME_HINT`` map.
+- **``extract_public_names(path)``** in
+  ``furqan_lint.go_adapter`` (re-exported from
+  ``go_adapter.public_names``). Returns
+  ``frozenset[str]`` of uppercase-initial Go identifiers from
+  ``path``. Used by the diff path. Method names are collected
+  WITHOUT receiver-type qualification (documented limit; fixed
+  in v0.8.2).
+- **``_check_go_additive`` and ``_check_python_additive``
+  helpers** in ``furqan_lint.cli``. The v0.8.0 monolithic
+  ``_check_additive`` is now a 4-guard dispatcher routing to
+  these helpers; ``_check_python_additive`` lifts the v0.8.0
+  Python diff body verbatim (minus the obsolete Go-not-
+  implemented guard).
+- **Go documented_limits scaffolding** at
+  ``tests/fixtures/go/documented_limits/``. README.md preamble
+  parallels the Rust documented_limits style. 8 fixtures for
+  v0.8.0 limits (3+ multi-return, non-error 2-tuple,
+  for/switch/select/defer opaque, interface dispatch,
+  generics) plus 3 fixtures for v0.8.1's new limits (R3
+  not-applicable, method-name conflation v1/v2). Each fixture
+  has a header comment describing the limit, when it was
+  introduced, and the resolution path.
+- **README Go support section.** Parallels the Rust support
+  section. Describes v0.8.1's final shape: opt-in extra,
+  D24 + D11, cross-language predicate, R3 not-applicable,
+  additive-only diff with language-aware hints, cross-language
+  rejection, method-name conflation as a known limit.
+- **README Go adapter limitations subsection** with 11-bullet
+  inventory matching documented_limits/README.md and the per-
+  fixture pinning tests.
+- **Per-version baselines.**
+  ``_GO_ADAPTER_PUBLIC_SURFACE_v0_8_1`` =
+  ``v0_8_0 | {"extract_public_names"}`` (grows by 1 name).
+  ``_RUST_ADAPTER_PUBLIC_SURFACE_v0_8_1`` aliases v0_7_0_1
+  (no change in v0.8.1).
+  ``V0_8_1_SURFACE`` aliases ``V0_7_0_SURFACE`` (no top-level
+  change).
+- **26 new tests** across six files:
+  - ``test_compare_name_sets.py`` (2): language-aware hint
+    dispatch, sorted diagnostic order.
+  - ``test_go_diff.py`` (8): 5 CLI diff scenarios + 3
+    extractor unit tests (uppercase-initials, frozenset return
+    type, method-name unqualified pin).
+  - ``test_rust_diff_not_implemented.py`` (3): cross-language
+    rejection, cross-language precedence over Rust-not-impl,
+    Rust pin via tmp_path.
+  - ``test_go_documented_limits.py`` (10): 8 v0.8.0 limit
+    pinning tests + R3 not-applicable (3-claim
+    discriminating) + method-name conflation.
+  - ``test_go_public_surface_additive.py`` (+1):
+    test_go_adapter_public_surface_is_superset_of_v0_8_1_baseline.
+  - ``test_rust_public_surface_additive.py`` (+1):
+    test_rust_adapter_public_surface_is_superset_of_v0_8_1_baseline.
+  - ``test_top_level_public_surface_additive.py`` (+1):
+    test_v0_8_1_surface_is_subset_of_current.
+
+### Changed
+
+- **``check_additive_api``** in ``furqan_lint.additive`` now
+  delegates to ``compare_name_sets`` after extracting both
+  Python public-name sets via ``_extract_public_names``.
+  Signature preserved exactly; external behavior is byte-for-
+  byte identical for the Python diff path.
+- **CLI dispatcher refactor.** ``_check_additive`` is now a
+  4-guard dispatcher. Cross-language is guard 1, Rust is
+  guard 2, Go is guard 3, Python is the default.
+
+### Retired
+
+- ``test_go_diff_returns_exit_2`` in ``tests/test_go_cli.py``
+  retired and replaced with
+  ``test_go_diff_now_implemented_returns_exit_0_on_clean_pair``.
+  The v0.8.0 contract (exit 2 because not implemented) is
+  satisfied differently in v0.8.1: the diff IS implemented, so
+  the verdict reflects actual additive-only semantics. The
+  retirement note in the new test's docstring makes the
+  contract change visible.
+
+### Tests
+
+Test count: 268 (v0.8.0) -> 291 (v0.8.1). Net delta: +23.
+Per the §4 inventory: 26 new tests, minus 1 retired
+(test_go_diff_returns_exit_2 replaced by the now-implemented
+verdict pin), minus 2 pre-existing tests that now skip when
+[go] extras are missing (the pre-flight already had skipif
+guards; the count delta accounts for the typical run with
+extras present).
+
+### §11.3 Five Questions
+
+1. **What's the riskiest assumption in this release?**
+   That ``frozenset(public_names)`` is the right collapse for
+   the diff. The method-name conflation false-negative is a
+   direct consequence of this choice. The v0.8.2 plan addresses
+   it via qualified method-name emission in goast.
+
+2. **What's the most reversible decision?**
+   The cross-language rejection guard. Removing it (or
+   reordering the guards) is a 5-line change. The most
+   irreversible decision is the ``compare_name_sets``
+   signature: changing it later would break Rust adapter
+   work-in-progress that depends on the helper.
+
+3. **What did we defer that we shouldn't have?**
+   Nothing. Rust diff deferral is principled (50-100 LoC
+   tree-sitter walking is real work); R3-for-Go deferral is
+   predetermined (compiler rejects the firing condition);
+   method-name conflation deferral is a single-commit follow-
+   up planned for v0.8.2.
+
+4. **What's the most surprising thing a fresh-instance
+   reviewer should look for?**
+   The dispatcher's guard-ordering test
+   (test_cross_language_takes_precedence_over_rust_not_implemented)
+   asserts a NEGATIVE: that 'Rust diff not implemented' does
+   NOT appear in stdout for a .py-vs-.rs pair. Inverting the
+   guards would silently violate this; the test pins the
+   ordering invariant.
+
+5. **What did we learn that should change the next prompt?**
+   The 'switch-only-body false PASS' result discovered while
+   building tests/test_go_documented_limits.py is a real Go
+   adapter limit that wasn't on the v0.8.0 inventory. Worth
+   adding to the v0.8.2 prompt's documented_limits review.
+
+### §5.1 Validator-Bias Self-Disclosure
+
+I am the producer + validator + reporter for the v0.8.1
+series. The load-bearing fresh-instance review questions are:
+
+* Does ``compare_name_sets`` produce identical output to the
+  v0.8.0 ``check_additive_api`` for any Python diff input pair?
+* Does the dispatcher's guard ordering correctly handle all
+  six suffix-pair combinations (.py vs .py, .py vs .rs, .py vs
+  .go, .rs vs .rs, .rs vs .go, .go vs .go)?
+* Does ``extract_public_names`` collect every uppercase-initial
+  Go identifier regardless of declaration kind, AND only those?
+* Does the R3 not-applicable test's claim 3 (zero-return
+  rejected by ``go build``) hold for all reasonable counter-
+  examples (empty body, body with only side-effecting
+  statements, etc.)?
+
+### §5.2 Prompt-Grounding Self-Check
+
+§2 commands all returned the expected results before
+implementation began:
+
+* additive.py imports ast and uses _extract_public_names
+  (Python-bound).
+* rust_adapter.parse_file does not surface a public_names
+  attribute on Module (no Rust pub-name extraction).
+* _check_python_additive / _check_go_additive don't exist
+  (will be created in commit 2).
+* Go documented_limits dir doesn't exist (will be created in
+  commit 0).
+* Method-conflation reproduces in goast: ['Counter', 'Logger',
+  'Foo', 'Foo'] -> frozenset {Counter, Foo, Logger}.
+* Baseline pytest: 268 (v0.8.0).
+
 ## [0.8.0] - 2026-05-03
 
 Feature release. First non-Python language adapter ships: the
