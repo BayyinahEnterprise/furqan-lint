@@ -84,23 +84,28 @@ func main() {
 }
 
 // receiverTypeName extracts the receiver type's name from a
-// FuncDecl receiver field, handling four shapes:
+// FuncDecl receiver field, handling six shapes (v0.8.3 added
+// the two IndexListExpr cases for multi-param generics):
 //
-//   - *ast.Ident                            => "T"
+//   - *ast.Ident                                => "T"
 //     (func (c T) Foo())
-//   - *ast.StarExpr wrapping *ast.Ident     => "T"
+//   - *ast.StarExpr wrapping *ast.Ident         => "T"
 //     (func (c *T) Foo())
-//   - *ast.IndexExpr wrapping *ast.Ident    => "T"
+//   - *ast.IndexExpr wrapping *ast.Ident        => "T"
 //     (func (c T[U]) Foo())
-//   - *ast.StarExpr wrapping *ast.IndexExpr => "T"
+//   - *ast.StarExpr wrapping *ast.IndexExpr     => "T"
 //     (func (c *T[U]) Foo())
+//   - *ast.IndexListExpr wrapping *ast.Ident    => "T"
+//     (func (c T[K, V]) Foo())                  -- v0.8.3
+//   - *ast.StarExpr wrapping *ast.IndexListExpr => "T"
+//     (func (c *T[K, V]) Foo())                 -- v0.8.3
 //
-// Returns "" if the receiver shape is not one of the above (e.g.
-// IndexListExpr for multi-parameter generics, or any other
-// surprise the Go grammar might surface). Empty receiver name
-// causes collectPublicNames to fall back to the bare method
-// name -- preserves the v0.8.1 behavior in unexpected cases
-// rather than silently dropping the method.
+// Returns "" if the receiver shape is not one of the above
+// (defensive; in practice every well-formed Go method
+// receiver has one of the six shapes above). Empty receiver
+// name causes collectPublicNames to fall back to the bare
+// method name -- preserves the v0.8.1 behavior in unexpected
+// cases rather than silently dropping the method.
 func receiverTypeName(field *ast.Field) string {
 	switch t := field.Type.(type) {
 	case *ast.Ident:
@@ -113,8 +118,16 @@ func receiverTypeName(field *ast.Field) string {
 			if id, ok := inner.X.(*ast.Ident); ok {
 				return id.Name
 			}
+		case *ast.IndexListExpr:
+			if id, ok := inner.X.(*ast.Ident); ok {
+				return id.Name
+			}
 		}
 	case *ast.IndexExpr:
+		if id, ok := t.X.(*ast.Ident); ok {
+			return id.Name
+		}
+	case *ast.IndexListExpr:
 		if id, ok := t.X.(*ast.Ident); ok {
 			return id.Name
 		}

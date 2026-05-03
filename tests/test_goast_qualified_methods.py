@@ -101,3 +101,31 @@ def test_goast_emits_qualified_generic_receiver_methods(tmp_path: Path) -> None:
     )
     names = extract_public_names(src)
     assert names == frozenset({"Container", "Container.Peek", "Container.Get"})
+
+
+def test_qualified_method_value_receiver_multi_param_generic(tmp_path: Path) -> None:
+    """v0.8.3: ``func (p Pair[K, V]) Get()`` emits as ``Pair.Get``.
+    Multi-parameter generic receiver via ast.IndexListExpr (not
+    handled in v0.8.2; the fall-back returned bare 'Get' which
+    risked the pre-v0.8.2 conflation across distinct multi-
+    parameter generic types).
+    """
+    from furqan_lint.go_adapter import extract_public_names
+
+    src = tmp_path / "m.go"
+    src.write_text("package m\n" "type Pair[K, V any] struct{}\n" "func (p Pair[K, V]) Get() {}\n")
+    names = extract_public_names(src)
+    assert names == frozenset({"Pair", "Pair.Get"})
+
+
+def test_qualified_method_pointer_receiver_multi_param_generic(tmp_path: Path) -> None:
+    """v0.8.3: ``func (p *Pair[K, V]) Get()`` emits as
+    ``Pair.Get``. Pointer-wrapped IndexListExpr is the second
+    of the two new cases added in commit 3.
+    """
+    from furqan_lint.go_adapter import extract_public_names
+
+    src = tmp_path / "m.go"
+    src.write_text("package m\n" "type Pair[K, V any] struct{}\n" "func (p *Pair[K, V]) Get() {}\n")
+    names = extract_public_names(src)
+    assert names == frozenset({"Pair", "Pair.Get"})
