@@ -74,3 +74,6 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Go adapter binary (built at install time via PEP 517 hook)
+src/furqan_lint/go_adapter/bin/goast

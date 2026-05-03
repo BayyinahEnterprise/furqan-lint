@@ -143,4 +143,3 @@ def test_v0_7_3_surface_is_subset_of_current() -> None:
         f"furqan_lint.__all__ removed names from the v0.7.3 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )
-
