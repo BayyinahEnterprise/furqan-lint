@@ -45,6 +45,10 @@ _GO_ADAPTER_PUBLIC_SURFACE_v0_8_1: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v
 # refinement, not a public-surface change). Aliases v0_8_1 per
 # the per-version cadence.
 _GO_ADAPTER_PUBLIC_SURFACE_v0_8_2: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_1
+# v0.8.3 corrective: goast IndexListExpr added (binary emit-
+# format refinement, not a Python __all__ change). Aliases
+# v0_8_2 per the per-version cadence.
+_GO_ADAPTER_PUBLIC_SURFACE_v0_8_3: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_2
 
 
 def test_go_adapter_public_surface_is_superset_of_v0_8_0_baseline() -> None:
@@ -101,5 +105,20 @@ def test_go_adapter_public_surface_is_superset_of_v0_8_2_baseline() -> None:
     missing = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_2 - current
     assert not missing, (
         f"go_adapter.__all__ removed names from v0.8.2 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_go_adapter_public_surface_is_superset_of_v0_8_3_baseline() -> None:
+    """The v0.8.3 baseline (alias of v0_8_2; goast IndexListExpr
+    is a binary emit-format refinement, not a Python public-
+    surface change).
+    """
+    from furqan_lint import go_adapter
+
+    current = frozenset(go_adapter.__all__)
+    missing = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_3 - current
+    assert not missing, (
+        f"go_adapter.__all__ removed names from v0.8.3 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )
