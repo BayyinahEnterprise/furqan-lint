@@ -1,0 +1,63 @@
+# Project-side pre-commit configuration for furqan-lint.
+# SEPARATE from .pre-commit-hooks.yaml, which is the producer-side
+# hook consumers install when they reference this repo as a hook
+# source.
+
+default_language_version:
+  python: python3.12
+
+repos:
+  # Standard hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Ruff: lint + format (replaces black, isort, flake8, pyupgrade,
+  # bugbear, simplify in one tool with one config block)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # Mypy: type check src/ only. Tests use dynamic fixtures and
+  # subprocess wrangling; strict typing them is a tax with low yield.
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        files: ^src/
+        additional_dependencies:
+          - "furqan @ git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
+
+  # Em-dash guard: mirrors the CI step so the violation is caught
+  # locally before push. Same rule, two layers.
+  - repo: local
+    hooks:
+      - id: no-em-dashes
+        name: no em-dashes in src/, tests/, README.md
+        entry: bash -c 'LC_ALL=C.UTF-8 grep -rPn "[\x{2013}\x{2014}]" src/ tests/ README.md && exit 1 || exit 0'
+        language: system
+        pass_filenames: false
+
+  # Dogfood: run furqan-lint on its own source. If furqan-lint fires
+  # on furqan-lint's own code, we have lost the right to ship the
+  # tool that catches drift in other people's code.
+  - repo: local
+    hooks:
+      - id: furqan-lint-self
+        name: furqan-lint (dogfood)
+        entry: furqan-lint check src/
+        language: system
+        types: [python]
+        pass_filenames: false

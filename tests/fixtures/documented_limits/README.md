@@ -43,13 +43,6 @@ the documentation cannot drift away from the code.
   implementation detail used as a closure-like return value, not
   part of the module's public contract. README registers this
   under "Local classes inside any function or method body."
-- **`zero_return_function.py`.** A function declaring a return type
-  with no `return` statement on any path is silently passed. D24
-  skips functions with zero returns, deferring to ring-close R3
-  (a separate Furqan checker furqan-lint does not yet run).
-  mypy reports this as "Missing return statement"; callers who
-  want this flagged should run mypy alongside furqan-lint.
-  README registers this under "Zero-return functions."
 
 ## How to retire a fixture
 

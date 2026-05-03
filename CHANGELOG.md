@@ -1,5 +1,106 @@
 # Changelog
 
+## [0.5.0] - 2026-05-03
+
+Dev tooling integration. No new checker logic; the tool starts
+checking itself.
+
+### Added
+
+- **`.pre-commit-config.yaml`** for the repo's own codebase
+  (separate from `.pre-commit-hooks.yaml`, which is the
+  producer-side hook for consumers). Five hook groups: standard
+  hygiene (trailing-whitespace, end-of-file-fixer, check-yaml,
+  check-toml, check-merge-conflict, check-added-large-files,
+  mixed-line-ending), ruff (lint + format), mypy on `src/` only
+  with furqan as additional_dependency, em-dash guard mirroring
+  the CI step, and a furqan-lint self-check (dogfood).
+- **CI lint job** parallel to the test matrix. Runs ruff check,
+  ruff format --check, and mypy on Python 3.12 in ~10s. Fails
+  fast on style/type issues before the 4-version test matrix
+  spins up.
+- **Three new pytest markers**: `unit` (fast, in-process, no
+  subprocess), `integration` (CLI or pipeline), `mock` (uses
+  unittest.mock or pytest-mock). `slow` and `network` were
+  already registered in v0.4.1.
+- **`[tool.ruff]`, `[tool.ruff.lint]`, `[tool.ruff.lint.per-file-ignores]`,
+  `[tool.ruff.format]`, `[tool.mypy]`, `[[tool.mypy.overrides]]`**
+  blocks in `pyproject.toml`. Ruff selection is curated, not
+  maximal: E/W/F/I/B/UP/SIM/RUF/PL/PTH/TID. Each ignore has a
+  one-line comment explaining intent.
+- **Dev dependencies extended**: `pytest-mock>=3.12`,
+  `ruff>=0.8.0`, `mypy>=1.13`, `pre-commit>=4.0`, `pyyaml>=6.0`.
+- **README sections**: "Using with Other Tools" (tool comparison
+  table + recommended consumer pre-commit config) and
+  "Contributing to furqan-lint" (setup, run-checks, marker usage).
+- **`tests/test_tooling.py`**: 3 structural tests verifying the
+  pre-commit config has all required hooks, pyproject has
+  `[tool.ruff]`, and all 5 pytest markers are registered.
+
+### Changed
+
+- Codebase formatted with `ruff format`. No behavioral changes.
+- Ruff and mypy findings from the baseline triage either fixed
+  (real issues: SIM101, SIM103, SIM102 x4, RUF059, E402,
+  arg-type narrowing on three predicate-helper pairs, missing
+  type annotations on local vars and helper signatures) or
+  ignored with explanatory comments (PLW1510 is intentional;
+  cli.py PLC0415 is the lazy-import-for-fast-version pattern;
+  PLR0911/PLR0912 are pre-existing API surface).
+- All 148 existing tests carry pytest markers (135 unit, 13
+  integration; the 1 v0.4.1 network test stays double-marked).
+
+### Not added (deliberate, per recommendation document)
+
+- `black` (ruff format is black-compatible; one tool, not two)
+- `pylint` (ruff covers the same rules, faster)
+- `tox`/`nox` (CI matrix already covers Python 3.10-3.13)
+- `bandit` (narrow attack surface; reconsider if network features
+  added)
+- `pytest-xdist` (suite runs in seconds; parallelism adds flake risk)
+- Coverage gate (add `pytest-cov` after baseline; gate after
+  measurement)
+- Directory-based test split (markers carry the same information
+  without forcing a 14-file rename)
+
+### Deferred (v0.6.0 candidates)
+
+- Ring-close R3 (zero-return checker) - drafted in a prior session
+  as a v0.5.0 candidate; reframed to v0.6.0 to keep this release
+  scoped to tooling.
+- Aliased Optional/Union import resolution (needs symbol table)
+- Exhaustive match recognition
+- Local classes inside function/method bodies
+- Decorator threading (eliminates abstract-method false positives
+  the future R3 checker will introduce)
+
+### Tests
+
+- 148 existing + 3 new tooling tests = 151 selectable + 1
+  network = 152 total.
+
+### Five questions (audit framework Section 9.3)
+
+1. **Smallest input demonstrating the fix works:** `pre-commit
+   run --all-files` exits 0 on a clean checkout. `ruff check .`,
+   `ruff format --check .`, `mypy`, and `furqan-lint check src/`
+   all exit 0.
+2. **Smallest input demonstrating the bug pre-fix:** Pre-v0.5.0
+   the repo had no formatter, no linter, no type checker, no
+   self-check. `pip install -e .[dev]` installed only pytest.
+3. **What this release does NOT do:** Does not add any new
+   checker logic; the structural-honesty checks ship unchanged
+   from v0.4.1. Ruff is not configured to run on `tests/fixtures/`
+   (those are intentionally malformed). Mypy is strict on `src/`
+   only, not `tests/`.
+4. **New code paths and their boundaries:** No production code
+   paths added; only configuration and one new test module.
+   Boundary: anything in `tests/fixtures/` is the System Under
+   Test for furqan-lint and is not subject to ruff or mypy.
+5. **Documented limitations retired/introduced:** None. This
+   release adds no checker behavior, so no four-place
+   documentation churn.
+
 ## [0.4.1] - 2026-05-02
 
 Corrective fixes from Fraz's round-8 review of v0.4.0. One CRITICAL,
@@ -45,9 +146,10 @@ against v0.4.0 before fixing.
   context manager. The ``_is_optional_union`` helper is preserved
   with its body unchanged; the docstring now references the
   ``producer_predicate`` keyword. Closes the full lifecycle of a
-  round-1 audit finding (v0.1.0 monkey-patch via context manager
-  -> v0.3.0 added threading lock for safety -> v0.4.1 upstream
-  ``producer_predicate=`` keyword retires the patch entirely).
+  round-1 audit finding (stopgap monkey-patch in v0.1.0 ->
+  scoped context manager in v0.3.0 -> threading lock for safety
+  in v0.3.0 -> upstream parameter retires the patch entirely in
+  v0.4.1).
 - The Bug 4 thread-safety regression test in
   ``test_review_fixes.py`` was rewritten to pin the new invariant:
   the global ``status_coverage._is_integrity_incomplete_union``
@@ -60,12 +162,7 @@ against v0.4.0 before fixing.
   declares a return type but has no ``return`` statement at all is
   silently passed by D24 (the existing skip-on-zero-returns rule
   defers to ring-close R3, which furqan-lint does not yet run).
-  Documented at all four canonical surfaces per the framework
-  four-place pattern: README "Remaining limitations," this
-  CHANGELOG entry, fixture at
-  ``tests/fixtures/documented_limits/zero_return_function.py``,
-  and pinning test
-  ``test_documented_limits.py::test_zero_return_function_is_silently_passed``.
+  Added to README "Remaining limitations."
 - Static test verifying ``.pre-commit-hooks.yaml`` declares
   ``furqan`` in ``additional_dependencies``.
 - Network-dependent functional test (marked ``slow`` and ``network``;

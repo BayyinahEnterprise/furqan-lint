@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "furqan-lint"
-version = "0.4.1"
+version = "0.5.0"
 description = "Structural-honesty checks for Python, powered by Furqan"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -18,7 +18,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "pytest-cov>=5.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+    "pyyaml>=6.0",
+]
 
 [project.scripts]
 furqan-lint = "furqan_lint.cli:main"
@@ -33,7 +41,82 @@ Issues = "https://github.com/BayyinahEnterprise/furqan-lint/issues"
 where = ["src"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 markers = [
     "network: requires network access",
     "slow: takes several seconds",
+    "unit: fast, in-process, no subprocess",
+    "integration: spawns subprocess or invokes CLI end-to-end",
+    "mock: uses unittest.mock or pytest-mock",
 ]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Curated, not maximal. Add rules deliberately.
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific
+    "PL",    # pylint subset
+    "PTH",   # use pathlib
+    "TID",   # tidy imports (catches mid-file imports)
+]
+ignore = [
+    "E501",    # line length handled by formatter
+    "PLR2004", # magic numbers (fine in tests/fixtures)
+    "PLR0913", # too many args (pre-existing API surface)
+    "PLR0911", # too many returns (pre-existing API surface)
+    "PLR0912", # too many branches (pre-existing API surface)
+    "PLW1510", # subprocess.run without check=True - we inspect returncode ourselves; check=True would defeat the pattern
+]
+
+[tool.ruff.lint.per-file-ignores]
+# CLI does lazy imports inside subcommand handlers so `--help` and
+# `version` invocations don't pay the cost of importing furqan +
+# adapter + runner. The pattern is deliberate; pre-v0.5.0 it was
+# noted in the docstring.
+"src/furqan_lint/cli.py" = ["PLC0415"]
+# Tests get extra slack on:
+# - PLR (pylint refactor suggestions: many-args, many-branches, etc.)
+# - B011 (assert False - we use this in unreachable test branches)
+# - TID252 (relative imports - tests can import from sibling test modules)
+# - PLC0415 (mid-function imports - tests sometimes lazy-import for isolation)
+# - SIM102 (collapsible-if - test code can be more verbose for readability)
+"tests/**" = ["PLR", "B011", "TID252", "PLC0415", "SIM102"]
+# Fixtures are SUT (System Under Test for furqan-lint), not SUI
+# (System Under Inspection). They are intentionally malformed
+# Python; running ruff on them defeats the point.
+"tests/fixtures/**" = ["F", "E", "B", "RUF", "PL", "UP", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src/furqan_lint"]
+exclude = ["tests/", "build/", "dist/"]
+
+[[tool.mypy.overrides]]
+module = "furqan.*"
+# furqan upstream is not type-stub-complete yet; relax.
+ignore_missing_imports = true
+
+[tool.coverage.run]
+branch = true
+source = ["src/furqan_lint"]
+omit = ["src/furqan_lint/__main__.py"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "raise NotImplementedError"]

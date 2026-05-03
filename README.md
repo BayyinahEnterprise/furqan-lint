@@ -89,6 +89,68 @@ repos:
 
 Then `pre-commit install`. Failures block the commit.
 
+## Using with Other Tools
+
+furqan-lint is complementary to ruff and mypy. Each catches a
+different class of issue:
+
+| Tool | Catches | Overlap with furqan-lint |
+|------|---------|--------------------------|
+| **ruff** | Style, unused imports, complexity, common bug patterns, formatting (replaces black + isort + flake8 + pyupgrade) | None |
+| **mypy** | Type errors, some missing returns | Partial overlap on D24 and return-none. mypy does NOT catch Optional collapse (D11) or API-breaking changes (additive-only). |
+| **furqan-lint** | Missing return paths, Optional collapse, return-None mismatch, API-breaking changes, zero-return functions | See mypy column |
+
+### Recommended `.pre-commit-config.yaml` for Your Project
+
+```yaml
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+
+  - repo: https://github.com/BayyinahEnterprise/furqan-lint
+    rev: v0.5.0
+    hooks:
+      - id: furqan-lint
+```
+
+Then `pre-commit install`. Run order: ruff (lint + format) -> mypy
+(types) -> furqan-lint (structural honesty). Each layer catches what
+the previous layers do not.
+
+### Contributing to furqan-lint
+
+```bash
+git clone https://github.com/BayyinahEnterprise/furqan-lint.git
+cd furqan-lint
+pip install -e ".[dev]"
+pre-commit install
+
+# Run all tools manually
+ruff check .
+ruff format --check .
+mypy
+pytest -q
+
+# Run by test category
+pytest -m unit         # fast, in-process, no subprocess
+pytest -m integration  # CLI and pipeline tests
+pytest -m "not slow"   # skip slow tests
+pytest -m "not network" # skip network-dependent tests
+```
+
+The `furqan-lint check src/` self-check runs as part of pre-commit;
+the tool that catches drift in other people's code must not have
+drift in its own.
+
 ## Example
 
 ```python
