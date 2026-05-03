@@ -1,6 +1,6 @@
 """Run structural checkers on a translated Go ``Module``.
 
-Phase 1 (v0.8.0) wires two checkers:
+Wires two checkers (current as of v0.8.0):
 
 * **D24 (all-paths-return)** via upstream
   ``furqan.checker.check_all_paths_return``. Same upstream
@@ -14,7 +14,7 @@ Phase 1 (v0.8.0) wires two checkers:
 
 Order: D24 -> D11. They are independent of each other.
 
-Out of scope for Phase 1:
+Out of scope for v0.8.x (potential future-phase candidates):
 
 * R3 (zero-return): Go has no Rust-style ``panic!()`` /
   ``todo!()`` body-shape analogue. The closest equivalent is

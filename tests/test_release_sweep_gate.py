@@ -76,6 +76,15 @@ _USER_VISIBLE_SURFACES: tuple[Path, ...] = (
     REPO_ROOT / "src" / "furqan_lint" / "rust_adapter" / "translator.py",
     REPO_ROOT / "src" / "furqan_lint" / "rust_adapter" / "edition.py",
     REPO_ROOT / "src" / "furqan_lint" / "rust_adapter" / "parser.py",
+    # Go adapter surfaces added in v0.8.0 (Go adapter Phase 1).
+    REPO_ROOT / "src" / "furqan_lint" / "go_adapter" / "__init__.py",
+    REPO_ROOT / "src" / "furqan_lint" / "go_adapter" / "runner.py",
+    REPO_ROOT / "src" / "furqan_lint" / "go_adapter" / "translator.py",
+    REPO_ROOT / "src" / "furqan_lint" / "go_adapter" / "parser.py",
+    # Go documented_limits README is created in commit 6 of v0.8.0;
+    # the path's existence is handled by the test (it skips files
+    # that don't exist yet).
+    REPO_ROOT / "tests" / "fixtures" / "go" / "documented_limits" / "README.md",
 )
 
 # Pattern catches "Phase 1", "Phase 2", etc. (with word boundary

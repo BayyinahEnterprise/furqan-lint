@@ -36,6 +36,12 @@ rust = [
     "tree-sitter>=0.23,<1",
     "tree-sitter-rust>=0.23,<1",
 ]
+# Optional Go adapter (Phase 1: D24 + D11 on .go files).
+# pip install furqan-lint[go]. The Go toolchain (1.21+) is
+# required at install time (PEP 517 build hook in setup.py
+# compiles the goast binary); not at runtime. Marker-only extra:
+# no PyPI dependencies; Python-side adapter ships in the wheel.
+go = []
 
 [project.scripts]
 furqan-lint = "furqan_lint.cli:main"
@@ -45,6 +51,9 @@ Homepage = "https://github.com/BayyinahEnterprise/furqan-lint"
 Repository = "https://github.com/BayyinahEnterprise/furqan-lint"
 Documentation = "https://tryfurqan.com"
 Issues = "https://github.com/BayyinahEnterprise/furqan-lint/issues"
+
+[tool.setuptools.package-data]
+furqan_lint = ["go_adapter/bin/goast", "go_adapter/cmd/goast/main.go", "go_adapter/cmd/goast/go.mod"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

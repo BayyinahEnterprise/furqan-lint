@@ -36,12 +36,16 @@ from furqan_lint.go_adapter._exceptions import (
 __all__ = ("GoExtrasNotInstalled", "GoParseError", "parse_file")
 
 
-def parse_file(path):  # type: ignore[no-untyped-def]
+def parse_file(path: object) -> dict[str, object]:
     """Parse ``path`` as Go source and return the goast JSON output.
 
     Lazy-imports ``furqan_lint.go_adapter.parser`` so importing this
     package does not require the bundled binary to be present.
     """
+    from pathlib import Path
+
     from furqan_lint.go_adapter.parser import parse_file as _parse_file
 
-    return _parse_file(path)
+    if isinstance(path, Path):
+        return _parse_file(path)
+    return _parse_file(Path(str(path)))

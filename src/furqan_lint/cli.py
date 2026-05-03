@@ -32,6 +32,8 @@ EXCLUDED_DIRS: frozenset[str] = frozenset(
         ".tox",
         ".mypy_cache",
         "target",
+        "vendor",
+        "cmd",
     }
 )
 
@@ -93,6 +95,8 @@ def _check_file(path: Path) -> int:
     """
     if path.suffix == ".rs":
         return _check_rust_file(path)
+    if path.suffix == ".go":
+        return _check_go_file(path)
     return _check_python_file(path)
 
 
@@ -229,7 +233,91 @@ def _check_rust_file(path: Path) -> int:
     return 1 if marads else 0
 
 
+def _check_go_file(path: Path) -> int:
+    """Lint a single .go file using the v0.8.0 Go adapter.
+
+    Runs three checkers: D24 (all-paths-return) + D11 (status-
+    coverage with the (T, error) firing shape). R3 is not wired
+    for Go in v0.8.0; deferred until a Go-specific zero-return
+    body shape motivates the design.
+
+    Mirrors the v0.7.0.1 Rust pattern: typed
+    ``GoExtrasNotInstalled`` exception is raised by parse_file
+    when the bundled goast binary is missing; the CLI catches it
+    and emits the install hint to stderr with exit 1 (NOT a
+    Python traceback).
+    """
+    try:
+        from furqan_lint.go_adapter import (
+            GoExtrasNotInstalled,
+            GoParseError,
+        )
+        from furqan_lint.go_adapter import parse_file as parse_go
+    except ImportError:
+        print(
+            "Go support not installed. Run: pip install furqan-lint[go]",
+            file=sys.stderr,
+        )
+        return 1
+
+    from furqan.errors.marad import Advisory, Marad
+
+    try:
+        from furqan_lint.go_adapter.runner import check_go_module
+        from furqan_lint.go_adapter.translator import translate
+
+        data = parse_go(path)
+        module = translate(data, filename=str(path))
+    except GoExtrasNotInstalled as e:
+        # The package itself imported, but the bundled goast
+        # binary is missing. Print the typed exception's message
+        # (the install hint) rather than dumping a traceback.
+        print(str(e), file=sys.stderr)
+        return 1
+    except GoParseError as e:
+        print(f"PARSE ERROR  {path}")
+        print(f"  {e}")
+        return 2
+
+    diagnostics = check_go_module(module)
+    marads = [(n, d) for n, d in diagnostics if isinstance(d, Marad)]
+    advisories = [(n, d) for n, d in diagnostics if isinstance(d, Advisory)]
+
+    if not diagnostics:
+        print(f"PASS  {path}")
+        print("  2 structural checks ran (D24, D11 with (T, error) firing). Zero diagnostics.")
+        return 0
+
+    if marads:
+        print(f"MARAD  {path}")
+        print(f"  {len(marads)} violation(s):")
+        for name, m in marads:
+            print(f"    [{name}] {m.diagnosis}")
+            fix = getattr(m, "minimal_fix", None)
+            if fix:
+                print(f"      fix: {fix}")
+        print()
+
+    if advisories:
+        print(f"ADVISORY  {path}")
+        print(f"  {len(advisories)} note(s):")
+        for name, a in advisories:
+            msg = getattr(a, "message", str(a))
+            print(f"    [{name}] {msg}")
+
+    return 1 if marads else 0
+
+
 def _check_additive(old_path: Path, new_path: Path) -> int:
+    if old_path.suffix == ".go" or new_path.suffix == ".go":
+        # Locked decision 8: Go diff is not implemented in v0.8.0.
+        # Return exit 2 (PARSE ERROR) NOT exit 0 (PASS) so CI
+        # pipelines invoking ``furqan-lint diff *.go`` do NOT
+        # silently treat the unimplemented case as a PASS.
+        print(f"PARSE ERROR  {new_path} (additive-only)")
+        print("  Go diff is not implemented in v0.8.0; see CHANGELOG " "for the schedule.")
+        return 2
+
     from furqan_lint.additive import DynamicAllError, check_additive_api
 
     try:
@@ -276,7 +364,7 @@ def _check_directory(directory: Path) -> int:
         p
         for p in directory.rglob("*")
         if p.is_file()
-        and p.suffix in {".py", ".rs"}
+        and p.suffix in {".py", ".rs", ".go"}
         and not any(part in EXCLUDED_DIRS for part in p.parts)
     )
     if not files:
