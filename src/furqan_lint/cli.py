@@ -175,8 +175,6 @@ def _check_rust_file(path: Path) -> int:
 
     from furqan.errors.marad import Advisory, Marad
 
-    from furqan_lint.runner import _is_optional_union
-
     try:
         module = parse_rust(path)
     except RustExtrasNotInstalled as e:
@@ -191,25 +189,19 @@ def _check_rust_file(path: Path) -> int:
         print(f"  {e.kind}")
         return 2
 
-    # Phase 1: D24 + D11 only. We call the Furqan checkers directly
-    # instead of going through check_python_module because the Python
-    # pipeline includes return_none and R3 which do not have Rust
-    # analogues yet.
-    from furqan.checker.all_paths_return import check_all_paths_return
-    from furqan.checker.status_coverage import check_status_coverage
+    # Phase 2 (v0.7.1): R3 + D24 + D11 via the Rust runner. The
+    # runner wires upstream check_ring_close (filtered to R3-shaped
+    # diagnostics), check_all_paths_return (D24), and
+    # check_status_coverage (D11) in the order R3 -> D24 -> D11.
+    from furqan_lint.rust_adapter.runner import check_rust_module
 
-    diagnostics: list[tuple[str, object]] = []
-    for d in check_all_paths_return(module):
-        diagnostics.append(("all_paths_return", d))
-    for d in check_status_coverage(module, producer_predicate=_is_optional_union):
-        diagnostics.append(("status_coverage", d))
-
+    diagnostics = check_rust_module(module)
     marads = [(n, d) for n, d in diagnostics if isinstance(d, Marad)]
     advisories = [(n, d) for n, d in diagnostics if isinstance(d, Advisory)]
 
     if not diagnostics:
         print(f"PASS  {path}")
-        print("  2 structural checks ran (Rust Phase 1: D24 + D11). Zero diagnostics.")
+        print("  3 structural checks ran (Rust Phase 2: R3 + D24 + D11). Zero diagnostics.")
         return 0
 
     if marads:

@@ -47,12 +47,14 @@ pip install "furqan-lint[rust]"
 This pulls in `tree-sitter` and `tree-sitter-rust` (PyPI ships
 ARM64 and x86_64 wheels for both; no source build required).
 
-Phase 1 runs two checkers on `.rs` files: D24 (all-paths-return)
-and D11 (status-coverage on `Option<T>`-returning helpers). Phase
-2 (v0.7.1+) will add a Rust analogue of `return_none_mismatch`,
-ring-close R3 for empty / `panic!()`-only bodies, and a
+As of v0.7.1, `.rs` files run three checkers: R3 (ring-close,
+zero-return on annotated functions, via upstream
+`furqan.checker.check_ring_close`), D24 (all-paths-return), and
+D11 (status-coverage on `Option<T>`-returning helpers). Phase 3
+(v0.7.2+) will add a Rust analogue of `return_none_mismatch` and a
 Result-aware D11 producer predicate. Trait objects, lifetimes,
-macro expansion, and Cargo workspace traversal remain out of scope.
+macro expansion, closure return-type checks, and Cargo workspace
+traversal remain out of scope.
 
 Edition is read from the nearest ancestor `Cargo.toml`'s
 `[package].edition` field (one of "2018", "2021", "2024"); if
@@ -371,20 +373,21 @@ Each Rust limit has a fixture in
   D24's path-coverage logic is unaffected; a future borrow-pattern
   checker would need lifetime preservation. Pinned as
   `tests/fixtures/rust/documented_limits/lifetime_param_return.rs`.
-- **Empty or panic-only bodies.** Functions with empty bodies or
-  bodies containing only `panic!()` / `todo!()` / `unimplemented!()`
-  are PASS in v0.7.0. The Rust analogue of Python's R3 (zero-return
-  ring-close) is deferred to v0.7.1. Pinned as
-  `tests/fixtures/rust/documented_limits/empty_or_panic_only_body.rs`.
-- **Trait method signatures.** `function_signature_item` nodes
-  (trait method declarations with no body) are skipped by design.
-  D24/D11 do not apply to interface declarations. Pinned as
-  `tests/fixtures/rust/documented_limits/trait_method_signature.rs`.
 - **Closures with annotated return types.** `closure_expression`
-  nodes are skipped in Phase 1 even when the closure has an
-  explicit `-> T` annotation. The outer function is checked
-  normally; the closure body is opaque. Phase 2 may revisit.
-  Pinned as `tests/fixtures/rust/documented_limits/closure_with_annotated_return.rs`.
+  nodes are skipped for D24, D11, AND R3 in v0.7.1. The outer
+  function is checked normally; the closure body is opaque.
+  Phase 3 may revisit when there is a concrete user-reported
+  false negative. Pinned as
+  `tests/fixtures/rust/documented_limits/closure_with_annotated_return.rs`.
+- **`panic!()` (or any diverging macro) used as a tail expression
+  with no `;`.** The translator synthesizes a `ReturnStmt(opaque)`
+  for any tail expression per the v0.7.0 R1 rule, so R3 (zero-return)
+  does not fire on `fn f() -> i32 { panic!() }`. Adding a fix
+  would require either a hardcoded diverging-macro allowlist
+  (brittle) or cross-file type inference of the macro's expansion
+  type (out of scope). Phase 3 may revisit if the Rust ecosystem
+  standardizes a `#[diverging]` attribute. Pinned as
+  `tests/fixtures/rust/documented_limits/r3_panic_as_tail_expression.rs`.
 
 ## License
 

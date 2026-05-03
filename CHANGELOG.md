@@ -1,5 +1,229 @@
 # Changelog
 
+## [0.7.1] - 2026-05-03
+
+Feature release. Phase 2 of the Rust adapter: wires upstream
+``furqan.checker.check_ring_close`` (filtered to R3-shaped
+diagnostics) for the Rust R3 analogue (zero-return on annotated
+functions). Closes the v0.7.0 documented limit
+``empty_or_panic_only_body.rs``. Retires the
+``trait_method_signature.rs`` documented limit (the skip is now
+stable across two releases and recognised as a permanent design
+choice). Adds the additive-only test infrastructure to the
+top-level ``furqan_lint`` package surface, parallel to the v0.7.0
+``rust_adapter.__all__`` snapshot.
+
+The architecture (parser, install path, IR boundary, lazy-import
+gate, ``RustExtrasNotInstalled`` typed exception) is unchanged
+from v0.7.0.1. Phase 2 adds one checker via upstream wiring (not
+local re-implementation), retires two documented limits, and
+lands one additive-only test. That is the entire scope.
+
+### Added
+
+- **R3 (zero-return) checker for Rust** via upstream
+  ``furqan.checker.check_ring_close`` in
+  ``src/furqan_lint/rust_adapter/runner.py``. Fires
+  ``zero_return_path`` MARAD on functions that declare a
+  non-unit return type but produce zero ``ReturnStmt`` in the
+  translated IR. The structural pattern catches every body shape
+  that has the right IR (empty body, ``panic!();``, ``todo!();``,
+  ``unimplemented!();``, ``unreachable!();``, and any other
+  macro-with-semicolon body whose macro identity is irrelevant to
+  the R3 firing condition).
+- **``check_rust_module(module)``** in
+  ``rust_adapter/runner.py``. Centralises the v0.7.1 checker
+  pipeline (R3 -> D24 -> D11). R3 runs first so the D24
+  suppression on R3-fired functions is reachable; the
+  suppression is pinned by a test asserting EXACTLY ONE
+  diagnostic on ``r3_empty_body_returns_T.rs``.
+- **``_RUST_KNOWN_TYPES`` frozenset** in
+  ``rust_adapter/runner.py`` listing well-known Rust primitive
+  type names plus the adapter-internal ``"None"`` token. Passed
+  to ``check_ring_close`` as ``imported_types`` so R1
+  (unresolved-type) noise does not dominate the diagnostic
+  output. Without this, every ``i32`` / ``Result`` / ``Option``
+  reference would be flagged as "no compound type with this
+  name."
+- **``_is_r3_shaped(diag)`` discriminator** in
+  ``rust_adapter/runner.py``. ``check_ring_close`` emits R1, R3,
+  and R4 shapes; v0.7.1 forwards only R3. The discriminator
+  reads the diagnosis prose prefix; if upstream adds a
+  structural discriminant, this helper migrates to that. Pinned
+  by ``test_is_r3_shaped_recognises_only_r3``.
+- **6 new R3 failing fixtures** in ``tests/fixtures/rust/failing/``:
+  ``r3_empty_body_returns_T.rs``, ``r3_panic_only_body.rs``,
+  ``r3_todo_only_body.rs``, ``r3_unimplemented_only_body.rs``,
+  ``r3_unreachable_only_body.rs``,
+  ``r3_macro_only_body_with_unrelated_macro.rs``. The last is
+  the load-bearing pin for the design that R3 is
+  grammar-and-macro-agnostic.
+- **1 new documented-limit fixture**
+  ``tests/fixtures/rust/documented_limits/r3_panic_as_tail_expression.rs``
+  pinning the v0.7.1 limit that R3 does NOT fire on
+  ``panic!()``-as-tail-expression (no semicolon). The trailing
+  ``;`` is load-bearing: with it, the macro is an
+  expression_statement that the translator drops (statements=0,
+  R3 fires); without it, the macro is a tail expression that
+  synthesizes a ReturnStmt (statements=1, R3 silent).
+- **Top-level public-surface additive-only test**
+  ``tests/test_top_level_public_surface_additive.py`` with
+  per-version snapshots V0_7_0_SURFACE, V0_7_0_1_SURFACE,
+  V0_7_1_SURFACE per Bayyinah Engineering Discipline Framework
+  v2.0 section 7.6 cadence. Round-11's MEDIUM 3 finding was the
+  failure mode that pinning only the latest version creates;
+  v0.7.1 establishes the pattern correctly from the start.
+- **Explicit ``__all__`` declaration** in
+  ``src/furqan_lint/__init__.py``. The implicit surface (any
+  module-level binding) is fragile; ``__all__ = ("__version__",)``
+  is the load-bearing primitive the additive-only discipline
+  requires.
+
+### Changed
+
+- **CLI Rust PASS message** updated from
+  ``"2 structural checks ran (Rust Phase 1: D24 + D11)."`` to
+  ``"3 structural checks ran (Rust Phase 2: R3 + D24 + D11)."``.
+- **Rust CLI dispatch** (``cli._check_rust_file``) delegates to
+  the new ``check_rust_module`` runner instead of inlining the
+  D24/D11 calls. The lazy-import guard, the
+  ``RustExtrasNotInstalled`` typed exception, and the
+  ``RustParseError`` path are unchanged.
+
+### Limitations introduced
+
+- **``panic!()`` (or any diverging macro) used as a tail
+  expression with no ``;``.** R3 does NOT fire because the
+  translator synthesizes a ``ReturnStmt(opaque)`` for any tail
+  expression per the v0.7.0 R1 rule. Adding a fix would require
+  either a hardcoded diverging-macro allowlist (brittle: third-
+  party macros like ``never_return!()`` would not be caught) or
+  cross-file type inference of the macro's expansion type (out
+  of scope; needs a Rust type checker). Pinned as
+  ``tests/fixtures/rust/documented_limits/r3_panic_as_tail_expression.rs``.
+
+### Limitations retired
+
+- **``empty_or_panic_only_body.rs``.** Was a v0.7.0 documented
+  limit ("Phase 1 ships D24 only on annotated functions whose
+  body has at least one statement-or-expression"). v0.7.1 closes
+  it: R3 (via the upstream check_ring_close wiring) fires on
+  every shape the limit pinned (empty body,
+  ``panic!()``-with-semi, ``todo!()``-with-semi,
+  ``unimplemented!()``-with-semi). The fixture is deleted; the
+  cases now live as ``failing/r3_*.rs`` fixtures with assertions
+  inverted from "silent PASS" to "fires R3."
+- **``trait_method_signature.rs``.** Was a v0.7.0 documented
+  limit ("function_signature_item nodes are skipped by design").
+  The skip is now stable across two releases and is recognised
+  as a permanent design choice rather than a temporary limit:
+  D24/D11/R3 do not apply to interface declarations because
+  there is no body to analyse. The retirement procedure cleans
+  up exactly this kind of "limit that turned out to be
+  permanent."
+
+### Tests
+
+- 229 passed (was 215 in v0.7.0.1). Delta: +14 (4 new R3 unit +
+  8 new R3 integration + 4 new top-level surface - 2 retired
+  pinning tests).
+- 184 unit + 44 integration + 1 network (network is also
+  integration-marked).
+
+### Five Questions (release level, per Bayyinah Engineering Discipline Framework v2.0 section 11.3)
+
+1. **Smallest input demonstrating the new capability:**
+   ``furqan-lint check tests/fixtures/rust/failing/r3_panic_only_body.rs``
+   returns exit 1 with a MARAD on function ``f`` declared
+   ``-> i32`` whose diagnosis names "but its body contains no
+   ``return`` statement." On v0.7.0.1: silent PASS (the Rust
+   adapter ran only D24 + D11; D24 needs >=1 return present and
+   does not fire on zero-return shapes).
+2. **Smallest input demonstrating the bug pre-fix:** same input,
+   on v0.7.0.1: PASS, exit 0. The macro-with-semicolon body is
+   honest-looking (compiles, runs, panics) but structurally
+   dishonest (declares it returns ``i32``, never does).
+3. **What this release does NOT do:**
+   (a) No R3 firing on ``panic!()``-as-tail-expression
+       (documented limit, pinned).
+   (b) No closure analysis (``closure_expression`` skipped for
+       D24, D11, AND R3; documented limit retained).
+   (c) No ``function_signature_item`` analysis (permanently
+       skipped, fixture retired).
+   (d) No cross-file Rust symbol resolution.
+   (e) No macro expansion.
+   (f) No Cargo workspace traversal beyond reading nearest
+       ``Cargo.toml`` for edition.
+   (g) No per-edition diagnostic divergence (Phase 1 confirmed
+       all in-scope idioms parse uniformly across 2018/2021/2024).
+   (h) No Result-aware D11 (still Option-only; deferred to
+       v0.7.2+).
+4. **New code paths:**
+   ``rust_adapter/runner.py`` (~140 LoC): ``_RUST_KNOWN_TYPES``
+   frozenset; ``check_rust_module`` pipeline; ``_is_r3_shaped``
+   discriminator; ``_diagnostic_function_name`` helper for D24
+   suppression. ``cli._check_rust_file`` refactored to delegate
+   to the runner. 6 new R3 fixtures + 1 new documented-limit
+   fixture + 2 retired fixtures + 4 new top-level surface tests
+   + 1 ``__all__`` declaration in package ``__init__``.
+5. **Limits retired and added:**
+   Retired: ``empty_or_panic_only_body.rs`` (closed by R3),
+   ``trait_method_signature.rs`` (skip is permanent design).
+   Added: ``r3_panic_as_tail_expression.rs`` (panic-as-tail false
+   negative).
+
+### Validator-bias self-disclosure (per v0.7.0.1 standing requirement)
+
+This section is the §5.1 standing requirement established by the
+v0.7.0.1 corrective. The v0.7.0 review missed two HIGH findings
+because (a) ``tomli`` was installed transitively in my sandbox
+and ``mypy --strict`` did not surface the missing override, and
+(b) the missing-extras CLI path was reasoned about but not
+empirically simulated. v0.7.1 reports each of the three §5.1
+subsections explicitly:
+
+**Sandbox state at the time of testing:**
+
+```
+$ pip freeze | grep -E "tree_sitter|tomli|furqan"
+furqan @ file:///[...]/furqan-programming-language
+furqan-lint @ -e file:///tmp/furqan-lint
+tomli==2.4.1
+tree-sitter==0.25.2
+tree-sitter-rust==0.24.2
+```
+
+``tomli``, ``tree-sitter``, and ``tree-sitter-rust`` were all
+installed in the sandbox. ``tomli`` came transitively from mypy
+on Python 3.10; the two tree-sitter packages were installed
+explicitly during v0.7.0 development. The v0.7.0.1 ``[[mypy]]
+overrides`` for ``tomli`` is in place so mypy --strict passes
+even when ``tomli`` is absent (verified once at v0.7.0.1 by
+``pip uninstall -y tomli``; not re-verified for v0.7.1 because
+the override is still in pyproject.toml).
+
+**Gates run from a clean state:**
+
+Gate 9 (empirical missing-extras) was run during v0.7.1 development
+AFTER ``pip uninstall -y tree_sitter tree_sitter_rust``:
+
+```
+$ furqan-lint check /tmp/r3_smoke.rs
+Rust support not installed. Run: pip install furqan-lint[rust]
+$ echo $?
+1
+```
+
+Output matches the v0.7.0.1 contract: clean install hint to
+stderr, exit 1, no traceback. Re-installed before re-running
+other gates.
+
+**Gates that could not be run from a clean state:**
+
+Air-gap (``unshare -n``) was attempted but the build sandbox
+lacks ``CAP_SYS_ADMIN`` to namespace-isolate. Verifiable on the
+deploy host; this is the same posture as v0.7.0 / v0.7.0.1.
+
 ## [0.7.0.1] - 2026-05-03
 
 Corrective release for two HIGH-severity findings from Bilal's

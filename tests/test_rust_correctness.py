@@ -60,7 +60,7 @@ def test_simple_returning_fn_is_pass() -> None:
     result = _run_check("clean/simple_returning_fn.rs")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "PASS" in result.stdout
-    assert "Rust Phase 1: D24 + D11" in result.stdout
+    assert "Rust Phase 2: R3 + D24 + D11" in result.stdout
 
 
 @pytestmark_rust
@@ -148,19 +148,102 @@ def test_macro_invocation_body_is_silent_pass() -> None:
 
 
 @pytestmark_rust
-def test_trait_method_signature_is_silent_pass() -> None:
-    """function_signature_item nodes are skipped by design; the
-    fixture has no implementation bodies and PASSes trivially."""
-    result = _run_check("documented_limits/trait_method_signature.rs")
-    assert result.returncode == 0
-    assert "PASS" in result.stdout
-
-
-@pytestmark_rust
 def test_closure_with_annotated_return_is_silent_pass() -> None:
     """closure_expression is skipped in Phase 1 even with explicit
     return-type annotation. The outer function PASSes because the
     closure body is not analysed."""
     result = _run_check("documented_limits/closure_with_annotated_return.rs")
+    assert result.returncode == 0
+    assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 (v0.7.1): R3 (zero-return) integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytestmark_rust
+def test_r3_fires_on_empty_body() -> None:
+    """Empty body with non-unit return type fires R3 (zero-return).
+    ALSO asserts EXACTLY ONE diagnostic, exercising the R3-D24
+    suppression path (without it, both R3 and D24 would fire and
+    the assertion would catch two)."""
+    result = _run_check("failing/r3_empty_body_returns_T.rs")
+    assert result.returncode == 1
+    assert "MARAD" in result.stdout
+    assert "zero_return_path" in result.stdout
+    assert "function 'f'" in result.stdout
+    assert "1 violation(s)" in result.stdout, (
+        f"expected EXACTLY ONE diagnostic (R3 suppresses D24); " f"got:\n{result.stdout}"
+    )
+
+
+@pytestmark_rust
+def test_r3_fires_on_panic_with_semicolon() -> None:
+    """``panic!();`` body fires R3. Pins exact diagnostic prose +
+    the function name + the declared return type per §3.5
+    source-fidelity requirement."""
+    result = _run_check("failing/r3_panic_only_body.rs")
+    assert result.returncode == 1
+    assert "MARAD" in result.stdout
+    assert "zero_return_path" in result.stdout
+    assert "function 'f'" in result.stdout
+    assert "i32" in result.stdout
+    assert "but its body contains no `return` statement" in result.stdout
+
+
+@pytestmark_rust
+def test_r3_fires_on_todo_with_semicolon() -> None:
+    """``todo!();`` body fires R3. Same structural pattern as
+    panic-with-semi, different macro identity, same verdict."""
+    result = _run_check("failing/r3_todo_only_body.rs")
+    assert result.returncode == 1
+    assert "zero_return_path" in result.stdout
+    assert "function 'f'" in result.stdout
+
+
+@pytestmark_rust
+def test_r3_fires_on_unimplemented_with_semicolon() -> None:
+    """``unimplemented!();`` body fires R3. Pinned to keep the
+    structural rule (not a hardcoded macro list) the load-bearing
+    decision point."""
+    result = _run_check("failing/r3_unimplemented_only_body.rs")
+    assert result.returncode == 1
+    assert "zero_return_path" in result.stdout
+    assert "function 'f'" in result.stdout
+
+
+@pytestmark_rust
+def test_r3_fires_on_unreachable_with_semicolon() -> None:
+    """``unreachable!();`` body fires R3."""
+    result = _run_check("failing/r3_unreachable_only_body.rs")
+    assert result.returncode == 1
+    assert "zero_return_path" in result.stdout
+
+
+@pytestmark_rust
+def test_r3_fires_on_unrelated_macro_with_semicolon() -> None:
+    """``eprintln!("x");`` body fires R3. Locks the design that
+    R3 is grammar-and-macro-agnostic: the structural pattern
+    (zero ReturnStmt + non-None return type) is what matters,
+    not whether the macro name is panic-like.
+
+    Without this fixture's pinning test, a future contributor
+    might add a PANIC_MACROS = {"panic", "todo", ...} allowlist,
+    which would narrow the checker incorrectly."""
+    result = _run_check("failing/r3_macro_only_body_with_unrelated_macro.rs")
+    assert result.returncode == 1
+    assert "zero_return_path" in result.stdout
+    assert "function 'f'" in result.stdout
+
+
+@pytestmark_rust
+def test_r3_silent_on_panic_as_tail_expression() -> None:
+    """Documented limit (v0.7.1): ``panic!()`` (no semicolon) used
+    as a tail expression does NOT fire R3 because the translator
+    synthesizes a ReturnStmt for any tail expression. Phase 3 may
+    revisit if the Rust ecosystem standardizes a #[diverging]
+    attribute on macros."""
+    result = _run_check("documented_limits/r3_panic_as_tail_expression.rs")
     assert result.returncode == 0
     assert "PASS" in result.stdout

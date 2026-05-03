@@ -312,3 +312,85 @@ def test_edition_read_from_cargo_toml(tmp_path: Path) -> None:
     rs = src_dir / "lib.rs"
     rs.write_text("fn f() -> i32 { 1 }\n")
     assert edition_for(rs) == "2018"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 (v0.7.1): R3 IR-shape pins
+# ---------------------------------------------------------------------------
+
+
+@pytestmark_rust
+def test_empty_body_translates_to_zero_statements() -> None:
+    """``fn f() -> i32 {}`` must produce a FunctionDef with
+    ``statements=()``. Locks the IR shape that R3 relies on (zero
+    ReturnStmt + non-None return type)."""
+    from furqan_lint.rust_adapter import parse_file
+
+    tmp = Path("/tmp/_test_empty.rs")
+    tmp.write_bytes(b"fn f() -> i32 {}\n")
+    module = parse_file(tmp)
+    fn = module.functions[0]
+    assert len(fn.statements) == 0
+
+
+@pytestmark_rust
+def test_panic_with_semicolon_translates_to_zero_statements() -> None:
+    """``fn f() -> i32 { panic!(); }`` must produce a FunctionDef
+    with ``statements=()``: the macro-with-semicolon is an
+    expression_statement that the translator drops. The IR shape
+    is identical to the empty-body case."""
+    from furqan_lint.rust_adapter import parse_file
+
+    tmp = Path("/tmp/_test_panic_semi.rs")
+    tmp.write_bytes(b"fn f() -> i32 { panic!(); }\n")
+    module = parse_file(tmp)
+    fn = module.functions[0]
+    assert len(fn.statements) == 0
+
+
+@pytestmark_rust
+def test_panic_as_tail_expression_synthesises_one_return_stmt() -> None:
+    """``fn f() -> i32 { panic!() }`` (no semicolon) must produce
+    a FunctionDef with exactly one ReturnStmt: the translator
+    synthesizes a ReturnStmt for any tail expression per the v0.7.0
+    R1 rule. This is the IR shape that prevents R3 from firing on
+    the panic-as-tail-expression case (documented limit)."""
+    from furqan.parser.ast_nodes import ReturnStmt
+
+    from furqan_lint.rust_adapter import parse_file
+
+    tmp = Path("/tmp/_test_panic_tail.rs")
+    tmp.write_bytes(b"fn f() -> i32 { panic!() }\n")
+    module = parse_file(tmp)
+    fn = module.functions[0]
+    assert len(fn.statements) == 1
+    assert isinstance(fn.statements[0], ReturnStmt)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 (v0.7.1): runner discriminator
+# ---------------------------------------------------------------------------
+
+
+@pytestmark_rust
+def test_is_r3_shaped_recognises_only_r3() -> None:
+    """``_is_r3_shaped`` must return True for R3-shaped diagnoses
+    (containing 'but its body') and False for R1-shaped diagnoses
+    (containing 'no compound type with that name'). Pinned so a
+    future upstream prose drift breaks the test, not the user."""
+    from unittest.mock import MagicMock
+
+    from furqan_lint.rust_adapter.runner import _is_r3_shaped
+
+    r3_diag = MagicMock()
+    r3_diag.diagnosis = (
+        "function 'f' declares return type i32 but its body contains "
+        "no `return` statement (recursing into any nested if-blocks)."
+    )
+    r1_diag = MagicMock()
+    r1_diag.diagnosis = (
+        "the return type of function 'f' references type 'i32', but "
+        "no compound type with that name is declared in this module."
+    )
+    assert _is_r3_shaped(r3_diag) is True
+    assert _is_r3_shaped(r1_diag) is False
