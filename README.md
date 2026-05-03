@@ -387,7 +387,7 @@ than silent.
   regression demonstrates otherwise, extend the function walker to
   descend into local `ClassDef` bodies and call
   `_collect_class_methods`.
-### Rust adapter (current as of v0.7.3)
+### Rust adapter (current as of v0.8.3)
 
 Each Rust limit has a fixture in
 `tests/fixtures/rust/documented_limits/` and a pinning test in
@@ -411,6 +411,15 @@ Each Rust limit has a fixture in
   A future phase may revisit when there is a concrete user-reported
   false negative. Pinned as
   `tests/fixtures/rust/documented_limits/closure_with_annotated_return.rs`.
+- **`extract_public_names` omits impl-block methods.**
+  The Rust additive-only diff path's name extractor walks only
+  top-level CST root children; methods defined inside
+  `impl Type { ... }` blocks are intentionally not collected
+  in v0.8.3. Asymmetric with goast (which emits qualified
+  method names like `Counter.increment` as of v0.8.2). Pinned
+  as `tests/fixtures/rust/documented_limits/impl_methods_omitted.rs`
+  (added in v0.8.3). Resolution path: registered as a v0.8.4
+  candidate.
 - **`panic!()` (or any diverging macro) used as a tail expression
   with no `;`.** The translator synthesizes a `ReturnStmt(opaque)`
   for any tail expression per the v0.7.0 R1 rule, so R3 (zero-return)

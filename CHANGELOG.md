@@ -15,6 +15,19 @@ replaces ``<DATE>`` and the ``<TBD>`` test count with the
 empirical values measured at release time via ``pytest
 --collect-only -q``.
 
+### Limitations introduced
+
+- **Rust ``extract_public_names`` omits impl-block methods.**
+  The Rust additive-only diff path's name extractor walks
+  only top-level CST root children; methods defined inside
+  ``impl Type { ... }`` blocks are not collected in v0.8.3.
+  Asymmetric with goast (which emits qualified method names
+  like ``Counter.increment`` as of v0.8.2). Pinned as
+  ``tests/fixtures/rust/documented_limits/impl_methods_omitted.rs``
+  with the matching ``test_rust_extract_omits_impl_methods``
+  pin in ``tests/test_rust_correctness.py``. Registered as a
+  v0.8.4 candidate.
+
 ### Tests
 
 Test count: 309 (v0.8.2) -> <TBD> (v0.8.3). Net delta: <TBD>.

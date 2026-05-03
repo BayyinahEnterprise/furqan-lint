@@ -23,12 +23,15 @@ Item kinds (locked decision 3): ``function_item``,
 v0.8.2 (a future phase may add it once a concrete consumer
 needs trait-name diffing).
 
-Method names are NOT collected here (the v0.8.2 Rust adapter
-deliberately walks only top-level items; Rust's ``impl Type {
-... }`` blocks contain method definitions but the diff API
-treats them as private to the type, mirroring how Go's
-qualified-method emission added in v0.8.2 works at the goast
-emit boundary).
+Method names are NOT collected here. The Rust adapter walks
+only top-level items; methods inside ``impl Type { ... }``
+blocks are intentionally omitted in v0.8.3 (registered as
+documented limit ``impl_methods_omitted.rs`` and a v0.8.4
+candidate for change). This is asymmetric with Go: as of
+v0.8.2, goast emits qualified method names like
+``Counter.Foo`` (shipped in v0.8.2); the Rust counterpart is
+not yet implemented. See
+``tests/fixtures/rust/documented_limits/impl_methods_omitted.rs``.
 """
 
 from __future__ import annotations

@@ -99,3 +99,11 @@ When a future version closes one of these limitations:
    the now-stale assertion (or invert it, per step 1).
 4. Add a CHANGELOG entry under `### Fixed` (or `### Limitations
    retired`) naming the limitation that closed.
+- **`impl_methods_omitted.rs`.** Methods inside `impl Type { ... }`
+  blocks are intentionally not collected by
+  `extract_public_names`. The extractor walks only top-level
+  CST root children; impl methods live one level deeper.
+  Asymmetric with goast as of v0.8.2 (which emits qualified
+  method names). Pin lives in
+  `tests/test_rust_correctness.py::test_rust_extract_omits_impl_methods`.
+  Added in v0.8.3.
