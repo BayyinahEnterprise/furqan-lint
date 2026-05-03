@@ -1,19 +1,153 @@
 # Changelog
 
-## [0.8.3] - <DATE>
+## [0.8.3] - 2026-05-03
 
 Corrective release. Round-21 found 1 HIGH (Rust diff parse-
 error gate missing), 2 MEDIUM (goast IndexListExpr +
-extract_public_names docstring), 2 LOW. Closes all five plus
-lands two automated gates (CHANGELOG-math + four-place-
-completeness). Per-version baselines added.
+``extract_public_names`` docstring sweep), 2 LOW. Closes all
+five plus lands two automated gates (CHANGELOG-math +
+four-place-completeness). Per-version baselines added.
 
-This commit (commit 1 of 7) is the placeholder header so the
-CHANGELOG-math gate (introduced in commit 5) does not self-
-fail on intermediate commits 1-5. The release commit (7)
-replaces ``<DATE>`` and the ``<TBD>`` test count with the
-empirical values measured at release time via ``pytest
---collect-only -q``.
+### Fixed
+
+- **Rust diff parse-error gate** (round-21 HIGH).
+  ``rust_adapter.public_names.extract_public_names`` now
+  calls ``_assert_parses_cleanly`` after ``parse_source``,
+  raising ``RustParseError`` on any tree-sitter recovered
+  parse error. The CLI's ``_check_rust_additive`` already
+  caught ``RustParseError`` and returned exit 2 with a PARSE
+  ERROR diagnostic on stdout; the missing piece was the
+  ``has_error`` check inside the diff path's name extractor.
+  Prior to this commit, a malformed ``.rs`` file silently
+  parsed to an empty public-name set, producing a false
+  MARAD on every name from the well-formed side (or a false
+  PASS when both sides were broken). Pinned by 5 new tests:
+  2 unit (broken signature, truncated input) plus 3 CLI
+  (parse error on old / new / both sides; the new-side test
+  is discriminating, asserting absence of the v0.8.2 false
+  MARAD).
+
+- **goast ``IndexListExpr`` in ``receiverTypeName``**
+  (round-21 MEDIUM, locked decision 2). Added two cases to
+  the receiver-type extractor so multi-parameter generic
+  receivers (``func (p Pair[K, V]) Get()`` and
+  ``func (p *Pair[K, V]) Get()``) emit qualified method
+  names ``Pair.Get`` instead of falling through to the
+  empty-string default + bare ``Get``. The receiver-shape
+  coverage matrix is now closed for the practical Go grammar
+  surface (six shapes total). Pinned by 2 new tests
+  (``test_qualified_method_value_receiver_multi_param_generic``
+  + the pointer variant). Goast binary rebuilt; md5
+  ``d7bf0679e814acf870b174391bd32f47``.
+
+### Backfilled
+
+- **``trait_object_return.rs`` pinning test** (v0.7.0 fixture
+  had no test reference; surfaced by the four-place-
+  completeness gate self-test).
+- **``lifetime_param_return.rs`` pinning test** (same
+  rationale).
+
+### Added (gates)
+
+- **``test_changelog_math_gate.py``** (2 tests): live gate
+  + self-test. Parses the latest ``## [...]`` entry's
+  ``### Tests`` block via the canonical regex; asserts
+  (Y == empirical) AND (Y - X == Z). The first assertion
+  would have caught the v0.8.1 drift (claimed 291, actual
+  294); the second catches arithmetic errors anywhere.
+  Placeholder handling (``<TBD>`` / ``<DATE>``) enables the
+  in-flight release commit pattern.
+
+- **``test_four_place_completeness_gate.py``** (1 test, single
+  internal loop). For every fixture in
+  ``tests/fixtures/<lang>/documented_limits/``, asserts the
+  four-place documentation discipline: CHANGELOG mention by
+  exact stem, ``documented_limits/README.md`` mention,
+  test reference, top-level ``README.md`` topic-keyword
+  mention. Legacy v0.8.0-era Go fixtures are explicitly
+  allowlisted (CHANGELOG describes by topic-keyword instead
+  of exact filename); allowlist is a v0.8.4 retirement
+  candidate.
+
+### Changed
+
+- **README.md Rust adapter section** anchor updated:
+  ``current as of v0.7.3`` -> ``current as of v0.8.3``.
+- **``go_adapter/public_names.py`` docstring** swept: the
+  forward-looking phrase ``a future v0.8.2 fix that emits
+  qualified method names`` was replaced with the post-fact
+  ``shipped in v0.8.2`` plus the impl-methods asymmetry
+  note.
+
+### Per-version baselines
+
+- ``V0_8_3_SURFACE`` (top-level): alias of ``V0_7_0_SURFACE``.
+- ``_RUST_ADAPTER_PUBLIC_SURFACE_v0_8_3``: alias of v0.8.2.
+- ``_GO_ADAPTER_PUBLIC_SURFACE_v0_8_3``: alias of v0.8.2.
+
+None of the v0.8.3 changes touch a public Python surface.
+
+### Out of scope (v0.8.4 candidates)
+
+- Diff path's PARSE ERROR diagnostic prefix names
+  ``new_path`` regardless of which side failed to parse.
+- Retire the four-place-completeness gate's legacy Go
+  allowlist.
+- Rust impl-block method collection.
+- Loosen CI em-dash gate to exempt Python docstrings.
+
+### §11.3 Five Questions
+
+1. **What's the riskiest assumption?** That the four-place
+   gate's keyword map covers every limit's variations. Loud
+   failure mode (gate names missing keyword candidates).
+2. **Most reversible decision?** The legacy-Go allowlist;
+   removing the nine entries forces v0.8.0-era CHANGELOG
+   exact-stem updates (a v0.8.4 commit).
+3. **What did we defer?** Nothing -- impl-block methods and
+   diff PARSE ERROR prefix are deliberate v0.8.4 candidates.
+4. **Most surprising?** The commit-order discipline (commit
+   1 placeholder + commit 7 release populates math) prevents
+   the gate from self-failing on intermediate commits.
+5. **What changes the next prompt?** Add 'four-place gate
+   self-test against current substrate' to §2 grounding so
+   pre-existing gaps surface before the prompt's commit
+   decomposition.
+
+### §5.1 Validator-Bias Self-Disclosure
+
+I am the producer + validator + reporter for the v0.8.3
+series. Load-bearing claims for fresh-instance verification:
+
+* Does ``_assert_parses_cleanly`` correctly raise
+  ``RustParseError`` on every shape of tree-sitter
+  recoverable parse error beyond the two pinned cases?
+* Does the v0.8.3 commit-order discipline (placeholder
+  header in commit 1) actually prevent self-failure across
+  commits 2-6? Verifiable via ``git checkout`` per
+  intermediate commit.
+* Does the legacy allowlist cover exactly the v0.8.0-era Go
+  fixtures (no more, no less)? An honest fresh-instance
+  read should challenge whether each entry deserves to stay.
+
+### §5.2 Prompt-Grounding Self-Check
+
+§2 commands all returned the expected results before
+implementation began:
+
+* ``RustParseError`` class at line 110 of translator.py.
+* ``_assert_parses_cleanly`` at line 188 of translator.py.
+* ``public_names.py extract_public_names`` body verified;
+  source_path convention used (no rebinding of ``path``).
+* ``RustParseError`` already imported in cli.py.
+* goast main.go ``receiverTypeName`` had 4 cases (the
+  IndexListExpr fall-through was explicitly noted).
+* documented_limits/README four-place description verified.
+* Existing rust_correctness had NO ``documented`` /
+  ``omit`` tests (surfaced the backfill gap).
+* Baseline pytest 309.
+* All ``PARSE ERROR`` diagnostics on stdout (not stderr).
 
 ### Limitations introduced
 
@@ -30,7 +164,15 @@ empirical values measured at release time via ``pytest
 
 ### Tests
 
-Test count: 309 (v0.8.2) -> <TBD> (v0.8.3). Net delta: <TBD>.
+Test count: 309 (v0.8.2) -> 325 (v0.8.3). Net delta: +16.
+
+Per the §4 inventory: +5 (parse-error: 2 unit + 3 CLI) +2
+(goast IndexListExpr) +1 (impl-methods pin) +2 (Rust
+backfills) +2 (changelog-math gate + self-test) +1 (four-
+place-completeness gate) +3 (per-version baselines) = +16.
+
+The CHANGELOG-math gate enforces this empirically on every
+future release.
 
 ## [0.8.2] - 2026-05-03
 
