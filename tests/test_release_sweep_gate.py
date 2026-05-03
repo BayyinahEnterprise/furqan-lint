@@ -98,10 +98,8 @@ def test_no_phase_numbering_in_rust_user_surfaces() -> None:
         if not path.is_file():
             continue
         for line_no, line in enumerate(path.read_text().splitlines(), start=1):
-            for match in _PHASE_PATTERN.finditer(line):
-                findings.append(
-                    (path.relative_to(REPO_ROOT), line_no, line.strip())
-                )
+            for _match in _PHASE_PATTERN.finditer(line):
+                findings.append((path.relative_to(REPO_ROOT), line_no, line.strip()))
     if findings:
         msg_lines = [
             "Found Phase N references in user-visible Rust adapter surfaces.",
@@ -147,10 +145,8 @@ def test_no_stale_version_anchored_claims_in_user_surfaces() -> None:
         if not path.is_file():
             continue
         for line_no, line in enumerate(path.read_text().splitlines(), start=1):
-            for match in _VERSION_CLAIM_PATTERN.finditer(line):
-                findings.append(
-                    (path.relative_to(REPO_ROOT), line_no, line.strip())
-                )
+            for _match in _VERSION_CLAIM_PATTERN.finditer(line):
+                findings.append((path.relative_to(REPO_ROOT), line_no, line.strip()))
     if findings:
         msg_lines = [
             "Found version-anchored claims in user-visible Rust adapter surfaces.",
