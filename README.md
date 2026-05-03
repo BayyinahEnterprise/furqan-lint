@@ -323,29 +323,6 @@ than silent.
   regression demonstrates otherwise, extend the function walker to
   descend into local `ClassDef` bodies and call
   `_collect_class_methods`.
-- **Redundant `None` arms in PEP 604 unions.** `int | None | None`
-  and `None | None` are correctly accepted (the runtime collapses
-  them to `int | None` and `type(None)` respectively, and the
-  matcher arrives at the right answer for incidental reasons), but
-  the v0.3.4 short-circuits applied to `Optional[None]` and the
-  v0.3.3 short-circuit applied to `Union[None]` are not yet
-  applied to the PEP 604 pipe path. The intermediate AST is a
-  binary `UnionType` whose arms may both be `None` after inner
-  extraction; this is correct today and would break the day
-  someone refactors the pipe path to require distinct arms. Full
-  symmetric tightening across the three optional spellings is a
-  v0.4.0 candidate. Pinned as `tests/fixtures/documented_limits/redundant_pipe_none.py`.
-
-- **Aliased decorator imports for R3 skip-list.** R3's skip-list
-  resolution in v0.6.0 is name-only: it recognises
-  `@abstractmethod`, `@abc.abstractmethod`, `@overload`, and
-  `@typing.overload`. It does NOT follow
-  `from abc import abstractmethod as abstract` aliases. A method
-  decorated with the aliased name fires R3 as a false positive,
-  even though it is genuinely abstract. The fix is symbol-table-backed
-  alias resolution, deferred to v0.6.1. Pinned as
-  `tests/fixtures/documented_limits/aliased_abstractmethod.py`.
-
 ## License
 
 Apache-2.0.

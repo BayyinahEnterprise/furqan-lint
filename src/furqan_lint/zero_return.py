@@ -29,9 +29,12 @@ Skipped (does not fire R3):
   ``itertools.count()``) are NOT recognized in v0.6.0.
 - Functions decorated with any of the names in
   ``_SKIP_DECORATORS`` (e.g., ``@abstractmethod``, ``@overload``).
-  Decorator resolution in v0.6.0 is name-only; aliased imports
-  (``from abc import abstractmethod as abstract``) are NOT yet
-  resolved. v0.6.1 will add symbol-table-backed resolution.
+  As of v0.6.1, decorator resolution follows module-level
+  ``import`` and ``from ... import ... as ...`` aliases via a
+  symbol table built from the module's top-level imports. So
+  ``from abc import abstractmethod as abstract`` then ``@abstract``
+  is correctly recognized and skipped. Imports inside function or
+  class bodies are not tracked (deliberate simplification).
 """
 
 from __future__ import annotations
@@ -46,8 +49,9 @@ from furqan_lint.adapter import (
     _is_union_with_none,
 )
 
-# Decorator skip-list. Name-only resolution; v0.6.1 will resolve
-# aliased imports through the symbol table.
+# Decorator skip-list. Names are resolved through a module-level
+# alias map (see _build_decorator_alias_map) so aliased imports
+# (``from abc import abstractmethod as abstract``) are recognized.
 _SKIP_DECORATORS: frozenset[str] = frozenset(
     {
         "abstractmethod",
@@ -84,10 +88,15 @@ def check_zero_return(tree: ast.Module) -> list[ZeroReturnDiagnostic]:
     Methods of classes are walked. Lambdas are not (they cannot have
     a return-type annotation in Python syntax). Nested function
     definitions are walked independently of their enclosing function.
+
+    Builds a module-level alias map from top-level ``import`` and
+    ``from ... import ... [as ...]`` statements once per call so the
+    decorator skip-list can resolve aliased imports.
     """
+    aliases = _build_decorator_alias_map(tree)
     diagnostics: list[ZeroReturnDiagnostic] = []
     for fn in _iter_function_defs(tree):
-        diagnostics.extend(_check_function(fn))
+        diagnostics.extend(_check_function(fn, aliases))
     return diagnostics
 
 
@@ -115,6 +124,7 @@ def _iter_function_defs(
 
 def _check_function(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
+    aliases: dict[str, str],
 ) -> list[ZeroReturnDiagnostic]:
     """Return a single-element list if ``node`` satisfies R3's
     firing condition, else an empty list.
@@ -132,8 +142,8 @@ def _check_function(
     if _annotation_allows_none(node.returns):
         return []
 
-    # 3. Decorator on the skip-list: skip.
-    if _has_skip_decorator(node):
+    # 3. Decorator on the skip-list (with alias resolution): skip.
+    if _has_skip_decorator(node, aliases):
         return []
 
     # 4. Body is provably non-returning (raise-only or while True
@@ -206,39 +216,90 @@ def _render_annotation(ann: ast.expr) -> str:
 
 def _has_skip_decorator(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
+    aliases: dict[str, str],
 ) -> bool:
     """True iff any decorator on ``node`` matches a name in
-    ``_SKIP_DECORATORS``.
+    ``_SKIP_DECORATORS``, either directly or via the module's
+    ``aliases`` map.
 
     Recognizes ``@abstractmethod``, ``@overload``,
-    ``@typing.overload``, ``@abc.abstractmethod``. Does NOT recognize
-    aliased imports (``from abc import abstractmethod as abstract``).
-    Pinned as v0.6.1 regression target.
+    ``@typing.overload``, ``@abc.abstractmethod`` directly. Resolves
+    aliased imports through ``aliases``: ``from abc import
+    abstractmethod as abstract`` followed by ``@abstract`` matches.
     """
-    return any(_decorator_matches_skip_list(dec) for dec in node.decorator_list)
+    return any(_decorator_matches_skip_list(dec, aliases) for dec in node.decorator_list)
 
 
-def _decorator_matches_skip_list(dec: ast.expr) -> bool:
-    """True iff the decorator reduces to a dotted name in
-    ``_SKIP_DECORATORS``.
+def _decorator_matches_skip_list(dec: ast.expr, aliases: dict[str, str]) -> bool:
+    """True iff the decorator reduces to a name in ``_SKIP_DECORATORS``,
+    either directly or after resolution through ``aliases``.
 
     Recognizes:
-    - ``@abstractmethod``                      -> ``"abstractmethod"``
-    - ``@abc.abstractmethod``                  -> ``"abc.abstractmethod"``
-    - ``@abstractmethod()`` (called)           -> ``"abstractmethod"``
-    - ``@functools.cache(maxsize=128)``        -> ``"functools.cache"``
+    - Direct bare:    ``@abstractmethod``, ``@overload``.
+    - Direct dotted:  ``@abc.abstractmethod``, ``@typing.overload``.
+    - Called forms:   ``@abstractmethod()``, ``@functools.cache(...)``.
+    - Aliased bare:   ``from abc import abstractmethod as abstract``
+                      then ``@abstract`` resolves to
+                      ``abc.abstractmethod`` via ``aliases``.
+    - Aliased prefix: ``import abc as a`` then ``@a.abstractmethod``
+                      resolves to ``abc.abstractmethod`` via
+                      ``aliases``.
 
     Returns ``False`` for shapes that don't reduce to a dotted name
-    (e.g., ``@(lambda f: f)``). Returns ``bool`` rather than
-    ``str | None`` so that ``_has_skip_decorator``'s consumer-side
+    (e.g., ``@(lambda f: f)``). Returns ``bool`` so the consumer-side
     discipline (D11) is honestly propagated.
     """
     target = dec.func if isinstance(dec, ast.Call) else dec
+
     if isinstance(target, ast.Name):
-        return target.id in _SKIP_DECORATORS
+        # Bare: @abstract, @abstractmethod, etc.
+        name = target.id
+        if name in _SKIP_DECORATORS:
+            return True
+        return aliases.get(name) in _SKIP_DECORATORS
+
     if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name):
-        return f"{target.value.id}.{target.attr}" in _SKIP_DECORATORS
+        # Dotted: @abc.abstractmethod, @a.abstractmethod, etc.
+        prefix = target.value.id
+        suffix = target.attr
+        if f"{prefix}.{suffix}" in _SKIP_DECORATORS:
+            return True
+        resolved_prefix = aliases.get(prefix)
+        if resolved_prefix is not None:
+            return f"{resolved_prefix}.{suffix}" in _SKIP_DECORATORS
+        return False
+
     return False
+
+
+def _build_decorator_alias_map(tree: ast.Module) -> dict[str, str]:
+    """Build a name -> resolved-name map from ``tree``'s top-level
+    imports. Used by the decorator skip-list to recognize aliased
+    imports.
+
+    Mappings:
+    - ``from X import Y`` -> ``{Y: "X.Y"}``
+    - ``from X import Y as Z`` -> ``{Z: "X.Y"}``
+    - ``import X`` -> ``{X: "X"}``
+    - ``import X as Y`` -> ``{Y: "X"}``
+
+    Resolution is module-level only. Imports inside function or
+    class bodies are not tracked; decorators that need such imports
+    are exotic enough to defer.
+    """
+    aliases: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            for name in node.names:
+                local = name.asname or name.name
+                qualified = f"{module}.{name.name}" if module else name.name
+                aliases[local] = qualified
+        elif isinstance(node, ast.Import):
+            for name in node.names:
+                local = name.asname or name.name
+                aliases[local] = name.name
+    return aliases
 
 
 # ---------------------------------------------------------------------------
