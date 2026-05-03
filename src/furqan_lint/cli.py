@@ -312,15 +312,40 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
     """Dispatch the additive-only diff to the language-appropriate
     helper based on file suffix.
 
-    v0.8.1 commit 2: minimal Go-or-Python dispatcher. The Go
-    path requires both arms to be ``.go``; otherwise routes to
-    the Python helper (which raises SyntaxError on non-Python
-    sources, mapped to exit 2). The cross-language rejection
-    and Rust-not-implemented guards land in v0.8.1 commit 3 with
-    their own pinning tests.
+    Guard ordering (load-bearing per locked decision 4):
+
+    1. Cross-language pairs (suffix mismatch) return exit 2 with
+       a "Cross-language diff not supported" message. MUST be
+       evaluated FIRST so a ``foo.py`` vs ``bar.rs`` pair says
+       "cross-language", not "Rust diff not implemented".
+    2. ``.rs`` vs ``.rs`` pairs return exit 2 with the
+       "Rust diff not implemented in v0.8.1" message (locked
+       decision 2: Rust diff deferred to v0.8.2).
+    3. ``.go`` vs ``.go`` pairs route to ``_check_go_additive``
+       (added in v0.8.1 commit 2).
+    4. Default: ``_check_python_additive`` (preserved verbatim
+       from v0.8.0's monolithic body).
     """
-    if old_path.suffix == ".go" and new_path.suffix == ".go":
+    # Guard 1: cross-language rejection (MUST BE FIRST).
+    if old_path.suffix != new_path.suffix:
+        print(f"PARSE ERROR  {new_path} (additive-only)")
+        print(
+            f"  Cross-language diff not supported. "
+            f"Old: '{old_path.suffix}'; new: '{new_path.suffix}'."
+        )
+        return 2
+
+    # Guard 2: Rust diff not yet implemented (deferred to v0.8.2).
+    if old_path.suffix == ".rs":
+        print(f"PARSE ERROR  {new_path} (additive-only)")
+        print("  Rust diff not implemented in v0.8.1. " "See CHANGELOG for the v0.8.2 schedule.")
+        return 2
+
+    # Guard 3: Go diff (added in v0.8.1 commit 2).
+    if old_path.suffix == ".go":
         return _check_go_additive(old_path, new_path)
+
+    # Default: Python diff.
     return _check_python_additive(old_path, new_path)
 
 
