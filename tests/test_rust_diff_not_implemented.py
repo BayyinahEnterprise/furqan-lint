@@ -75,19 +75,12 @@ def test_cross_language_takes_precedence_over_rust_not_implemented(
     assert "Rust diff not implemented" not in result.stdout
 
 
-def test_rust_diff_returns_exit_2_with_v0_8_2_schedule_message(
-    tmp_path: Path,
-) -> None:
-    """A .rs vs .rs pair returns exit 2 with the locked-decision-2
-    message. The diff dispatcher fires before any tree-sitter
-    import, so this test runs without [rust] extras installed
-    (mirrors the v0.8.0 test_go_diff_returns_exit_2 pattern)."""
-    v1 = tmp_path / "v1.rs"
-    v2 = tmp_path / "v2.rs"
-    v1.write_text("pub fn f() {}\n")
-    v2.write_text("pub fn f() {}\n")
-    result = _run_diff(v1, v2)
-    assert result.returncode == 2, result.stdout + result.stderr
-    assert "PARSE ERROR" in result.stdout
-    assert "Rust diff not implemented in v0.8.1" in result.stdout
-    assert "v0.8.2 schedule" in result.stdout
+# Retired in v0.8.2 commit 2: test_rust_diff_returns_exit_2_with_v0_8_2_schedule_message
+# pinned the v0.8.1 'Rust diff not implemented' contract. v0.8.2 implements
+# Rust diff via rust_adapter.extract_public_names + compare_name_sets;
+# detailed coverage moved to tests/test_rust_diff.py. Replacement is the
+# positive PASS verdict (test_rust_diff_additive_only_passes) in that new
+# file. The remaining two tests in this file (cross-language guard + its
+# precedence over the now-defunct Rust-not-impl message) get renamed and
+# their precedence assertion flipped in v0.8.2 commit 4 (file moves to
+# tests/test_cli_diff_dispatcher.py).
