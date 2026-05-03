@@ -103,12 +103,12 @@ shipped; archived in the discussion record).
 
 ### Tests
 
-- 233 passed (was 229 in v0.7.1). Delta: +4 (3 new D11 tests +
-  1 dead-code regression test + 3 new surface-snapshot tests
-  - 0 retired = +7; corrected count below).
-- Actual delta after measurement: +4 net (the 3 surface tests
-  count toward the snapshot baselines and were not present in
-  v0.7.1's 229).
+- 236 passed (was 229 in v0.7.1). Delta: +7 (3 new D11 tests +
+  1 dead-code regression test + 3 new surface-snapshot tests).
+  v0.7.2's release commit message originally said "+4 net"; the
+  v0.7.3 documentation sweep corrected it to +7. The 3 surface
+  tests are real test functions (not just snapshot baselines)
+  and count toward the total.
 - Marker counts: 188 unit + 44 integration (1 also network).
 
 ### Five Questions (release level, per Bayyinah Engineering Discipline Framework v2.0 section 11.3)

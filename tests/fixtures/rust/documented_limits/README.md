@@ -1,7 +1,7 @@
 # Rust documented limitations
 
 Each fixture in this directory pins a known false negative or false
-positive of the v0.7.0 Rust adapter (Phase 1: D24 + D11 only). The
+positive of the current Rust adapter (R3 + D24 + D11). The
 project README's `Remaining limitations` section explains the
 user-visible contract; the fixtures here pin the current behaviour
 so a future fix is detected as a deliberate improvement rather
@@ -22,7 +22,7 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
 
 - **`macro_invocation_body.rs`.** A function whose body is a single
   macro invocation (`todo!()`, `unimplemented!()`, etc.) is treated
-  as opaque. Phase 1 cannot see through macro expansion. The
+  as opaque. The current implementation cannot see through macro expansion. The
   Python adapter's R3 catches the analogous Python case
   (`def f() -> int: pass`); the Rust analogue is deferred to
   v0.7.1.
@@ -30,7 +30,7 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
   `Box<dyn Trait>` is translated to a `TypePath` that ignores the
   trait-object payload. Trait-object polymorphism is out of scope
   per ADR-001's deferred-features list; the fixture parses cleanly
-  and does not currently fire a marad, but a future Phase 2
+  and does not currently fire a marad, but a future
   checker that reasons about trait dispatch would be the right
   place to revisit.
 - **`lifetime_param_return.rs`.** Functions with explicit lifetime
@@ -39,9 +39,9 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
   `-> str`. D24's path-coverage logic is unaffected; a future
   borrow-pattern checker would need lifetime preservation.
 - **`closure_with_annotated_return.rs`.** `closure_expression`
-  nodes are skipped for D24, D11, AND R3 in Phase 2 (v0.7.1).
+  nodes are skipped for D24, D11, AND R3 (current as of v0.7.2).
   The outer function is checked normally; the closure body is
-  opaque. Phase 3 may revisit when there is a concrete
+  opaque. A future phase may revisit when there is a concrete
   user-reported false negative.
 - **`r3_panic_as_tail_expression.rs`.** `panic!()` (or any
   diverging macro) used as a tail expression with no trailing
@@ -52,7 +52,7 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
   expression; R3 fires on zero `ReturnStmt`, so it does not
   fire here. Fixing this would require either a hardcoded
   diverging-macro allowlist (brittle) or cross-file type
-  inference (out of scope). Phase 3 may revisit if the Rust
+  inference (out of scope). A future phase may revisit if the Rust
   ecosystem standardizes a `#[diverging]` attribute.
 
 ## Retired in v0.7.1

@@ -60,7 +60,7 @@ def test_simple_returning_fn_is_pass() -> None:
     result = _run_check("clean/simple_returning_fn.rs")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "PASS" in result.stdout
-    assert "Rust Phase 2: R3 + D24 + D11" in result.stdout
+    assert "R3, D24, D11" in result.stdout
 
 
 @pytestmark_rust
