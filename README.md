@@ -35,6 +35,30 @@ pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-langua
 pip install furqan-lint
 ```
 
+### Rust support (Phase 1, opt-in)
+
+As of v0.7.0, furqan-lint can lint `.rs` files. Rust support is
+behind an opt-in extra so the Python-only install path is unchanged:
+
+```bash
+pip install "furqan-lint[rust]"
+```
+
+This pulls in `tree-sitter` and `tree-sitter-rust` (PyPI ships
+ARM64 and x86_64 wheels for both; no source build required).
+
+Phase 1 runs two checkers on `.rs` files: D24 (all-paths-return)
+and D11 (status-coverage on `Option<T>`-returning helpers). Phase
+2 (v0.7.1+) will add a Rust analogue of `return_none_mismatch`,
+ring-close R3 for empty / `panic!()`-only bodies, and a
+Result-aware D11 producer predicate. Trait objects, lifetimes,
+macro expansion, and Cargo workspace traversal remain out of scope.
+
+Edition is read from the nearest ancestor `Cargo.toml`'s
+`[package].edition` field (one of "2018", "2021", "2024"); if
+no Cargo.toml is found or the field is malformed, edition
+defaults to "2021". Phase 1 does not branch on edition.
+
 ## Usage
 
 ```bash
@@ -323,6 +347,45 @@ than silent.
   regression demonstrates otherwise, extend the function walker to
   descend into local `ClassDef` bodies and call
   `_collect_class_methods`.
+### Rust adapter (v0.7.0 Phase 1)
+
+Each Rust limit has a fixture in
+`tests/fixtures/rust/documented_limits/` and a pinning test in
+`tests/test_rust_correctness.py`.
+
+- **Macro-invocation bodies.** A function whose body is a single
+  macro invocation (`todo!()`, `unimplemented!()`, etc.) is treated
+  as opaque. Phase 1 cannot see through macro expansion. The
+  Python adapter's R3 catches the analogous Python case
+  (`def f() -> int: pass`); the Rust analogue is deferred to
+  v0.7.1. Pinned as `tests/fixtures/rust/documented_limits/macro_invocation_body.rs`.
+- **Trait-object return types.** Functions returning `Box<dyn Trait>`
+  are translated to a `TypePath` that ignores the trait-object
+  payload. Trait-object polymorphism is out of scope; a future
+  Phase 2 checker would be the right place to revisit. Pinned as
+  `tests/fixtures/rust/documented_limits/trait_object_return.rs`.
+- **Lifetime-affected return types.** Functions with explicit
+  lifetime parameters (`fn f<'a>(...) -> &'a str`) have their
+  lifetimes stripped during translation; the return type is
+  treated as `-> &'a str` literally (no lifetime semantics).
+  D24's path-coverage logic is unaffected; a future borrow-pattern
+  checker would need lifetime preservation. Pinned as
+  `tests/fixtures/rust/documented_limits/lifetime_param_return.rs`.
+- **Empty or panic-only bodies.** Functions with empty bodies or
+  bodies containing only `panic!()` / `todo!()` / `unimplemented!()`
+  are PASS in v0.7.0. The Rust analogue of Python's R3 (zero-return
+  ring-close) is deferred to v0.7.1. Pinned as
+  `tests/fixtures/rust/documented_limits/empty_or_panic_only_body.rs`.
+- **Trait method signatures.** `function_signature_item` nodes
+  (trait method declarations with no body) are skipped by design.
+  D24/D11 do not apply to interface declarations. Pinned as
+  `tests/fixtures/rust/documented_limits/trait_method_signature.rs`.
+- **Closures with annotated return types.** `closure_expression`
+  nodes are skipped in Phase 1 even when the closure has an
+  explicit `-> T` annotation. The outer function is checked
+  normally; the closure body is opaque. Phase 2 may revisit.
+  Pinned as `tests/fixtures/rust/documented_limits/closure_with_annotated_return.rs`.
+
 ## License
 
 Apache-2.0.

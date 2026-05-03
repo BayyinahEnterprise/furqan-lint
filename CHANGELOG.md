@@ -1,5 +1,300 @@
 # Changelog
 
+## [0.7.0.1] - 2026-05-03
+
+Corrective release for two HIGH-severity findings from Bilal's
+fresh-instance review of the v0.7.0 patch. Both were silent on
+my own validation pass because of validator bias (transitive
+dependencies and call-time imports that did not surface in the
+sandbox where v0.7.0 was built).
+
+### Fixed
+
+- **HIGH: mypy --strict failed on a clean install (Issue 1).**
+  The v0.7.0 ``[dev]`` install resolves to a venv where ``tomli``
+  is not always present (it is a transitive of mypy on Python
+  3.10 but not on 3.11+). Without ``tomli`` installed, mypy
+  --strict emitted ``Cannot find implementation or library stub
+  for module named "tomli"`` at ``edition.py:24``, failing
+  gate-4 of section 5. Fix: added ``[[tool.mypy.overrides]]
+  module = "tomli" ignore_missing_imports = true`` to
+  ``pyproject.toml``. The override is pinned by a regression test
+  in ``tests/test_v0_7_0_1_corrective.py`` so a future cleanup
+  cannot silently drop it.
+- **HIGH: ``furqan-lint check foo.rs`` without [rust] crashed with
+  a Python traceback (Issue 2).** The CLI guard in
+  ``_check_rust_file`` wrapped only the package import
+  (``from furqan_lint.rust_adapter import ...``), not the call
+  to ``parse_rust(path)``. The actual ``import tree_sitter``
+  fired deep inside ``parser._get_parser`` on first call, and
+  surfaced as an uncaught ``ModuleNotFoundError`` traceback,
+  violating prompt section 3.3 ("Do not crash with
+  ``ModuleNotFoundError``"). Fix: added
+  ``RustExtrasNotInstalled`` (a typed ``ImportError`` subclass)
+  to the rust_adapter public surface; ``parse_file`` now probes
+  the ``tree_sitter`` and ``tree_sitter_rust`` imports at its
+  entry point and re-raises any ``ImportError`` as
+  ``RustExtrasNotInstalled`` carrying the install hint. The CLI
+  catches this typed exception around the ``parse_rust(path)``
+  call and prints a one-line install hint to stderr, exit 1.
+  Pinned by three regression tests in
+  ``tests/test_v0_7_0_1_corrective.py``.
+
+### Added
+
+- **``RustExtrasNotInstalled`` typed exception** in
+  ``furqan_lint.rust_adapter.translator``, exported from
+  ``furqan_lint.rust_adapter``. Subclasses ``ImportError``;
+  message is the install hint itself. Snapshot test in
+  ``tests/test_rust_public_surface_additive.py`` extended with
+  a v0.7.0.1 baseline that includes this name (additive
+  superset of the v0.7.0 baseline).
+- **``tests/test_v0_7_0_1_corrective.py``** (4 unit tests).
+  (1) Asserts pyproject.toml has a tomli mypy override.
+  (2) Asserts ``RustExtrasNotInstalled`` is exported and
+  subclasses ``ImportError``.
+  (3) Asserts ``parse_file`` raises ``RustExtrasNotInstalled``
+  when ``tree_sitter`` is not importable (uses ``sys.meta_path``
+  injection to simulate the missing extra).
+  (4) Asserts the CLI emits the install hint to stderr and
+  returns exit 1 without dumping a traceback when
+  ``RustExtrasNotInstalled`` is raised.
+
+### Tests
+
+- 214 passed (was 210 in v0.7.0). Delta: +4.
+- 176 unit + 38 integration (1 also network-marked).
+
+### Process notes (validator-bias self-disclosure)
+
+Both findings landed silently on my v0.7.0 validation because:
+
+1. **Issue 1**: my sandbox already had ``tomli`` installed (a
+   transitive of mypy on Python 3.10), so mypy resolved the
+   import without needing the override. A fresh contributor
+   venv on 3.11+ without tomli would not. The lesson is that
+   "mypy --strict passes" is not a sufficient gate; it must be
+   "mypy --strict passes on a clean install of [dev,rust]
+   from scratch", which is what fresh-instance review is for.
+2. **Issue 2**: I tested the CLI dispatch path with extras
+   installed and never simulated the missing-extras case
+   empirically. The lazy-import gate I did test
+   (``python3 -X importtime``) proves that ``cli`` does not
+   load tree_sitter, but does NOT prove that ``cli`` handles
+   tree_sitter being missing at call time. Different gate,
+   different test required.
+
+Both lessons saved as feedback memories for future releases.
+
+### Five Questions (per Bayyinah Engineering Discipline Framework v2.0 section 11.3)
+
+1. **Smallest input demonstrating the fix works?**
+   For Issue 2:
+   ```bash
+   pip uninstall tree_sitter tree_sitter_rust
+   echo "fn f() -> i32 { 42 }" > /tmp/foo.rs
+   furqan-lint check /tmp/foo.rs
+   ```
+   On v0.7.0: Python traceback ending with
+   ``ModuleNotFoundError: No module named 'tree_sitter'``,
+   exit 1. On v0.7.0.1: one line
+   ``Rust support not installed. Run: pip install furqan-lint[rust]``,
+   exit 1, no traceback.
+
+2. **Smallest input demonstrating the bug pre-fix?**
+   Same input, on v0.7.0: 12-line Python traceback dumping
+   the call stack down to ``parser.py:35``.
+
+3. **What this fix does NOT do?**
+   (a) Does not bump the minimum Python to 3.11 (which would
+       eliminate the tomli dependency entirely). 3.10 remains
+       supported.
+   (b) Does not change the behaviour when a partial extras
+       install (e.g., tree_sitter present but tree_sitter_rust
+       missing) occurs; the typed exception fires identically
+       in either case.
+   (c) Does not add a ``furqan-lint --install-extras`` helper
+       command; the user must run pip themselves.
+
+4. **New code paths and their boundaries?**
+   ``parse_file`` gained a 7-line probe block at its entry
+   (try/except importing tree_sitter and tree_sitter_rust,
+   raising ``RustExtrasNotInstalled`` with the install hint).
+   ``_check_rust_file`` gained a 6-line except-block catching
+   ``RustExtrasNotInstalled`` and emitting a clean stderr
+   message + exit 1. The translator gained the
+   ``RustExtrasNotInstalled`` class (8 lines including
+   docstring). All boundaries pinned by the 4-test corrective
+   regression suite.
+
+5. **Limits retired and added?**
+   Retired: none. Added: none. v0.7.0.1 is a corrective
+   release; the documented-limits inventory is unchanged.
+
+## [0.7.0] - 2026-05-03
+
+Feature release: Rust adapter Phase 1. New language support behind
+an opt-in `[rust]` extra. Two checkers run on `.rs` files: D24
+(all-paths-return) and D11 (status-coverage on Option-returning
+helpers). The Python adapter is unchanged.
+
+This is the first release in the multi-language stage of the
+furqan-lint roadmap. The architecture follows ADR-001
+(`furqan_lint_rust_adapter_adr.md`): tree-sitter-rust direct (not
+language-pack), opt-in extra (not bundled), all checker logic
+operates on Furqan IR (`tree_sitter` appears only in
+`src/furqan_lint/rust_adapter/`). Validator findings R1
+(implicit-return load-bearing), R3 (PyPI ARM64 wheels both
+packages), and R4 (representability gate before translator code)
+are all observed.
+
+### Added
+
+- **`src/furqan_lint/rust_adapter/`** (~470 LoC). New package
+  containing `parser.py` (tree-sitter bootstrap with lazy
+  initialisation), `translator.py` (CST -> Furqan
+  Module/UnionType/TypePath), `edition.py` (Cargo.toml
+  resolution), and `__init__.py` (lazy-import gate; public
+  surface limited to `parse_file` and `RustParseError`).
+- **CLI dispatch on `.rs` files.** `_check_file` is now a
+  dispatcher calling `_check_python_file` (existing 55-line body)
+  or `_check_rust_file` (new path). On `.rs`, the CLI lazy-imports
+  `furqan_lint.rust_adapter`; if `tree_sitter` is missing, prints
+  `Rust support not installed. Run: pip install furqan-lint[rust]`
+  to stderr and exits 1.
+- **`_check_directory` walks both `*.py` and `*.rs`.** Existing
+  Python directory walks are unchanged; new directory walks
+  discover Rust files alongside Python.
+- **`target/` added to `EXCLUDED_DIRS`.** Cargo build output is
+  skipped in directory walks (mirrors the existing `.venv`,
+  `__pycache__` exclusions).
+- **`[rust]` optional extra in `pyproject.toml`.**
+  `pip install furqan-lint[rust]` resolves
+  `tree-sitter>=0.23,<1` and `tree-sitter-rust>=0.23,<1`. Both
+  packages ship ARM64 and x86_64 wheels on PyPI; no source build
+  required.
+- **21 Rust fixture files.** 10 in `clean/`, 4 in `failing/`,
+  6 in `documented_limits/`, plus a `documented_limits/README.md`
+  mirroring the Python adapter's four-place-pattern shape.
+- **30 new tests across four files.** `test_rust_adapter.py`
+  (15 unit), `test_rust_correctness.py` (11 integration),
+  `test_rust_extras_sync.py` (2 unit), and
+  `test_rust_public_surface_additive.py` (2 unit). Test count
+  goes from 180 to 210.
+- **`test_rust_public_surface_additive.py`.** First additive-only
+  snapshot test on furqan-lint's own surface. Pins
+  `furqan_lint.rust_adapter.__all__` at v0.7.0 as a frozenset that
+  future versions must remain a superset of. A parallel snapshot
+  for the top-level `furqan_lint` package is registered as a
+  v0.7.x or v0.8 candidate.
+
+### Changed
+
+- **CLI PASS message for `.rs` files.** Reads "2 structural checks
+  ran (Rust Phase 1: D24 + D11). Zero diagnostics." rather than
+  the Python-side "4 structural checks ran" message, so it is
+  obvious which pipeline ran.
+- **`pyproject.toml` ruff per-file-ignores.** The three new
+  `rust_adapter/*.py` files use lazy mid-function imports; PLC0415
+  is suppressed for them, mirroring the existing `cli.py`
+  exception.
+- **`pyproject.toml` mypy override.** `tree_sitter` and
+  `tree_sitter_rust` get `ignore_missing_imports = true` because
+  they ship without inline type hints at the version we pin. The
+  rest of the source remains strictly typed.
+
+### Limitations introduced
+
+Six Rust documented limits, each pinned by the four-place pattern
+(README bullet + fixture + pinning test + CHANGELOG entry):
+
+- **Macro-invocation bodies** (`macro_invocation_body.rs`). Phase 1
+  cannot see through macro expansion; `fn f() -> i32 { todo!() }`
+  passes silently. The Rust analogue of R3 (zero-return ring-close)
+  is deferred to v0.7.1.
+- **Trait-object return types** (`trait_object_return.rs`).
+  `Box<dyn Trait>` is translated to an opaque `TypePath`; trait-
+  object polymorphism is out of scope per ADR-001.
+- **Lifetime-affected return types** (`lifetime_param_return.rs`).
+  `fn f<'a>(...) -> &'a str` has its lifetime stripped; D24's
+  path-coverage logic is unaffected.
+- **Empty or panic-only bodies** (`empty_or_panic_only_body.rs`).
+  Same as the macro-body limit; deferred to v0.7.1.
+- **Trait method signatures** (`trait_method_signature.rs`).
+  `function_signature_item` nodes are skipped by design (per
+  prompt 3.4); D24/D11 do not apply to interface declarations.
+- **Closures with annotated return types**
+  (`closure_with_annotated_return.rs`). `closure_expression` nodes
+  are skipped in Phase 1 even when annotated. Phase 2 may revisit.
+
+### Tests
+
+- 210 passed (was 180 in v0.6.1). Delta: +30.
+- 168 unit + 42 integration (1 of which is also network-marked).
+
+### Five Questions (release level, per Bayyinah Engineering Discipline Framework v2.0 section 11.3)
+
+1. **Smallest input demonstrating the new capability:**
+   ```rust
+   fn classify(x: i32) -> i32 {
+       if x > 0 {
+           return 1;
+       }
+       println!("non-positive");
+   }
+   ```
+   On v0.6.x: `furqan-lint check classify.rs` prints
+   `Not found: classify.rs` (the CLI rejected `.rs`). On v0.7.0
+   with `[rust]` installed: exit 1 with a MARAD on `classify`
+   naming the missing-return path; without `[rust]` installed: exit
+   1 with the install hint.
+
+2. **Smallest input that would have shown each shipped diagnostic
+   on v0.6.x:** none. v0.6.x had no Rust dispatch path. The
+   shipped diagnostics for `.rs` files (D24 path-coverage, D11
+   Option-collapse, `RustParseError` for syntax errors) are all
+   new in v0.7.0.
+
+3. **What this release does NOT do:**
+   (a) No Rust analogue of `return_none_mismatch` (deferred to
+       v0.7.1+).
+   (b) No additive-only on the top-level `furqan_lint` surface
+       (the rust subpackage gets its own snapshot; the rest is
+       deferred).
+   (c) No macro expansion; macros are opaque.
+   (d) No cross-file symbol resolution; all checks are intra-file.
+   (e) No Cargo workspace traversal beyond reading the nearest
+       `Cargo.toml` for edition.
+   (f) No R3 equivalent for empty / `todo!()`-only / `panic!()`-only
+       Rust functions (deferred to v0.7.1 per the documented
+       limit).
+   (g) No D24 or D11 on trait method declarations or closures
+       (skipped by design).
+   (h) No Result-aware D11. The producer predicate fires on
+       Option-returning helpers (Option translates to
+       UnionType-with-None-arm); Result-collapse needs a
+       Rust-specific predicate, deferred.
+
+4. **New code paths:**
+   `src/furqan_lint/rust_adapter/` (~470 LoC across four
+   modules); CLI dispatch on `.rs` (3 new methods:
+   `_check_file` dispatcher, `_check_python_file`,
+   `_check_rust_file`); lazy-import gate that converts
+   `ImportError` to a user-facing install hint;
+   `tree.root_node.has_error` refusal that exits 2; edition
+   resolution from `Cargo.toml`; six Rust documented limits with
+   the four-place pattern; one additive-only test on
+   `rust_adapter.__all__`.
+
+5. **Limits retired and added:**
+   Retired: none. (v0.6.0 retired the zero-return-functions limit;
+   v0.6.1 retired the aliased-decorator limit.)
+   Added: six Rust documented limits (macro-invocation bodies,
+   trait-object returns, lifetime-affected return types,
+   empty/`todo!()`-only/`panic!()`-only bodies (deferred to v0.7.1),
+   trait method signatures (skipped by design), closures with
+   annotated return types (skipped in Phase 1)).
+
 ## [0.6.1] - 2026-05-02
 
 Round-11 corrective from Fraz. Three tracked findings: an aliased-

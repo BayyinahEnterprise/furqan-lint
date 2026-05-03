@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "furqan-lint"
-version = "0.6.1"
+version = "0.7.0.1"
 description = "Structural-honesty checks for Python, powered by Furqan"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,6 +26,15 @@ dev = [
     "mypy>=1.13",
     "pre-commit>=4.0",
     "pyyaml>=6.0",
+]
+# Optional Rust adapter (Phase 1: D24 + D11 on .rs files).
+# pip install furqan-lint[rust]. Pinned to a single major-zero
+# range on both packages because the tree-sitter Python bindings
+# broke between 0.20 and 0.21; we are not getting bitten by a
+# similar break across our own minor releases.
+rust = [
+    "tree-sitter>=0.23,<1",
+    "tree-sitter-rust>=0.23,<1",
 ]
 
 [project.scripts]
@@ -85,6 +94,12 @@ ignore = [
 # adapter + runner. The pattern is deliberate; pre-v0.5.0 it was
 # noted in the docstring.
 "src/furqan_lint/cli.py" = ["PLC0415"]
+# rust_adapter __init__.py lazy-imports tree_sitter inside parse_file
+# so the broader furqan_lint package remains importable on installs
+# without the [rust] extra. Mirror the cli.py exception.
+"src/furqan_lint/rust_adapter/__init__.py" = ["PLC0415"]
+"src/furqan_lint/rust_adapter/parser.py" = ["PLC0415"]
+"src/furqan_lint/rust_adapter/translator.py" = ["PLC0415"]
 # Tests get extra slack on:
 # - PLR (pylint refactor suggestions: many-args, many-branches, etc.)
 # - B011 (assert False - we use this in unreachable test branches)
@@ -111,6 +126,25 @@ exclude = ["tests/", "build/", "dist/"]
 [[tool.mypy.overrides]]
 module = "furqan.*"
 # furqan upstream is not type-stub-complete yet; relax.
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# tree-sitter and tree-sitter-rust ship without inline type hints
+# at the resolution our [rust] extra pins; mypy --strict needs the
+# imports relaxed. The Rust adapter wraps both packages in a thin
+# typed surface (parser._get_parser, translator.translate_tree)
+# so the rest of the source remains strictly typed.
+module = ["tree_sitter", "tree_sitter_rust"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# tomli is the Python 3.10 fallback for the stdlib tomllib; on a
+# clean install of [dev] without tomli pre-installed (e.g., a fresh
+# venv on Python 3.10), mypy --strict cannot find stubs for it and
+# fails the strict gate. Suppress the missing-stubs check; the
+# import itself is type-safe (we only call _tomllib.load(handle)
+# and _tomllib.TOMLDecodeError, both well-typed at runtime).
+module = "tomli"
 ignore_missing_imports = true
 
 [tool.coverage.run]
