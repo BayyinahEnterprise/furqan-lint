@@ -15,17 +15,16 @@ promoted to fixes in v0.3.5:
 
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
+import pytest
 from furqan.parser.ast_nodes import TypePath, UnionType
 
 from furqan_lint.adapter import translate_source
 from furqan_lint.return_none import check_return_none
 from furqan_lint.runner import check_python_module
 
-
+pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -37,16 +36,11 @@ def _d24(module) -> list:
 # try/except modeling
 # ---------------------------------------------------------------------------
 
+
 def test_try_return_except_no_return_fires_d24() -> None:
     """probe11: ``try: return X; except: pass`` - the except branch
     falls through despite the function declaring a return type."""
-    src = (
-        "def f() -> int:\n"
-        "    try:\n"
-        "        return 42\n"
-        "    except ValueError:\n"
-        "        pass\n"
-    )
+    src = "def f() -> int:\n    try:\n        return 42\n    except ValueError:\n        pass\n"
     module = translate_source(src, "<t>")
     assert len(_d24(module)) == 1
 
@@ -55,11 +49,7 @@ def test_try_no_return_except_return_fires_d24() -> None:
     """try.body has no return, only the except branch returns -
     the success path falls through."""
     src = (
-        "def f(x) -> int:\n"
-        "    try:\n"
-        "        x = int(x)\n"
-        "    except ValueError:\n"
-        "        return 0\n"
+        "def f(x) -> int:\n    try:\n        x = int(x)\n    except ValueError:\n        return 0\n"
     )
     module = translate_source(src, "<t>")
     assert len(_d24(module)) == 1
@@ -68,13 +58,7 @@ def test_try_no_return_except_return_fires_d24() -> None:
 def test_try_return_except_return_passes_d24() -> None:
     """Both the success path and the handler return - D24 must
     NOT fire."""
-    src = (
-        "def f() -> int:\n"
-        "    try:\n"
-        "        return 42\n"
-        "    except ValueError:\n"
-        "        return 0\n"
-    )
+    src = "def f() -> int:\n    try:\n        return 42\n    except ValueError:\n        return 0\n"
     module = translate_source(src, "<t>")
     assert _d24(module) == []
 
@@ -88,7 +72,7 @@ def test_try_except_else_all_return_passes_d24() -> None:
         "        y = int(x)\n"
         "    except ValueError:\n"
         "        return 0\n"
-    "    else:\n"
+        "    else:\n"
         "        return y\n"
     )
     module = translate_source(src, "<t>")
@@ -98,13 +82,7 @@ def test_try_except_else_all_return_passes_d24() -> None:
 def test_finally_return_covers_all_paths() -> None:
     """A return in ``finally`` covers every possible exit path
     regardless of try/except shape."""
-    src = (
-        "def f() -> int:\n"
-        "    try:\n"
-        "        x = 1\n"
-        "    finally:\n"
-        "        return 0\n"
-    )
+    src = "def f() -> int:\n    try:\n        x = 1\n    finally:\n        return 0\n"
     module = translate_source(src, "<t>")
     assert _d24(module) == []
 
@@ -126,13 +104,7 @@ def test_try_return_none_except_pass_fires_return_none() -> None:
 def test_bare_except_no_return_fires_d24() -> None:
     """``except:`` (no exception type) with no return is treated
     the same as ``except Exception:`` for D24's purposes."""
-    src = (
-        "def f() -> int:\n"
-        "    try:\n"
-        "        return 42\n"
-        "    except:\n"
-        "        pass\n"
-    )
+    src = "def f() -> int:\n    try:\n        return 42\n    except:\n        pass\n"
     module = translate_source(src, "<t>")
     assert len(_d24(module)) == 1
 
@@ -187,13 +159,11 @@ def test_try_with_multiple_handlers_one_falls_through_fires() -> None:
 # PEP 604 None | None symmetric tightening
 # ---------------------------------------------------------------------------
 
+
 def test_pipe_none_none_translates_to_bare_none_typepath() -> None:
     """``None | None`` must translate to bare ``TypePath(base="None")``,
     matching Optional[None] (v0.3.4) and Union[None] (v0.3.3)."""
-    src = (
-        "def f() -> None | None:\n"
-        "    return None\n"
-    )
+    src = "def f() -> None | None:\n    return None\n"
     module = translate_source(src, "<t>")
     rt = module.functions[0].return_type
     assert isinstance(rt, TypePath)
@@ -203,10 +173,7 @@ def test_pipe_none_none_translates_to_bare_none_typepath() -> None:
 def test_pipe_none_none_return_none_passes() -> None:
     """``None | None`` is type(None); ``return None`` is correct
     typing and must NOT fire return_none_mismatch."""
-    src = (
-        "def f() -> None | None:\n"
-        "    return None\n"
-    )
+    src = "def f() -> None | None:\n    return None\n"
     module = translate_source(src, "<t>")
     assert check_return_none(module) == []
 
@@ -214,10 +181,7 @@ def test_pipe_none_none_return_none_passes() -> None:
 def test_pipe_int_none_still_translates_to_union_type() -> None:
     """Regression: the v0.3.5 None|None shortcut must NOT affect
     the normal ``X | None`` path."""
-    src = (
-        "def f() -> int | None:\n"
-        "    return None\n"
-    )
+    src = "def f() -> int | None:\n    return None\n"
     module = translate_source(src, "<t>")
     rt = module.functions[0].return_type
     assert isinstance(rt, UnionType)
@@ -228,9 +192,6 @@ def test_pipe_int_none_still_translates_to_union_type() -> None:
 def test_redundant_pipe_int_none_none_still_passes() -> None:
     """``int | None | None`` is semantically ``int | None``;
     return None must continue to PASS."""
-    src = (
-        "def f() -> int | None | None:\n"
-        "    return None\n"
-    )
+    src = "def f() -> int | None | None:\n    return None\n"
     module = translate_source(src, "<t>")
     assert check_return_none(module) == []

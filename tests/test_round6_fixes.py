@@ -32,18 +32,22 @@ three concrete inputs; v0.3.3 closes it.
 
 from __future__ import annotations
 
+import ast
+
+import pytest
+
 from furqan_lint.adapter import (
     _extract_union_with_none_inner,
     _is_union_with_none,
     translate_source,
 )
 from furqan_lint.runner import check_python_module
-import ast
 
-
+pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Boundary: degenerate Union[None, ...] shapes must not crash translation
 # ---------------------------------------------------------------------------
+
 
 def test_round6_degenerate_union_single_none_does_not_crash() -> None:
     """``Union[None]`` is legal Python that ``typing.Union``
@@ -52,11 +56,7 @@ def test_round6_degenerate_union_single_none_does_not_crash() -> None:
     raising; the exact diagnostic shape is open (the input is
     degenerate) but a hard crash is not the right answer.
     """
-    src = (
-        "from typing import Union\n"
-        "def f() -> Union[None]:\n"
-        "    return None\n"
-    )
+    src = "from typing import Union\ndef f() -> Union[None]:\n    return None\n"
     module = translate_source(src, "<test>")
     # Smoke: the module translates and the function is collected.
     assert module is not None
@@ -68,11 +68,7 @@ def test_round6_degenerate_union_two_nones_does_not_crash() -> None:
     syntax error; ``typing.Union`` collapses it to ``type(None)``
     at runtime). v0.3.2 crashed here. v0.3.3 must not.
     """
-    src = (
-        "from typing import Union\n"
-        "def f() -> Union[None, None]:\n"
-        "    return None\n"
-    )
+    src = "from typing import Union\ndef f() -> Union[None, None]:\n    return None\n"
     module = translate_source(src, "<test>")
     assert module is not None
     assert any(fn.name == "f" for fn in module.functions)
@@ -84,11 +80,7 @@ def test_round6_degenerate_union_three_nones_does_not_crash() -> None:
     a 3-arm all-None Union explicitly so the regression cannot
     return through the variadic case.
     """
-    src = (
-        "from typing import Union\n"
-        "def f() -> Union[None, None, None]:\n"
-        "    return None\n"
-    )
+    src = "from typing import Union\ndef f() -> Union[None, None, None]:\n    return None\n"
     module = translate_source(src, "<test>")
     assert module is not None
     assert any(fn.name == "f" for fn in module.functions)
@@ -98,6 +90,7 @@ def test_round6_degenerate_union_three_nones_does_not_crash() -> None:
 # Predicate truthfulness: _is_union_with_none must reject what
 # _extract_union_with_none_inner cannot satisfy
 # ---------------------------------------------------------------------------
+
 
 def test_round6_is_union_with_none_rejects_all_none_arms() -> None:
     """``_is_union_with_none`` must return False on
@@ -167,6 +160,7 @@ def test_round6_extract_inner_assertion_fires_on_contract_violation() -> None:
 # End-to-end: degenerate Unions produce no MARAD, no crash
 # ---------------------------------------------------------------------------
 
+
 def test_round6_degenerate_union_runs_full_pipeline_clean() -> None:
     """End-to-end: a function with ``Union[None]`` return and an
     actual ``return None`` body must complete the full check
@@ -175,11 +169,7 @@ def test_round6_degenerate_union_runs_full_pipeline_clean() -> None:
     ``None``, the annotation resolves to ``type(None)``, the two
     are compatible.
     """
-    src = (
-        "from typing import Union\n"
-        "def f() -> Union[None]:\n"
-        "    return None\n"
-    )
+    src = "from typing import Union\ndef f() -> Union[None]:\n    return None\n"
     module = translate_source(src, "<test>")
     diagnostics = check_python_module(module)
     # Zero diagnostics: degenerate Union[None] declares NoneType,

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.unit
 yaml = pytest.importorskip("yaml")
 
 
@@ -40,10 +41,7 @@ def test_ci_workflow_tests_python_310_through_313() -> None:
     # Each listed version must be present. Missing one would mean
     # a Python release went untested on every PR.
     for required in ["3.10", "3.11", "3.12", "3.13"]:
-        assert required in versions, (
-            f"CI matrix is missing Python {required}; covers "
-            f"{versions}"
-        )
+        assert required in versions, f"CI matrix is missing Python {required}; covers {versions}"
 
 
 def test_ci_workflow_includes_version_sync() -> None:

@@ -13,10 +13,9 @@ Three checkers cross the language boundary cleanly:
   predicate so the check sees ``Optional[X]`` (translated to
   ``UnionType(X, None)``) as the Python equivalent of Furqan's
   ``Integrity | Incomplete`` producer pattern. Closes the full
-  lifecycle of a round-1 audit finding (v0.1.0 monkey-patch via
-  context manager -> v0.3.0 added threading lock for safety ->
-  v0.4.1 upstream ``producer_predicate=`` keyword retires the
-  patch entirely).
+  lifecycle of a round-1 audit finding (stopgap monkey-patch ->
+  scoped context manager -> threading lock for safety -> upstream
+  parameter retired the patch entirely).
 * **return_none_mismatch.** Python-native checker that closes Phase 1
   Gap 1: a function declaring a non-Optional return type that returns
   None on some path is a type mismatch, not a satisfied D24 path.
@@ -30,10 +29,10 @@ from furqan.parser.ast_nodes import Module, UnionType
 
 from furqan_lint.return_none import check_return_none
 
-
 # ---------------------------------------------------------------------------
 # Producer predicate adaptation
 # ---------------------------------------------------------------------------
+
 
 def _is_optional_union(rt: object) -> bool:
     """True iff ``rt`` is a ``UnionType`` with one arm being ``None``.
@@ -54,6 +53,7 @@ def _is_optional_union(rt: object) -> bool:
 # Public entry point
 # ---------------------------------------------------------------------------
 
+
 def check_python_module(module: Module) -> list[tuple[str, object]]:
     """Run all structural checks on a translated Python ``Module``.
 
@@ -68,9 +68,7 @@ def check_python_module(module: Module) -> list[tuple[str, object]]:
     for d in check_all_paths_return(module):
         diagnostics.append(("all_paths_return", d))
 
-    for d in check_status_coverage(
-        module, producer_predicate=_is_optional_union
-    ):
+    for d in check_status_coverage(module, producer_predicate=_is_optional_union):
         diagnostics.append(("status_coverage", d))
 
     for d in check_return_none(module):

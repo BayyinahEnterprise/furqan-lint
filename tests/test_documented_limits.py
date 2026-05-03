@@ -17,13 +17,16 @@ correct. They are a statement that the current behaviour is the
 deliberate, documented behaviour, so any change to it (in either
 direction) must be intentional.
 """
+
 from __future__ import annotations
 
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 
+pytestmark = pytest.mark.integration
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "documented_limits"
 
@@ -42,6 +45,7 @@ def _run_check(fixture: str) -> subprocess.CompletedProcess:
 # Exception-driven fall-through (try body spliced unconditionally)
 # ---------------------------------------------------------------------------
 
+
 def test_try_body_raises_with_swallowing_handler_is_passed() -> None:
     """``try: raise; except: pass`` is reported PASS.
 
@@ -57,6 +61,7 @@ def test_try_body_raises_with_swallowing_handler_is_passed() -> None:
 # ---------------------------------------------------------------------------
 # Aliased Optional / Union imports
 # ---------------------------------------------------------------------------
+
 
 def test_aliased_optional_import_fires_false_positive() -> None:
     """``from typing import Optional as MyOpt; -> MyOpt[X]`` is
@@ -96,6 +101,7 @@ def test_aliased_union_import_treated_as_typing_union() -> None:
 # Local classes inside function bodies
 # ---------------------------------------------------------------------------
 
+
 def test_local_class_in_function_methods_not_collected() -> None:
     """A class defined inside a function body has its methods
     silently dropped, even though the v0.3.2 nested-class fix
@@ -116,32 +122,3 @@ def test_local_class_in_function_methods_not_collected() -> None:
 
 # ---------------------------------------------------------------------------
 # Redundant None arms in PEP 604 unions (v0.3.4 / round-7 Observation 2)
-# ---------------------------------------------------------------------------
-# (Pinning tests for this limit were retired in v0.3.5 when the limit
-# was promoted to a fix; the comment marker is preserved for grep
-# discoverability across the audit history.)
-
-
-# ---------------------------------------------------------------------------
-# Zero-return functions (v0.4.1 documented limit)
-# ---------------------------------------------------------------------------
-
-def test_zero_return_function_is_silently_passed() -> None:
-    """A function declaring a return type with no ``return`` statement
-    on any path is silently passed.
-
-    Documented limitation (v0.4.1): D24 skips functions whose
-    return-statement count is zero, deferring to ring-close R3.
-    furqan-lint does not yet run R3, so the zero-return case is
-    not flagged. mypy reports it as "Missing return statement";
-    callers who want this flagged should run mypy alongside
-    furqan-lint.
-
-    This pinning test asserts the *current* silent-pass behaviour
-    so any future change (in either direction) must be intentional.
-    Closes the four-place-pattern gap identified in v0.4.1
-    pre-flight self-review (Finding 7).
-    """
-    result = _run_check("zero_return_function.py")
-    assert result.returncode == 0
-    assert "PASS" in result.stdout

@@ -13,8 +13,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from furqan_lint.adapter import translate_file, translate_source
 from furqan_lint.runner import check_python_module
+
+pytestmark = pytest.mark.unit
 
 
 def _calls_of(module, name: str) -> tuple:
@@ -25,6 +29,7 @@ def _calls_of(module, name: str) -> tuple:
 # ---------------------------------------------------------------------------
 # Nested-definition scoping
 # ---------------------------------------------------------------------------
+
 
 def test_closure_call_not_attributed_to_outer(clean_dir: Path) -> None:
     """The fixture ``closure_no_false_positive.py`` has ``find_item``
@@ -53,12 +58,7 @@ def test_inner_function_call_not_attributed() -> None:
 def test_direct_call_still_extracted() -> None:
     """The scoping fix must not regress the basic case: a call in the
     function's direct body is still collected."""
-    src = (
-        "def f() -> int:\n"
-        "    return helper()\n"
-        "def helper() -> int:\n"
-        "    return 1\n"
-    )
+    src = "def f() -> int:\n    return helper()\ndef helper() -> int:\n    return 1\n"
     module = translate_source(src, "<test>")
     assert "helper" in _calls_of(module, "f")
 
@@ -83,12 +83,11 @@ def test_nested_class_method_not_attributed() -> None:
 # Decorator scoping
 # ---------------------------------------------------------------------------
 
+
 def test_decorator_call_not_attributed_to_function(clean_dir: Path) -> None:
     """The decorator ``@retry`` on ``outer`` should not register as a
     call inside ``outer``'s body."""
-    module = translate_file(
-        clean_dir / "decorator_no_false_positive.py"
-    )
+    module = translate_file(clean_dir / "decorator_no_false_positive.py")
     assert "retry" not in _calls_of(module, "outer")
 
 
@@ -115,6 +114,7 @@ def test_multiple_decorators_not_attributed() -> None:
 # ---------------------------------------------------------------------------
 # Lambdas and comprehensions are inline expressions: still count
 # ---------------------------------------------------------------------------
+
 
 def test_lambda_call_still_extracted() -> None:
     """A lambda is an inline expression, not a separate scope the

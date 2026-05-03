@@ -1,7 +1,8 @@
 """Document processing API v1."""
+
 from __future__ import annotations
 
-__all__ = ["validate_document", "process_intake", "classify"]
+__all__ = ["classify", "process_intake", "validate_document"]
 
 
 def validate_document(data: dict) -> dict | None:

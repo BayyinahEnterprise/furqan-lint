@@ -26,14 +26,17 @@ currently produce correct answers but for incidental reasons:
 
 from __future__ import annotations
 
+import pytest
 from furqan.parser.ast_nodes import TypePath, UnionType
+
 from furqan_lint.adapter import translate_source
 from furqan_lint.return_none import _suggested_fix, check_return_none
 
-
+pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # Observation 1: Optional[None] symmetry with v0.3.3 Union[None]
 # ---------------------------------------------------------------------------
+
 
 def test_round7_optional_none_translates_to_bare_none_typepath() -> None:
     """``Optional[None]`` must translate to a bare
@@ -45,11 +48,7 @@ def test_round7_optional_none_translates_to_bare_none_typepath() -> None:
     not a union) and would break any future refactor that requires
     distinct arms.
     """
-    src = (
-        "from typing import Optional\n"
-        "def f() -> Optional[None]:\n"
-        "    return None\n"
-    )
+    src = "from typing import Optional\ndef f() -> Optional[None]:\n    return None\n"
     module = translate_source(src, "<test>")
     fn = next(f for f in module.functions if f.name == "f")
     assert isinstance(fn.return_type, TypePath), (
@@ -66,11 +65,7 @@ def test_round7_optional_none_does_not_produce_binary_union() -> None:
     refactor. Pin the absence so a future change has a
     self-explaining failure.
     """
-    src = (
-        "from typing import Optional\n"
-        "def f() -> Optional[None]:\n"
-        "    return None\n"
-    )
+    src = "from typing import Optional\ndef f() -> Optional[None]:\n    return None\n"
     module = translate_source(src, "<test>")
     fn = next(f for f in module.functions if f.name == "f")
     assert not isinstance(fn.return_type, UnionType), (
@@ -87,11 +82,7 @@ def test_round7_optional_none_return_none_passes() -> None:
     annotation declares NoneType; the body returns None; they
     agree.
     """
-    src = (
-        "from typing import Optional\n"
-        "def f() -> Optional[None]:\n"
-        "    return None\n"
-    )
+    src = "from typing import Optional\ndef f() -> Optional[None]:\n    return None\n"
     module = translate_source(src, "<test>")
     diagnostics = check_return_none(module)
     assert diagnostics == [], (
@@ -108,11 +99,7 @@ def test_round7_optional_str_still_translates_to_union_type() -> None:
     the binary ``UnionType(X, None)`` shape that v0.3.0 introduced
     and the v0.3.x line depends on.
     """
-    src = (
-        "from typing import Optional\n"
-        "def f() -> Optional[str]:\n"
-        "    return None\n"
-    )
+    src = "from typing import Optional\ndef f() -> Optional[str]:\n    return None\n"
     module = translate_source(src, "<test>")
     fn = next(f for f in module.functions if f.name == "f")
     assert isinstance(fn.return_type, UnionType), (
@@ -127,6 +114,7 @@ def test_round7_optional_str_still_translates_to_union_type() -> None:
 # ---------------------------------------------------------------------------
 # Observation 3: bare Optional/Union diagnostic prose
 # ---------------------------------------------------------------------------
+
 
 def _make_type_path(base: str) -> TypePath:
     """Build a minimal TypePath for unit-testing _suggested_fix.
@@ -175,8 +163,7 @@ def test_round7_bare_union_produces_helpful_fix_suggestion() -> None:
         f"detect the bare-name case for Union as well."
     )
     assert "not valid typing syntax" in fix or "Union[X]" in fix, (
-        f"_suggested_fix returned {fix!r} but does not name the "
-        f"real bug for bare Union."
+        f"_suggested_fix returned {fix!r} but does not name the real bug for bare Union."
     )
 
 
@@ -205,8 +192,9 @@ def test_bare_union_suggests_union_x_none_not_union_x() -> None:
     ``Union[X, None]``, or equivalently ``Optional[X]`` or
     ``X | None``.
     """
-    from furqan_lint.return_none import _suggested_fix
     from furqan.parser.ast_nodes import SourceSpan, TypePath
+
+    from furqan_lint.return_none import _suggested_fix
 
     rt = TypePath(
         base="Union",
@@ -216,13 +204,11 @@ def test_bare_union_suggests_union_x_none_not_union_x() -> None:
     )
     fix = _suggested_fix(rt)
     assert "Union[X, None]" in fix, (
-        f"v0.4.1: bare-Union fix must include 'Union[X, None]', "
-        f"got {fix!r}"
+        f"v0.4.1: bare-Union fix must include 'Union[X, None]', got {fix!r}"
     )
     # Must NOT recommend the degenerate one-arm Union[X] form
     # standalone. We allow the substring 'Union[X' as part of
     # 'Union[X, None]' but disallow the closed form 'Union[X]'.
     assert "Union[X]" not in fix, (
-        f"v0.4.1: bare-Union fix should NOT suggest the "
-        f"degenerate Union[X] form, got {fix!r}"
+        f"v0.4.1: bare-Union fix should NOT suggest the degenerate Union[X] form, got {fix!r}"
     )

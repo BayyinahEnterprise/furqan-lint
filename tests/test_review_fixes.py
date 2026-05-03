@@ -23,18 +23,15 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from furqan.checker import status_coverage
-from furqan.errors.marad import Marad
 
+from furqan_lint.adapter import translate_source
 from furqan_lint.additive import (
     DynamicAllError,
     check_additive_api,
 )
-from furqan_lint.adapter import translate_source
 from furqan_lint.return_none import check_return_none
 from furqan_lint.runner import check_python_module
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -52,39 +49,30 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess:
 # Bug 1 - compound statements
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_bug1_for_loop_return_none_fires() -> None:
-    src = (
-        "def f(xs: list) -> str:\n"
-        "    for x in xs:\n"
-        "        return None\n"
-        "    return 'fallback'\n"
-    )
+    src = "def f(xs: list) -> str:\n    for x in xs:\n        return None\n    return 'fallback'\n"
     module = translate_source(src, "<t>")
     diags = check_return_none(module)
     assert len(diags) == 1
 
 
+@pytest.mark.unit
 def test_bug1_while_loop_return_none_fires() -> None:
-    src = (
-        "def f(xs: list) -> str:\n"
-        "    while xs:\n"
-        "        return None\n"
-        "    return 'x'\n"
-    )
+    src = "def f(xs: list) -> str:\n    while xs:\n        return None\n    return 'x'\n"
     module = translate_source(src, "<t>")
     assert len(check_return_none(module)) == 1
 
 
+@pytest.mark.unit
 def test_bug1_with_block_return_none_fires() -> None:
-    src = (
-        "def f() -> str:\n"
-        "    with open('x') as g:\n"
-        "        return None\n"
-    )
+    src = "def f() -> str:\n    with open('x') as g:\n        return None\n"
     module = translate_source(src, "<t>")
     assert len(check_return_none(module)) == 1
 
 
+@pytest.mark.unit
 def test_bug1_try_block_return_none_fires() -> None:
     src = (
         "def f() -> str:\n"
@@ -97,6 +85,7 @@ def test_bug1_try_block_return_none_fires() -> None:
     assert len(check_return_none(module)) == 1
 
 
+@pytest.mark.unit
 def test_bug1_match_case_return_none_fires() -> None:
     src = (
         "def f(x: int) -> str:\n"
@@ -110,31 +99,24 @@ def test_bug1_match_case_return_none_fires() -> None:
     assert len(check_return_none(module)) == 1
 
 
+@pytest.mark.unit
 def test_bug1_d24_fires_when_only_return_is_inside_for() -> None:
     """A function whose only return is inside a for-loop body is no
     longer silently certified clean: the for-body wraps as
     ``IfStmt(opaque, ..., ())`` so D24 sees a maybe-not-run path."""
-    src = (
-        "def f(xs: list) -> int:\n"
-        "    for x in xs:\n"
-        "        if x > 0:\n"
-        "            return 1\n"
-    )
+    src = "def f(xs: list) -> int:\n    for x in xs:\n        if x > 0:\n            return 1\n"
     module = translate_source(src, "<t>")
     diags = check_python_module(module)
     d24 = [d for n, d in diags if n == "all_paths_return"]
     assert len(d24) == 1
 
 
+@pytest.mark.unit
 def test_bug1_with_block_body_treated_as_unconditional() -> None:
     """``with`` blocks unconditionally execute their body, so a
     function whose entire body is ``with: return X`` does
     all-paths-return."""
-    src = (
-        "def f() -> int:\n"
-        "    with open('x') as g:\n"
-        "        return 1\n"
-    )
+    src = "def f() -> int:\n    with open('x') as g:\n        return 1\n"
     module = translate_source(src, "<t>")
     diags = check_python_module(module)
     d24 = [d for n, d in diags if n == "all_paths_return"]
@@ -145,6 +127,8 @@ def test_bug1_with_block_body_treated_as_unconditional() -> None:
 # Bug 2 - AnnAssign + tuple-target visibility
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_bug2_annassign_removal_fires() -> None:
     old = "MAX_RETRIES: int = 5\ndef foo(): pass\n"
     new = "def foo(): pass\n"
@@ -153,6 +137,7 @@ def test_bug2_annassign_removal_fires() -> None:
     assert "MAX_RETRIES" in diags[0].diagnosis
 
 
+@pytest.mark.unit
 def test_bug2_tuple_target_removal_fires() -> None:
     old = "A, B = 1, 2\ndef foo(): pass\n"
     new = "def foo(): pass\n"
@@ -161,6 +146,7 @@ def test_bug2_tuple_target_removal_fires() -> None:
     assert names == ["A", "B"]
 
 
+@pytest.mark.unit
 def test_bug2_annotated_all_still_recognised() -> None:
     """``__all__: list[str] = ['x']`` should be read the same as a
     plain ``__all__`` assignment."""
@@ -171,6 +157,7 @@ def test_bug2_annotated_all_still_recognised() -> None:
     assert "'y'" in diags[0].diagnosis
 
 
+@pytest.mark.unit
 def test_bug2_private_annassign_not_tracked() -> None:
     """An ``AnnAssign`` whose name starts with ``_`` is private."""
     old = "_X: int = 1\ndef foo(): pass\n"
@@ -182,6 +169,8 @@ def test_bug2_private_annassign_not_tracked() -> None:
 # Bug 3 - refuse on dynamic __all__
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_bug3_dynamic_all_raises_on_new_side() -> None:
     old = "__all__ = ['foo']\ndef foo(): pass\n"
     new = "_NAMES = ['foo']\n__all__ = list(_NAMES)\ndef foo(): pass\n"
@@ -190,6 +179,7 @@ def test_bug3_dynamic_all_raises_on_new_side() -> None:
     assert excinfo.value.where == "new"
 
 
+@pytest.mark.unit
 def test_bug3_dynamic_all_raises_on_old_side() -> None:
     old = "_NAMES = ['foo']\n__all__ = list(_NAMES)\ndef foo(): pass\n"
     new = "__all__ = ['foo']\ndef foo(): pass\n"
@@ -198,6 +188,7 @@ def test_bug3_dynamic_all_raises_on_old_side() -> None:
     assert excinfo.value.where == "old"
 
 
+@pytest.mark.unit
 def test_bug3_non_string_element_raises() -> None:
     """``__all__ = ['foo', SOME_NAME]`` cannot be statically read."""
     src = "__all__ = ['foo', SOME_NAME]\ndef foo(): pass\n"
@@ -205,6 +196,7 @@ def test_bug3_non_string_element_raises() -> None:
         check_additive_api(src, "def foo(): pass\n")
 
 
+@pytest.mark.integration
 def test_bug3_cli_diff_returns_2_on_dynamic_all(tmp_path: Path) -> None:
     old_path = tmp_path / "old.py"
     new_path = tmp_path / "new.py"
@@ -222,6 +214,8 @@ def test_bug3_cli_diff_returns_2_on_dynamic_all(tmp_path: Path) -> None:
 # Bug 4 - thread-safety
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_bug4_d11_uses_producer_predicate_kwarg() -> None:
     """v0.4.1 retired the monkey-patch entirely. D11 status-coverage
     now passes the Python-Optional predicate via the upstream
@@ -266,6 +260,8 @@ def test_bug4_d11_uses_producer_predicate_kwarg() -> None:
 # Bug 5 - Optional matcher tightness
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_bug5_fake_optional_attribute_no_longer_matched() -> None:
     """An annotation like ``Some.lib.Optional[str]`` should NOT be
     treated as ``typing.Optional[str]``. After v0.3.0, a function
@@ -293,25 +289,19 @@ def test_bug5_fake_optional_attribute_no_longer_matched() -> None:
     assert "Optional[Optional]" not in fix
 
 
+@pytest.mark.unit
 def test_bug5_typing_optional_still_recognised() -> None:
     """Regression: ``typing.Optional[str]`` must remain recognised."""
-    src = (
-        "import typing\n"
-        "def f(x: int) -> typing.Optional[str]:\n"
-        "    return None\n"
-    )
+    src = "import typing\ndef f(x: int) -> typing.Optional[str]:\n    return None\n"
     module = translate_source(src, "<t>")
     assert check_return_none(module) == []
 
 
+@pytest.mark.unit
 def test_bug5_t_optional_alias_recognised() -> None:
     """Regression: ``import typing as t`` followed by
     ``t.Optional[str]`` must remain recognised."""
-    src = (
-        "import typing as t\n"
-        "def f(x: int) -> t.Optional[str]:\n"
-        "    return None\n"
-    )
+    src = "import typing as t\ndef f(x: int) -> t.Optional[str]:\n    return None\n"
     module = translate_source(src, "<t>")
     assert check_return_none(module) == []
 
@@ -320,13 +310,10 @@ def test_bug5_t_optional_alias_recognised() -> None:
 # Quality - BinOp annotation rendering
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_quality_binop_union_renders_with_pipe() -> None:
-    src = (
-        "def f(x: str) -> int | str:\n"
-        "    if x == '':\n"
-        "        return None\n"
-        "    return x\n"
-    )
+    src = "def f(x: str) -> int | str:\n    if x == '':\n        return None\n    return x\n"
     module = translate_source(src, "<t>")
     diags = check_return_none(module)
     assert len(diags) == 1
@@ -335,11 +322,9 @@ def test_quality_binop_union_renders_with_pipe() -> None:
     assert "Unknown" not in diagnosis
 
 
+@pytest.mark.unit
 def test_quality_binop_fix_suggestion_is_actionable() -> None:
-    src = (
-        "def f() -> int | str:\n"
-        "    return None\n"
-    )
+    src = "def f() -> int | str:\n    return None\n"
     module = translate_source(src, "<t>")
     diags = check_return_none(module)
     fix = diags[0].minimal_fix

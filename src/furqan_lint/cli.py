@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-
+from typing import TextIO
 
 EXCLUDED_DIRS: frozenset[str] = frozenset(
     {
@@ -67,7 +67,7 @@ def main() -> int:
     return 1
 
 
-def _print_usage(file=None) -> None:
+def _print_usage(file: TextIO | None = None) -> None:
     out = file if file is not None else sys.stdout
     print("furqan-lint: structural-honesty checks for Python", file=out)
     print(file=out)
@@ -132,9 +132,7 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
         return 1
 
     try:
-        diagnostics = check_additive_api(
-            new_source, old_source, filename=str(new_path)
-        )
+        diagnostics = check_additive_api(new_source, old_source, filename=str(new_path))
     except SyntaxError as e:
         line = e.lineno if e.lineno is not None else 0
         print(f"SYNTAX ERROR  {e.filename or new_path}:{line}")
@@ -167,17 +165,14 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
 def _check_directory(directory: Path) -> int:
     exit_code = 0
     py_files = sorted(
-        p
-        for p in directory.rglob("*.py")
-        if not any(part in EXCLUDED_DIRS for part in p.parts)
+        p for p in directory.rglob("*.py") if not any(part in EXCLUDED_DIRS for part in p.parts)
     )
     if not py_files:
         print(f"No .py files found in {directory}")
         return 0
     for path in py_files:
         result = _check_file(path)
-        if result > exit_code:
-            exit_code = result
+        exit_code = max(exit_code, result)
     return exit_code
 
 

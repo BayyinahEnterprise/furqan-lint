@@ -6,6 +6,7 @@ mypy flags this as missing-return; furqan-lint v0.3.1 does not.
 See README.md "Remaining limitations" -> "Exception-driven
 fall-through."
 """
+
 from __future__ import annotations
 
 

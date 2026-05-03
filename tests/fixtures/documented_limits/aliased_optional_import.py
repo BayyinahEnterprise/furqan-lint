@@ -14,6 +14,7 @@ as t``; ``t.Optional[X]`` is recognised).
 
 See README.md "Remaining limitations" -> "Aliased Optional imports."
 """
+
 from __future__ import annotations
 
 from typing import Optional as MyOpt

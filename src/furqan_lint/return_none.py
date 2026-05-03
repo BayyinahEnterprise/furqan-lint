@@ -27,14 +27,15 @@ from furqan.parser.ast_nodes import (
     IfStmt,
     Module,
     ReturnStmt,
+    Statement,
     TypePath,
     UnionType,
 )
 
-
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
+
 
 def check_return_none(module: Module) -> list[Marad]:
     """Return one :class:`Marad` per function that declares a
@@ -54,6 +55,7 @@ def check_return_none(module: Module) -> list[Marad]:
 # Type predicates
 # ---------------------------------------------------------------------------
 
+
 def _allows_none(return_type: object) -> bool:
     """True iff the declared return type permits ``None``.
 
@@ -66,14 +68,16 @@ def _allows_none(return_type: object) -> bool:
         names = {return_type.left.base, return_type.right.base}
         return "None" in names
     if isinstance(return_type, TypePath):
-        return return_type.base == "None"
+        # Furqan AST attrs are Any-typed upstream (no py.typed); the
+        # `Any == "None"` comparison is bool at runtime but Any to mypy.
+        return return_type.base == "None"  # type: ignore[no-any-return]
     return False
 
 
 def _type_name(return_type: object) -> str:
     """Best-effort short rendering of a return-type clause."""
     if isinstance(return_type, TypePath):
-        return return_type.base
+        return return_type.base  # type: ignore[no-any-return]
     if isinstance(return_type, UnionType):
         return f"{return_type.left.base} | {return_type.right.base}"
     return "Unknown"
@@ -122,7 +126,8 @@ def _suggested_fix(return_type: object) -> str:
 # Body walking
 # ---------------------------------------------------------------------------
 
-def _has_none_return(statements: tuple) -> bool:
+
+def _has_none_return(statements: tuple[Statement, ...]) -> bool:
     """True iff any return statement in the (possibly nested) body
     returns ``None``.
 
@@ -147,6 +152,7 @@ def _has_none_return(statements: tuple) -> bool:
 # ---------------------------------------------------------------------------
 # Diagnostic construction
 # ---------------------------------------------------------------------------
+
 
 def _mismatch_marad(fn: FunctionDef) -> Marad:
     type_text = _type_name(fn.return_type)

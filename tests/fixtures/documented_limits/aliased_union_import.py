@@ -22,6 +22,7 @@ form, or rename the import (``import typing as t``;
 See README.md "Remaining limitations" -> "Aliased Optional / Union
 imports."
 """
+
 from __future__ import annotations
 
 # In a real codebase this would resolve to a non-typing module's

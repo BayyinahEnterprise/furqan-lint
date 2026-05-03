@@ -11,4 +11,5 @@ def outer() -> str:
     def inner():
         result = find_item(1)
         return result
+
     return "done"

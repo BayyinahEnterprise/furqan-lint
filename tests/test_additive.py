@@ -14,11 +14,9 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from furqan.errors.marad import Marad
 
 from furqan_lint.additive import check_additive_api
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,6 +34,8 @@ def _read(p: Path) -> str:
 # Marad construction and cleanliness
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_additive_clean_no_removals_passes(additive_dir: Path) -> None:
     diags = check_additive_api(
         _read(additive_dir / "v2_api_clean.py"),
@@ -44,6 +44,7 @@ def test_additive_clean_no_removals_passes(additive_dir: Path) -> None:
     assert diags == []
 
 
+@pytest.mark.unit
 def test_additive_removed_name_fires_marad(additive_dir: Path) -> None:
     diags = check_additive_api(
         _read(additive_dir / "v2_api_breaking.py"),
@@ -54,29 +55,20 @@ def test_additive_removed_name_fires_marad(additive_dir: Path) -> None:
     assert "farewell" in diags[0].diagnosis
 
 
+@pytest.mark.unit
 def test_additive_multiple_removals_fire_each() -> None:
-    old = (
-        "__all__ = ['a', 'b', 'c']\n"
-        "def a(): pass\n"
-        "def b(): pass\n"
-        "def c(): pass\n"
-    )
+    old = "__all__ = ['a', 'b', 'c']\ndef a(): pass\ndef b(): pass\ndef c(): pass\n"
     new = "__all__ = ['a']\ndef a(): pass\n"
     diags = check_additive_api(new, old)
     assert len(diags) == 2
-    removed_names = sorted(
-        d.diagnosis.split("'")[1] for d in diags
-    )
+    removed_names = sorted(d.diagnosis.split("'")[1] for d in diags)
     assert removed_names == ["b", "c"]
 
 
+@pytest.mark.unit
 def test_additive_added_name_does_not_fire() -> None:
     old = "__all__ = ['a']\ndef a(): pass\n"
-    new = (
-        "__all__ = ['a', 'b']\n"
-        "def a(): pass\n"
-        "def b(): pass\n"
-    )
+    new = "__all__ = ['a', 'b']\ndef a(): pass\ndef b(): pass\n"
     assert check_additive_api(new, old) == []
 
 
@@ -84,6 +76,8 @@ def test_additive_added_name_does_not_fire() -> None:
 # Public-surface extraction
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_additive_no_all_uses_top_level_names(additive_dir: Path) -> None:
     """No ``__all__`` -> every non-underscore top-level name is public.
     The fixture removes ``Formatter`` but keeps ``VERSION``, so only
@@ -96,6 +90,7 @@ def test_additive_no_all_uses_top_level_names(additive_dir: Path) -> None:
     assert removed == ["Formatter"]
 
 
+@pytest.mark.unit
 def test_additive_no_all_private_not_tracked() -> None:
     """Names starting with ``_`` are excluded from the public surface."""
     old = "def public(): pass\ndef _private(): pass\n"
@@ -103,18 +98,16 @@ def test_additive_no_all_private_not_tracked() -> None:
     assert check_additive_api(new, old) == []
 
 
+@pytest.mark.unit
 def test_additive_with_all_uses_all_list() -> None:
     """``__all__`` takes precedence: a name not in ``__all__`` is
     private, even if it would be public without the declaration."""
-    old = (
-        "__all__ = ['exposed']\n"
-        "def exposed(): pass\n"
-        "def hidden(): pass\n"
-    )
+    old = "__all__ = ['exposed']\ndef exposed(): pass\ndef hidden(): pass\n"
     new = "__all__ = ['exposed']\ndef exposed(): pass\n"
     assert check_additive_api(new, old) == []
 
 
+@pytest.mark.unit
 def test_additive_all_as_tuple_works() -> None:
     """``__all__ = (...)`` should parse the same as a list."""
     old = "__all__ = ('a', 'b')\ndef a(): pass\ndef b(): pass\n"
@@ -124,6 +117,7 @@ def test_additive_all_as_tuple_works() -> None:
     assert "'b'" in diags[0].diagnosis
 
 
+@pytest.mark.unit
 def test_additive_empty_old_trivially_passes() -> None:
     """An empty previous version cannot have anything removed."""
     old = ""
@@ -131,6 +125,7 @@ def test_additive_empty_old_trivially_passes() -> None:
     assert check_additive_api(new, old) == []
 
 
+@pytest.mark.unit
 def test_additive_class_removal_fires() -> None:
     """Top-level class removal fires the same as function removal."""
     old = "class A: pass\nclass B: pass\n"
@@ -144,6 +139,7 @@ def test_additive_class_removal_fires() -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _run_cli(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "-m", "furqan_lint.cli", *args],
@@ -153,6 +149,7 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess:
     )
 
 
+@pytest.mark.integration
 def test_cli_diff_command_works(additive_dir: Path) -> None:
     """``furqan-lint diff`` prints a MARAD line and exits 1 on
     breaking changes; exits 0 on clean ones."""

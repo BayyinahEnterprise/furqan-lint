@@ -24,7 +24,6 @@ from furqan.parser.ast_nodes import (
     BismillahBlock,
     CallRef,
     CompoundTypeDef,
-    FieldDecl,
     FunctionDef,
     IdentExpr,
     IfStmt,
@@ -37,10 +36,10 @@ from furqan.parser.ast_nodes import (
     UnionType,
 )
 
-
 # ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
+
 
 def translate_file(path: Path) -> Module:
     """Parse a Python file at ``path`` and return a Furqan ``Module``."""
@@ -58,6 +57,7 @@ def translate_source(source: str, filename: str = "<string>") -> Module:
 # ---------------------------------------------------------------------------
 # Module translation
 # ---------------------------------------------------------------------------
+
 
 def _translate_module(tree: ast.Module, filename: str) -> Module:
     """Translate an ``ast.Module`` into a Furqan ``Module``.
@@ -142,9 +142,11 @@ def _collect_class_methods(
             methods.extend(_collect_class_methods(child, filename))
     return methods
 
+
 # ---------------------------------------------------------------------------
 # Class translation
 # ---------------------------------------------------------------------------
+
 
 def _translate_class(node: ast.ClassDef, filename: str) -> CompoundTypeDef:
     """Translate a Python class to a ``CompoundTypeDef``.
@@ -175,6 +177,7 @@ def _translate_class(node: ast.ClassDef, filename: str) -> CompoundTypeDef:
 # ---------------------------------------------------------------------------
 # Function translation
 # ---------------------------------------------------------------------------
+
 
 def _translate_function(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
@@ -212,6 +215,7 @@ def _translate_function(
 # ---------------------------------------------------------------------------
 # Type annotation translation
 # ---------------------------------------------------------------------------
+
 
 def _translate_annotation(
     node: ast.expr | None,
@@ -273,6 +277,8 @@ def _translate_return_annotation(
             pass
 
     if _is_optional(node):
+        # _is_optional ensures node is ast.Subscript; help mypy narrow.
+        assert isinstance(node, ast.Subscript)
         inner = _extract_optional_inner(node)
         # v0.3.4: ``Optional[None]`` resolves to ``type(None)`` at
         # Python runtime (``typing.Optional[X]`` is defined as
@@ -309,6 +315,8 @@ def _translate_return_annotation(
         )
 
     if _is_pipe_union_with_none(node):
+        # _is_pipe_union_with_none ensures node is ast.BinOp.
+        assert isinstance(node, ast.BinOp)
         inner = _extract_pipe_union_inner(node)
         # v0.3.5: ``None | None`` (and chains of None like
         # ``None | None | None``) collapse to type(None). The
@@ -344,6 +352,8 @@ def _translate_return_annotation(
         )
 
     if _is_union_with_none(node):
+        # _is_union_with_none ensures node is ast.Subscript.
+        assert isinstance(node, ast.Subscript)
         inner = _extract_union_with_none_inner(node)
         return UnionType(
             left=TypePath(
@@ -401,9 +411,12 @@ def _is_optional(node: ast.expr) -> bool:
         return True
     if isinstance(node.value, ast.Attribute):
         attr = node.value
-        if attr.attr == "Optional" and isinstance(attr.value, ast.Name):
-            if attr.value.id in ("typing", "t"):
-                return True
+        if (
+            attr.attr == "Optional"
+            and isinstance(attr.value, ast.Name)
+            and attr.value.id in ("typing", "t")
+        ):
+            return True
     return False
 
 
@@ -519,13 +532,16 @@ def _is_union_head(node: ast.expr) -> bool:
     ``Union``, ``typing.Union``, or ``t.Union``."""
     if isinstance(node, ast.Name) and node.id == "Union":
         return True
-    if isinstance(node, ast.Attribute):
-        if node.attr == "Union" and isinstance(node.value, ast.Name):
-            return node.value.id in ("typing", "t")
+    if (
+        isinstance(node, ast.Attribute)
+        and node.attr == "Union"
+        and isinstance(node.value, ast.Name)
+    ):
+        return node.value.id in ("typing", "t")
     return False
 
 
-def _slice_elements(slice_node: ast.expr) -> list:
+def _slice_elements(slice_node: ast.expr) -> list[ast.expr]:
     """Return the comma-separated elements of a subscript slice."""
     if isinstance(slice_node, ast.Tuple):
         return list(slice_node.elts)
@@ -537,11 +553,9 @@ def _slice_contains_none(slice_node: ast.expr) -> bool:
 
 
 def _is_none_literal(node: ast.expr) -> bool:
-    if isinstance(node, ast.Constant) and node.value is None:
-        return True
-    if isinstance(node, ast.Name) and node.id == "None":
-        return True
-    return False
+    return (isinstance(node, ast.Constant) and node.value is None) or (
+        isinstance(node, ast.Name) and node.id == "None"
+    )
 
 
 def _annotation_name(node: ast.expr) -> str:
@@ -580,10 +594,11 @@ def _annotation_name(node: ast.expr) -> str:
 # Body and expression translation
 # ---------------------------------------------------------------------------
 
+
 def _translate_body(
     body: list[ast.stmt],
     filename: str,
-) -> list:
+) -> list[ReturnStmt | IfStmt]:
     """Translate a Python statement list into Furqan ``ReturnStmt``
     and ``IfStmt`` nodes (the only statement shapes Furqan's AST has).
 
@@ -614,7 +629,7 @@ def _translate_body(
     ``nonlocal``) is silently skipped: the checkers wired into the
     runner do not inspect these forms.
     """
-    result: list = []
+    result: list[ReturnStmt | IfStmt] = []
     for node in body:
         if isinstance(node, ast.Return):
             result.append(
@@ -668,12 +683,9 @@ def _translate_body(
             #
             # finally always runs and is spliced unconditionally.
             success_body = tuple(
-                _translate_body(node.body, filename)
-                + _translate_body(node.orelse, filename)
+                _translate_body(node.body, filename) + _translate_body(node.orelse, filename)
             )
-            handler_chain = _build_try_handler_chain(
-                node.handlers, filename
-            )
+            handler_chain = _build_try_handler_chain(node.handlers, filename)
             if success_body or handler_chain:
                 sp = _span(filename, node.lineno, node.col_offset)
                 result.append(
@@ -694,10 +706,10 @@ def _translate_body(
 
 
 def _maybe_runs_if(
-    inner: list,
+    inner: list[ReturnStmt | IfStmt],
     source_node: ast.AST,
     filename: str,
-) -> "IfStmt":
+) -> IfStmt:
     """Wrap ``inner`` in an ``IfStmt(opaque, inner, ())`` so D24
     treats the body as "may or may not execute" rather than as a
     guaranteed control-flow path."""
@@ -711,10 +723,11 @@ def _maybe_runs_if(
         else_body=(),
     )
 
+
 def _build_try_handler_chain(
-    handlers: list,
+    handlers: list[ast.ExceptHandler],
     filename: str,
-) -> tuple:
+) -> tuple[IfStmt | ReturnStmt, ...]:
     """Build a right-folded ``IfStmt`` chain for a list of
     ``ast.ExceptHandler`` nodes, suitable for use as the
     ``else_body`` of a try-statement encoding.
@@ -754,7 +767,6 @@ def _build_try_handler_chain(
     return accum
 
 
-
 def _extract_calls(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     filename: str,
@@ -781,9 +793,7 @@ def _extract_calls(
         # calls are attributed to the inner definition (or to
         # nothing, if the inner def is itself a method whose
         # methods get extracted at module level).
-        if not is_root and isinstance(
-            n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-        ):
+        if not is_root and isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             return
         if isinstance(n, ast.Call):
             name = _call_name(n)
@@ -799,9 +809,7 @@ def _extract_calls(
             # walking the root node.
             if (
                 is_root
-                and isinstance(
-                    n, (ast.FunctionDef, ast.AsyncFunctionDef)
-                )
+                and isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and hasattr(n, "decorator_list")
                 and child in n.decorator_list
             ):

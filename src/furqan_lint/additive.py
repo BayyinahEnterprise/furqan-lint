@@ -51,10 +51,7 @@ class DynamicAllError(Exception):
     def __init__(self, where: str = "?", detail: str = "") -> None:
         self.where = where
         self.detail = detail
-        message = (
-            f"could not statically determine __all__ in the {where} "
-            f"version"
-        )
+        message = f"could not statically determine __all__ in the {where} version"
         if detail:
             message = f"{message}: {detail}"
         super().__init__(message)
@@ -63,6 +60,7 @@ class DynamicAllError(Exception):
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
+
 
 def check_additive_api(
     current_source: str,
@@ -121,6 +119,7 @@ def check_additive_api(
 # Public-surface extraction
 # ---------------------------------------------------------------------------
 
+
 def _extract_public_names(source: str) -> set[str]:
     """Return the set of public names exposed by ``source``.
 
@@ -139,25 +138,19 @@ def _extract_public_names(source: str) -> set[str]:
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if (
-                    isinstance(target, ast.Name)
-                    and target.id == "__all__"
-                ):
+                if isinstance(target, ast.Name) and target.id == "__all__":
                     return _extract_all_list(node.value)
-        elif isinstance(node, ast.AnnAssign):
-            if (
-                isinstance(node.target, ast.Name)
-                and node.target.id == "__all__"
-                and node.value is not None
-            ):
-                return _extract_all_list(node.value)
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "__all__"
+            and node.value is not None
+        ):
+            return _extract_all_list(node.value)
 
     names: set[str] = set()
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if not node.name.startswith("_"):
-                names.add(node.name)
-        elif isinstance(node, ast.ClassDef):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             if not node.name.startswith("_"):
                 names.add(node.name)
         elif isinstance(node, ast.Assign):
@@ -167,14 +160,14 @@ def _extract_public_names(source: str) -> set[str]:
                         names.add(target.id)
                 elif isinstance(target, ast.Tuple):
                     for elt in target.elts:
-                        if (
-                            isinstance(elt, ast.Name)
-                            and not elt.id.startswith("_")
-                        ):
+                        if isinstance(elt, ast.Name) and not elt.id.startswith("_"):
                             names.add(elt.id)
-        elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name) and not node.target.id.startswith("_"):
-                names.add(node.target.id)
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and not node.target.id.startswith("_")
+        ):
+            names.add(node.target.id)
     return names
 
 
@@ -191,10 +184,7 @@ def _extract_all_list(node: ast.expr) -> set[str]:
     """
     if not isinstance(node, (ast.List, ast.Tuple)):
         raise DynamicAllError(
-            detail=(
-                f"value is a {type(node).__name__}, not a literal "
-                f"list or tuple"
-            )
+            detail=(f"value is a {type(node).__name__}, not a literal list or tuple")
         )
     names: set[str] = set()
     for elt in node.elts:
@@ -202,9 +192,6 @@ def _extract_all_list(node: ast.expr) -> set[str]:
             names.add(elt.value)
         else:
             raise DynamicAllError(
-                detail=(
-                    f"element at index {node.elts.index(elt)} is not "
-                    f"a string literal"
-                )
+                detail=(f"element at index {node.elts.index(elt)} is not a string literal")
             )
     return names

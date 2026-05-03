@@ -9,7 +9,6 @@ pre-commit installation, both out of scope for unit testing.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,13 +32,16 @@ def _load(rel_path: str):
 # action.yml
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_action_yml_exists_and_is_valid_yaml() -> None:
-    data, path = _load("action.yml")
+    data, _ = _load("action.yml")
     assert isinstance(data, dict)
     assert data.get("name"), "action.yml must declare a name"
     assert data.get("description"), "action.yml must declare a description"
 
 
+@pytest.mark.unit
 def test_action_yml_has_required_inputs() -> None:
     data, _ = _load("action.yml")
     inputs = data.get("inputs", {})
@@ -53,6 +55,7 @@ def test_action_yml_has_required_inputs() -> None:
     assert inputs["path"].get("default") == "."
 
 
+@pytest.mark.unit
 def test_action_yml_uses_composite_runs() -> None:
     """The action is a composite of standard setup-python +
     install + run steps. Avoids needing a Docker image."""
@@ -66,6 +69,7 @@ def test_action_yml_uses_composite_runs() -> None:
     assert "furqan-lint check" in last.get("run", "")
 
 
+@pytest.mark.unit
 def test_action_pins_furqan_lint_to_action_ref() -> None:
     """The action installs furqan-lint at ``github.action_ref`` so
     a user pinning the action to a specific tag (e.g.,
@@ -86,12 +90,15 @@ def test_action_pins_furqan_lint_to_action_ref() -> None:
 # .pre-commit-hooks.yaml
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.unit
 def test_pre_commit_hooks_yaml_exists_and_is_valid() -> None:
     data, _ = _load(".pre-commit-hooks.yaml")
     assert isinstance(data, list)
     assert len(data) == 1
 
 
+@pytest.mark.unit
 def test_pre_commit_hooks_yaml_entry_is_furqan_lint_check() -> None:
     data, _ = _load(".pre-commit-hooks.yaml")
     hook = data[0]
@@ -103,7 +110,7 @@ def test_pre_commit_hooks_yaml_entry_is_furqan_lint_check() -> None:
     assert hook["types"] == ["python"]
 
 
-
+@pytest.mark.unit
 def test_pre_commit_hooks_yaml_declares_furqan_dependency() -> None:
     """The pre-commit hook must declare ``furqan`` as an
     ``additional_dependency`` because pyproject.toml's
@@ -154,6 +161,4 @@ def test_pre_commit_hook_installs_in_clean_venv(tmp_path) -> None:
         timeout=180,
         cwd=str(REPO_ROOT),
     )
-    assert result.returncode == 0, (
-        f"Install failed in clean venv:\n{result.stderr}"
-    )
+    assert result.returncode == 0, f"Install failed in clean venv:\n{result.stderr}"
