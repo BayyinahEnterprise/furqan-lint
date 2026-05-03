@@ -43,19 +43,26 @@ def _run_check(fixture: str) -> subprocess.CompletedProcess:
 
 # ---------------------------------------------------------------------------
 # Exception-driven fall-through (try body spliced unconditionally)
+# RETIRED in v0.6.0: R3 (zero-return) catches this case because the
+# function 'f' has no return statement on any path. The fixture is
+# kept as a regression target asserting R3 still catches it.
 # ---------------------------------------------------------------------------
 
 
-def test_try_body_raises_with_swallowing_handler_is_passed() -> None:
-    """``try: raise; except: pass`` is reported PASS.
+def test_try_body_raises_with_swallowing_handler_now_caught_by_r3() -> None:
+    """``try: raise; except: pass`` (no return on any path) is now
+    flagged by R3 (zero-return). v0.5.x and earlier: silent PASS.
+    v0.6.0+: ring-close violation.
 
-    Documented limitation: same as above, stronger form. The body
-    unconditionally raises, the handler falls through, mypy flags
-    this. v0.3.1 does not.
+    Pinning the new behaviour as a regression target. If a future
+    refactor accidentally regresses R3 to skip try-body shapes, this
+    test will fail and the fix is to restore R3's coverage.
     """
     result = _run_check("try_body_only_returns_in_block.py")
-    assert result.returncode == 0
-    assert "PASS" in result.stdout
+    assert result.returncode == 1
+    assert "MARAD" in result.stdout
+    assert "zero_return_path" in result.stdout
+    assert "function 'f'" in result.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -122,3 +129,26 @@ def test_local_class_in_function_methods_not_collected() -> None:
 
 # ---------------------------------------------------------------------------
 # Redundant None arms in PEP 604 unions (v0.3.4 / round-7 Observation 2)
+
+
+# ---------------------------------------------------------------------------
+# Aliased decorator imports for R3 skip-list (v0.6.0)
+# ---------------------------------------------------------------------------
+
+
+def test_aliased_abstractmethod_fires_r3_false_positive() -> None:
+    """``from abc import abstractmethod as abstract; @abstract`` is
+    NOT recognized by R3's skip-list and the method fires
+    ``zero_return_path`` as a false positive.
+
+    Documented limitation: R3's skip-list resolution in v0.6.0 is
+    name-only. Symbol-table-backed alias resolution is deferred to
+    v0.6.1, at which point this fixture transitions from "fires R3"
+    to "skipped" and the test is updated per the four-step
+    procedure in ``tests/fixtures/documented_limits/README.md``.
+    """
+    result = _run_check("aliased_abstractmethod.py")
+    assert result.returncode == 1
+    assert "MARAD" in result.stdout
+    assert "zero_return_path" in result.stdout
+    assert "function 'required'" in result.stdout

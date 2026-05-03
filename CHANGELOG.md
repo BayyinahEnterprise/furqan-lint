@@ -1,5 +1,156 @@
 # Changelog
 
+## [0.6.0] - 2026-05-02
+
+Round-10: ring-close R3 (zero-return) checker. The fourth Furqan
+checker on the Python adaptor. Closes the v0.4.x documented
+limitation "Zero-return functions" and additionally retires the
+v0.3.5 documented limitation "Exception-driven fall-through" (R3
+catches the try-body-only-raise shape that D24 cannot). One new
+documented limitation introduced: aliased decorator imports for
+R3's skip-list (e.g., `from abc import abstractmethod as abstract`)
+are not yet resolved; v0.6.1 will close that with a symbol table.
+
+### Added
+
+- **`zero_return_path` (R3) checker.** New module
+  `src/furqan_lint/zero_return.py` (~250 lines, ~10 helpers). A
+  function that declares a non-`None` return type but contains zero
+  `return` statements anywhere on any path is reported as
+  `zero_return_path` (R3, ring-close). mypy reports the same shape
+  as "Missing return statement"; furqan-lint now matches that
+  coverage.
+- **`furqan_lint.adapter.translate_tree(tree, filename)`.** Public
+  wrapper around `_translate_module` so the CLI can parse the
+  source once and feed both the Furqan `Module` (for D24/D11/return-none)
+  and the raw `ast.Module` (for R3, which needs decorators that
+  the Furqan translation does not preserve).
+- **R3 wired into the runner pipeline.** `runner.check_python_module`
+  gained a `source_tree: ast.Module | None = None` keyword. R3 runs
+  before D24 on each function; if R3 fires, D24 is suppressed for
+  that function (defensive: in practice D24 only fires on partial-
+  path coverage, but the suppression is forward-compatible). Without
+  `source_tree` the runner is back-compat for v0.5.x callers.
+- **CLI parses once, threads tree to runner.** `cli._check_file`
+  now does `tree = ast.parse(source); module = translate_tree(tree)`
+  and passes `source_tree=tree`. CLI exit code now treats R3
+  diagnostics as failures (exit 1), parallel to marads. PASS message
+  updated from "3 structural checks ran" to "4 structural checks
+  ran".
+- **R3 skip-list (name-based).** `@abstractmethod`,
+  `@abc.abstractmethod`, `@overload`, `@typing.overload` (and the
+  called forms `@abstractmethod()` etc.) are recognised and skipped.
+  Aliased imports are NOT recognised (documented limit).
+- **Provably-non-returning body recognition.** Two shapes:
+  raise-only bodies (recursive on `If` branches whose every arm
+  ends in `Raise`) and the canonical `while True:` loop with no
+  reachable `break`. Conservative: `while 1:` is NOT recognised.
+- **5 failing fixtures.**
+  `tests/fixtures/failing/zero_return_function.py` (moved from
+  `documented_limits/`), `zero_return_with_branches.py`,
+  `zero_return_async.py`, `zero_return_method.py`,
+  `zero_return_optional_propagation.py`.
+- **8 clean fixtures.**
+  `tests/fixtures/clean/zero_return_none_annotated.py`,
+  `zero_return_unannotated.py`, `zero_return_optional_annotated.py`,
+  `zero_return_pipe_none.py`, `raise_only_function.py`,
+  `while_true_no_break.py`, `abstractmethod_decorated.py`,
+  `overload_decorated.py`.
+- **1 documented-limit fixture.**
+  `tests/fixtures/documented_limits/aliased_abstractmethod.py`
+  pinning the v0.6.1 regression target.
+- **`tests/test_round10_r3.py` (12 tests).** 5 firing tests, 6
+  silence tests (the abstractmethod/overload pair share one test
+  function), 1 direct-API test pinning `check_zero_return`'s
+  return shape.
+
+### Changed
+
+- **CLI PASS string updated** from `3 structural checks ran` to
+  `4 structural checks ran` to match the new pipeline (D24, D11,
+  return-none, R3).
+
+### Fixed (limitations retired)
+
+- **Zero-return functions.** Was a v0.4.x documented limitation
+  ("D24 skips zero-return functions, R3 not yet wired"). v0.6.0
+  closes it: R3 fires on every shape D24 cannot reach. The
+  README "Remaining limitations" entry is removed.
+- **Exception-driven fall-through, stronger form.** The
+  `try: raise; except: pass` shape with no return on any path
+  was a v0.3.5 documented limitation. R3 catches it as a
+  zero-return function. The fixture
+  `try_body_only_returns_in_block.py` is retained but the
+  pinning test is inverted: it now asserts R3 fires
+  (`test_try_body_raises_with_swallowing_handler_now_caught_by_r3`).
+
+### Architectural alternative considered
+
+The prompt's ADR offered three alternatives for sourcing the raw
+AST in R3: (A) local AST walk inside `zero_return.py` using the raw
+`ast.Module`; (B) extend the Furqan translation to preserve
+decorators and walk the Furqan `Module`; (D) call upstream Furqan's
+ring-close primitive with adapter-supplied predicates. Alternative
+A was chosen: it is the smallest change (no Furqan-side or upstream
+changes), the most testable (R3 logic is fully isolated), and the
+most precise (raw AST decorators are lossless). The reversibility
+cost is one day if a future requirement (e.g. cross-checker
+deduplication) forces a switch to B or D.
+
+### Limitations introduced
+
+- **Aliased decorator imports for R3 skip-list.** Name-only
+  resolution does not follow `from abc import abstractmethod as
+  abstract`. Pinned as `aliased_abstractmethod.py` in
+  `documented_limits/`. v0.6.1 will add a symbol table so this case
+  is skipped.
+
+### Tests
+
+- 12 new R3 tests (`test_round10_r3.py`).
+- 1 new documented-limit pin
+  (`test_aliased_abstractmethod_fires_r3_false_positive`).
+- 1 inverted documented-limit test
+  (`test_try_body_raises_with_swallowing_handler_now_caught_by_r3`).
+- 14 fixture files added (5 failing + 8 clean + 1 doc-limit) and 1
+  fixture moved (`zero_return_function.py` from `documented_limits/`
+  to `failing/`).
+
+### Five Questions (per Bayyinah Engineering Discipline Framework v2.0 §11.3)
+
+1. **Smallest input demonstrating the fix works?**
+   `def f(x: int) -> int: pass` is now reported as
+   `zero_return_path` (R3) with exit code 1. v0.5.x: silent PASS.
+
+2. **Smallest input demonstrating the bug pre-fix?**
+   Same input, on v0.5.x: `furqan-lint check ...` returns "PASS"
+   and exits 0. mypy reports "Missing return statement".
+
+3. **What does this fix NOT do that a reader might expect?**
+   It does not (a) catch zero-return shapes hidden behind
+   aliased decorators (`@abstract` from
+   `from abc import abstractmethod as abstract`); (b) recognise
+   non-canonical infinite loops (`while 1:`, `itertools.count()`);
+   (c) recognise bodies whose raise is hidden inside a swallowing
+   `try/except` that the body itself does not establish; (d)
+   replace mypy's broader missing-return analysis (R3 only fires
+   on zero returns, not partial coverage; D24 covers partial).
+
+4. **New code paths and their boundaries?**
+   `zero_return.py:check_zero_return -> _check_function` runs the
+   5-step skip cascade (no annotation -> Optional/None ->
+   skip-decorator -> non-returning body -> has any return). All
+   five steps are pinned by tests. Boundaries: nested function
+   bodies are recursed by `ast.walk` so they are checked
+   independently; lambdas are excluded (no syntax for return
+   annotation); methods inside classes ARE walked (matches D24
+   behaviour).
+
+5. **What documented limitations does this retire? Add?**
+   Retires: "Zero-return functions" (v0.4.x), "Exception-driven
+   fall-through, stronger form" (v0.3.5). Adds: "Aliased decorator
+   imports for R3 skip-list" (v0.6.0).
+
 ## [0.5.1] - 2026-05-03
 
 Round-9 corrective from Fraz Ashraf. CRITICAL: ruff version drift

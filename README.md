@@ -336,12 +336,15 @@ than silent.
   symmetric tightening across the three optional spellings is a
   v0.4.0 candidate. Pinned as `tests/fixtures/documented_limits/redundant_pipe_none.py`.
 
-- **Zero-return functions.** A function that declares a return
-  type but has no `return` statement at all is silently passed.
-  D24 checks that every *existing* return path is covered; the
-  absence of any return is a separate check (ring-close R3) that
-  furqan-lint does not yet run. mypy reports this as "Missing
-  return statement"; furqan-lint will when R3 is wired.
+- **Aliased decorator imports for R3 skip-list.** R3's skip-list
+  resolution in v0.6.0 is name-only: it recognises
+  `@abstractmethod`, `@abc.abstractmethod`, `@overload`, and
+  `@typing.overload`. It does NOT follow
+  `from abc import abstractmethod as abstract` aliases. A method
+  decorated with the aliased name fires R3 as a false positive,
+  even though it is genuinely abstract. The fix is symbol-table-backed
+  alias resolution, deferred to v0.6.1. Pinned as
+  `tests/fixtures/documented_limits/aliased_abstractmethod.py`.
 
 ## License
 

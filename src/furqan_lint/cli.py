@@ -79,26 +79,33 @@ def _print_usage(file: TextIO | None = None) -> None:
 
 
 def _check_file(path: Path) -> int:
+    import ast as _ast
+
     from furqan.errors.marad import Advisory, Marad
 
-    from furqan_lint.adapter import translate_file
+    from furqan_lint.adapter import translate_tree
     from furqan_lint.runner import check_python_module
+    from furqan_lint.zero_return import ZeroReturnDiagnostic
 
     try:
-        module = translate_file(path)
+        source = path.read_text(encoding="utf-8")
+        tree = _ast.parse(source, filename=str(path))
+        module = translate_tree(tree, str(path))
     except SyntaxError as e:
         line = e.lineno if e.lineno is not None else 0
         print(f"SYNTAX ERROR  {path}:{line}")
         print(f"  {e.msg}")
         return 2
 
-    diagnostics = check_python_module(module)
+    diagnostics = check_python_module(module, source_tree=tree)
     marads = [(n, d) for n, d in diagnostics if isinstance(d, Marad)]
     advisories = [(n, d) for n, d in diagnostics if isinstance(d, Advisory)]
+    r3_diags = [(n, d) for n, d in diagnostics if isinstance(d, ZeroReturnDiagnostic)]
+    is_failure = bool(marads or r3_diags)
 
     if not diagnostics:
         print(f"PASS  {path}")
-        print("  3 structural checks ran. Zero diagnostics.")
+        print("  4 structural checks ran. Zero diagnostics.")
         return 0
 
     if marads:
@@ -111,6 +118,13 @@ def _check_file(path: Path) -> int:
                 print(f"      fix: {fix}")
         print()
 
+    if r3_diags:
+        print(f"MARAD  {path}")
+        print(f"  {len(r3_diags)} ring-close violation(s):")
+        for name, d in r3_diags:
+            print(f"    [{name}] {d.diagnosis}")
+        print()
+
     if advisories:
         print(f"ADVISORY  {path}")
         print(f"  {len(advisories)} note(s):")
@@ -118,7 +132,7 @@ def _check_file(path: Path) -> int:
             msg = getattr(a, "message", str(a))
             print(f"    [{name}] {msg}")
 
-    return 1 if marads else 0
+    return 1 if is_failure else 0
 
 
 def _check_additive(old_path: Path, new_path: Path) -> int:

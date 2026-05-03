@@ -54,6 +54,17 @@ def translate_source(source: str, filename: str = "<string>") -> Module:
     return _translate_module(tree, filename)
 
 
+def translate_tree(tree: ast.Module, filename: str) -> Module:
+    """Translate a pre-parsed ``ast.Module`` into a Furqan ``Module``.
+
+    Lets a caller (e.g. the CLI) parse the source once and reuse the
+    raw AST for both the Furqan translation and Python-native
+    checkers (R3 zero-return, which needs decorators that the
+    translation does not preserve).
+    """
+    return _translate_module(tree, filename)
+
+
 # ---------------------------------------------------------------------------
 # Module translation
 # ---------------------------------------------------------------------------
