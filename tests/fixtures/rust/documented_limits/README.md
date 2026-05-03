@@ -42,11 +42,6 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
   or bodies containing only `panic!()` / `todo!()` /
   `unimplemented!()` are PASS in v0.7.0. The Rust analogue of
   Python's R3 (zero-return ring-close) is deferred to v0.7.1.
-- **`trait_method_signature.rs`.** `function_signature_item` nodes
-  (trait method declarations with no body) are skipped by design
-  per prompt §3.4. D24/D11 do not apply to interface declarations.
-  This is a deliberate skip, not an oversight; pinned so that a
-  future change to walk `function_signature_item` is intentional.
 - **`closure_with_annotated_return.rs`.** `closure_expression`
   nodes are skipped for D24, D11, AND R3 in Phase 2 (v0.7.1).
   The outer function is checked normally; the closure body is
@@ -63,6 +58,16 @@ pinning test in `tests/test_rust_correctness.py` that asserts the
   diverging-macro allowlist (brittle) or cross-file type
   inference (out of scope). Phase 3 may revisit if the Rust
   ecosystem standardizes a `#[diverging]` attribute.
+
+## Retired in v0.7.1
+
+- `trait_method_signature.rs` removed: the skip of
+  `function_signature_item` is now stable across two releases
+  (v0.7.0 + v0.7.1) and is recognised as a permanent design
+  choice rather than a temporary limit. D24/D11/R3 do not apply
+  to trait method declarations because there is no body to
+  analyse. The retirement procedure cleans up exactly this kind
+  of "limit that turned out to be permanent."
 
 ## How to retire a fixture
 

@@ -148,15 +148,6 @@ def test_macro_invocation_body_is_silent_pass() -> None:
 
 
 @pytestmark_rust
-def test_trait_method_signature_is_silent_pass() -> None:
-    """function_signature_item nodes are skipped by design; the
-    fixture has no implementation bodies and PASSes trivially."""
-    result = _run_check("documented_limits/trait_method_signature.rs")
-    assert result.returncode == 0
-    assert "PASS" in result.stdout
-
-
-@pytestmark_rust
 def test_closure_with_annotated_return_is_silent_pass() -> None:
     """closure_expression is skipped in Phase 1 even with explicit
     return-type annotation. The outer function PASSes because the
