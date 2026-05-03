@@ -42,6 +42,10 @@ _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_2: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFA
 # rust_adapter public surface change. Aliases v0.7.0.1.
 _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_3: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_0_1
 
+# v0.8.0 lands the Go adapter; the rust_adapter public surface
+# is unchanged. Aliases v0.7.0.1.
+_RUST_ADAPTER_PUBLIC_SURFACE_v0_8_0: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_0_1
+
 
 def test_rust_adapter_public_surface_is_superset_of_v0_7_0_baseline() -> None:
     """``furqan_lint.rust_adapter.__all__`` must include every name
@@ -124,5 +128,18 @@ def test_rust_adapter_public_surface_is_superset_of_v0_7_3_baseline() -> None:
     missing = _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_3 - current
     assert not missing, (
         f"rust_adapter.__all__ removed names from the v0.7.3 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_rust_adapter_public_surface_is_superset_of_v0_8_0_baseline() -> None:
+    """v0.8.0 lands the Go adapter Phase 1; the rust_adapter
+    public surface is unchanged. Baseline aliases v0.7.0.1."""
+    from furqan_lint import rust_adapter
+
+    current = frozenset(rust_adapter.__all__)
+    missing = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_0 - current
+    assert not missing, (
+        f"rust_adapter.__all__ removed names from the v0.8.0 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )

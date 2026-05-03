@@ -1,5 +1,270 @@
 # Changelog
 
+## [0.8.0] - 2026-05-03
+
+Feature release. First non-Python language adapter ships: the
+Go adapter (Phase 1) lints ``.go`` files for D24 (all-paths-
+return) and D11 (status-coverage with the Go ``(T, error)``
+firing shape). Cross-language ``_is_may_fail_producer``
+predicate consolidated to Shape B per ADR-002 §10 Q3
+follow-up. The Python adapter is unchanged.
+
+This release builds on v0.7.3 plus the v0.7.4 corrective items
+(round-18 audit findings, folded into commit 0 of this series).
+
+### Added
+
+- **Go adapter Phase 1.** ``furqan-lint check file.go`` runs D24
+  (all-paths-return) and D11 (status-coverage with the
+  ``(T, error)`` firing shape) on Go source. Install via
+  ``pip install furqan-lint[go]``. The Go toolchain (1.21+) is
+  required at install time (PEP 517 build hook compiles the
+  goast binary); not at runtime.
+- **goast binary** at ``src/furqan_lint/go_adapter/cmd/goast/main.go``
+  (~250 LoC). Self-contained Go program that uses ``go/parser``
+  and ``go/ast`` to emit a JSON representation of a Go source
+  file's AST. JSON shape: filename, package, public_names,
+  functions (each with name, line, col, exported,
+  return_type_names, params, body_statements). Body statement
+  types: ``if``, ``return``, ``assign``, ``opaque``. The binary
+  has NO ``calls`` field; the Python translator extracts calls
+  from ``rhs_call`` sites at IR build time per round-17
+  prompt-review MEDIUM 1.
+- **Python Go adapter** at ``src/furqan_lint/go_adapter/``:
+  - ``__init__.py`` exports ``parse_file``,
+    ``GoExtrasNotInstalled``, ``GoParseError``.
+  - ``parser.py`` invokes the bundled goast binary as a
+    subprocess with a 10-second timeout. Discovery order:
+    bundled binary → ``FURQAN_LINT_GOAST_BIN`` env var → loud
+    failure (NO ``$PATH`` fallback per round-17 prompt-review
+    MEDIUM 2).
+  - ``translator.py`` (~280 LoC) converts goast JSON to Furqan
+    IR. Return-type translation rules: 0 → None; 1 → TypePath;
+    2-with-error-last → UnionType (error in right arm by
+    convention); 2-non-error → opaque TypePath; 3+ → opaque
+    TypePath("<multi-return>") (Phase 1 documented limit). nil
+    in any expression position → IdentExpr("__opaque__"), NOT
+    "__none__" (per locked decision 5: avoid accidental
+    cross-language firing of Python-only check_return_none).
+  - ``runner.py`` wires D24 + D11 via upstream
+    ``check_all_paths_return`` and ``check_status_coverage``
+    with the cross-language ``_is_may_fail_producer`` predicate.
+  - ``_build.py`` is the PEP 517 build hook that compiles the
+    goast binary at install time. If Go is absent on the build
+    machine, the hook prints a stderr note and exits cleanly so
+    the wheel still builds; runtime then raises
+    ``GoExtrasNotInstalled`` with the install hint.
+- **Cross-language ``_is_may_fail_producer`` (Shape B).** Moved
+  from ``rust_adapter/runner.py`` to ``furqan_lint/runner.py``
+  and extended to recognize Python ``Optional[T]``, Rust
+  ``Option<T>`` / ``Result<T, E>``, AND Go ``(T, error)``. Per
+  ADR-002 §10 Q3 follow-up: the predicate composition is the
+  right abstraction once three data points exist. The Rust
+  adapter's runner now imports from ``furqan_lint.runner``
+  rather than maintaining a parallel composition.
+- **``_is_error_return`` predicate** in
+  ``furqan_lint/runner.py``. Recognizes Go's ``(T, error)``
+  return shape via UnionType where one arm has base ``"error"``.
+  SYMMETRIC across arms (per locked decision 7) so a future
+  translator change that reorders does not silently break D11.
+- **``setup.py``** with a ``build_py`` subclass that calls the
+  Go build hook before standard setuptools build.
+- **``[go]`` extra** in pyproject.toml (marker-only; no PyPI
+  dependencies; the Go binary is built at install time from
+  bundled source). ``[tool.setuptools.package-data]`` ships the
+  goast binary (when built) plus the Go source so subsequent
+  installs can rebuild.
+- **CLI dispatch on .go.** ``cli.py`` ``main()`` routes ``.go``
+  to ``_check_go_file``. Mirrors the v0.7.0.1 Rust pattern:
+  typed ``GoExtrasNotInstalled`` is caught and printed as a
+  one-line install hint to stderr (NOT a Python traceback).
+  ``_check_directory`` walks ``*.py``, ``*.rs``, AND ``*.go``.
+  ``EXCLUDED_DIRS`` adds ``vendor`` (Go's equivalent of
+  ``node_modules`` / ``target``).
+- **furqan-lint diff foo.go bar.go returns exit 2** with
+  explicit "Go diff is not implemented" message per locked
+  decision 8 / round-17 prompt-review CRITICAL. Exit 0 = PASS in
+  framework verdict semantics; CI pipelines invoking
+  ``furqan-lint diff *.go`` must NOT silently treat the
+  unimplemented case as PASS. Pinned by
+  ``test_go_diff_returns_exit_2``.
+- **Release-sweep gate extended to Go surfaces.** The v0.7.3
+  ``test_release_sweep_gate.py`` ``_USER_VISIBLE_SURFACES`` now
+  includes the four go_adapter Python modules and the Go
+  documented_limits README. Phase numbering on Go adapter
+  surfaces fails the gate the same way Rust adapter surfaces do.
+- **9 new fixtures** in ``tests/fixtures/go/``:
+  - ``clean/all_paths_return.go``, ``clean/error_propagated.go``,
+    ``clean/error_handled_via_named_return.go``.
+  - ``failing/missing_return.go``,
+    ``failing/error_collapse_via_blank.go``,
+    ``failing/error_collapse_via_panic.go``.
+- **22 new tests** across four files:
+  - ``test_go_parser.py`` (3): JSON shape, parse error, timeout.
+  - ``test_go_translator.py`` (6): function translation,
+    UnionType emission, "error in right arm" pin (load-bearing
+    Go convention pin), nil → opaque marker (locked decision 5
+    pin), 2-element non-error tuple opaque, 3+ multi-return
+    documented limit.
+  - ``test_go_correctness.py`` (9): D24 clean + missing +
+    switch + for, D11 collapse-via-blank + collapse-via-panic +
+    propagated + named-returns + predicate-partition (load-
+    bearing pin against future name-based consolidation).
+  - ``test_go_cli.py`` (3): .go extension dispatch, diff exit 2,
+    missing-extras install hint.
+- **Per-version surface snapshots extended.**
+  ``tests/test_top_level_public_surface_additive.py`` gains
+  ``V0_8_0_SURFACE`` (alias of ``V0_7_0_SURFACE``; no top-level
+  surface change in v0.8.0).
+  ``tests/test_rust_public_surface_additive.py`` gains
+  ``_RUST_ADAPTER_PUBLIC_SURFACE_v0_8_0`` (alias of v0.7.0.1; no
+  rust_adapter surface change).
+  NEW ``tests/test_go_public_surface_additive.py`` ships
+  ``_GO_ADAPTER_PUBLIC_SURFACE_v0_8_0`` baseline as the first
+  go_adapter snapshot: ``{parse_file, GoExtrasNotInstalled,
+  GoParseError}``.
+
+### Changed
+
+- **Rust D11 producer predicate import.** ``rust_adapter/runner.py``
+  now imports ``_is_may_fail_producer`` from ``furqan_lint.runner``
+  instead of maintaining its own composition. The Rust D11 firing
+  semantics are unchanged; only the predicate's home file moved.
+
+### Out of scope (deferred to Phase 2 or beyond)
+
+- R3 (zero-return) for Go. Go has no body-shape analogue to
+  Rust's annotated-fn-with-empty-body pattern. The closest
+  equivalent is ``log.Fatal()`` / ``os.Exit()`` which is a
+  function call, not a body shape. Deferred until a concrete
+  user-reported false negative motivates the design.
+- ``(T, T, error)`` and other 3+-element multi-return shapes.
+  UnionType IR is binary; documented limit (the translator
+  emits opaque ``TypePath("<multi-return>")``).
+- ``go/types`` integration. Type resolution requires
+  ``go build`` or module-aware parsing; deferred.
+- Cross-package symbol resolution.
+- Generics, interface dispatch, method-receiver call-site
+  analysis.
+- Additive-only diff for Go (CLI dispatches but returns exit 2
+  with the "not implemented" message).
+- ``for`` / ``switch`` / ``select`` / ``defer`` body analysis
+  beyond opaque markers.
+- ``nil`` distinction (pointer vs slice vs interface vs map);
+  all collapse to ``IdentExpr("__opaque__")``.
+
+### Tests
+
+- 268 passed (was 243 base after v0.7.4 corrective). Delta:
+  +25 (3 parser + 6 translator + 9 correctness + 3 CLI + 2
+  go_adapter surface + 1 rust_adapter v0.8.0 baseline + 1
+  top-level v0.8.0 baseline).
+- Marker counts: 199 unit + 68 integration + 1 network = 268.
+
+### Verification
+
+- All 10 gates pass (gate 7 em-dash audit run from clean state;
+  gate 9b empirical missing-Go-extras simulated).
+- Per-version snapshots in BOTH top-level AND adapter tests.
+- Four-place pattern wired for the documented limits introduced.
+
+### Five Questions (per Bayyinah Engineering Discipline Framework v2.0 §11.3)
+
+1. **Smallest input demonstrating the new capability:**
+   ```go
+   package main
+   func loadConfig(path string) (*Config, error) {
+       return &Config{}, nil
+   }
+   func StartServer(path string) *Config {
+       cfg, _ := loadConfig(path)
+       return cfg
+   }
+   ```
+   On v0.7.3: ``furqan-lint check x.go`` returns "Unknown
+   command: check" or similar (no Go support). On v0.8.0:
+   exit 1 with MARAD on ``StartServer`` naming ``loadConfig``
+   as the may-fail producer whose error arm was discarded.
+
+2. **Smallest input demonstrating the bug pre-fix:** the
+   absence of any Go support is the "before" state; this
+   release introduces it.
+
+3. **What this release does NOT do:** see "Out of scope" above.
+
+4. **New code paths:** ~250 LoC of Go (cmd/goast/main.go) +
+   ~600 LoC of Python (go_adapter/) + ~85 LoC of CLI integration
+   + ~30 LoC of setup.py + ~25 LoC of build hook + 9 fixtures +
+   22 tests + per-version snapshots in three surface files.
+
+5. **Limits retired and added:** none retired; 8 documented
+   limits introduced (3+-element multi-return; no R3 for Go;
+   no Go diff; no go/types; no generics; no method-receiver
+   call-site; switch/for/select/defer opaque; nil distinctions).
+
+### Validator-bias self-disclosure (per v0.7.0.1 §5.1 standing requirement)
+
+**Sandbox state at the time of testing:**
+
+```
+$ pip freeze | grep -E "tree_sitter|tomli|furqan"
+furqan @ file:///[...]/furqan-programming-language
+furqan-lint @ -e file:///tmp/furqan-lint
+tomli==2.4.1
+tree-sitter==0.25.2
+tree-sitter-rust==0.24.2
+$ /tmp/golocal/go/bin/go version
+go version go1.21.13 linux/arm64
+```
+
+The Go toolchain was installed during this build via the
+official tarball (apt-get unavailable without sudo on this
+sandbox). Go is required only on the build machine; install
+machines and runtime machines do not need Go.
+
+**Gates run from a clean state:**
+
+The release-sweep gate (commit 5 + v0.7.3 commit 3) was run
+empirically and caught Phase numbering in the Go translator,
+runner, and CLI diff message during this release's development.
+All findings swept to durable phrasing.
+
+The em-dash audit gate (gate 7) was run from the clean
+post-commit-1 state; clean.
+
+**Gates that could not be run from a clean state:**
+
+Gate 6 air-gap (``unshare -n``) is unavailable in the build
+sandbox without ``CAP_SYS_ADMIN``. Same posture as v0.7.0
+through v0.7.3.
+
+Gate 9b (empirical missing-Go-extras simulation) is verified
+via the unit test ``test_go_missing_extras_prints_install_hint``
+which mocks the ``GoExtrasNotInstalled`` raise inside
+``parse_file`` and asserts the stderr message + exit 1 + no
+traceback. Empirical simulation via ``rm -f
+src/furqan_lint/go_adapter/bin/goast`` works the same way and
+is the deploy-host's verification path.
+
+### §5.2 prompt-grounding self-check (per v0.7.2 standing requirement)
+
+The §2.1 self-check ran clean against v0.7.3 codebase state
+before any code was written. The framing-verification step
+caught one drift: the prompt named base hash ``2a80cb1`` which
+does not resolve on origin; the actual v0.7.3 release tip is
+``50e698c`` (origin/v0.7.3 branch HEAD; v0.7.3 had not merged
+to origin/main at the time of this v0.8.0 work). Branched off
+``50e698c``; v0.7.3 is expected to merge ahead of or alongside
+v0.8.0's PR. No other drift.
+
+The §0 (round-18 corrective) finding 1 (em-dash on v0.7.3 HEAD)
+was already closed on origin/v0.7.3 by commit 50e698c
+"fix(ci): strip em-dash from test_release_sweep_gate
+docstring" before this v0.8.0 work began. Findings 2 and 3 land
+in commit 0 of this series. The §0 framing was therefore
+partially redundant (1 of 3 findings already closed); the
+v0.7.4 corrective scope shrank from 3 items to 2.
+
 ## [0.7.3] - 2026-05-03
 
 Documentation-sweep corrective for the round-17 audit findings.
