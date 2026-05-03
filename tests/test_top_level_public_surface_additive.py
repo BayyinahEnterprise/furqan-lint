@@ -65,6 +65,12 @@ V0_7_3_SURFACE: frozenset[str] = V0_7_0_SURFACE
 # top-level public surface (the new go_adapter package is its
 # own subpackage with its own snapshot test). Aliases V0_7_0_SURFACE.
 V0_8_0_SURFACE: frozenset[str] = V0_7_0_SURFACE
+# v0.8.1 adds the Go additive-only diff path. The new public
+# entry point is in the go_adapter subpackage
+# (extract_public_names); the top-level furqan_lint surface
+# is unchanged. Aliases V0_7_0_SURFACE per the per-version
+# cadence.
+V0_8_1_SURFACE: frozenset[str] = V0_7_0_SURFACE
 
 
 def _current_surface() -> frozenset[str]:
@@ -159,5 +165,22 @@ def test_v0_8_0_surface_is_subset_of_current() -> None:
     missing = V0_8_0_SURFACE - current
     assert not missing, (
         f"furqan_lint.__all__ removed names from the v0.8.0 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_v0_8_1_surface_is_subset_of_current() -> None:
+    """The v0.8.1 baseline (alias of V0_7_0_SURFACE; the Go diff
+    path's public entry lives in furqan_lint.go_adapter, not at
+    the top level) must remain a subset of the current
+    furqan_lint.__all__. Catches accidental top-level surface
+    removal.
+    """
+    import furqan_lint
+
+    current = frozenset(furqan_lint.__all__)
+    missing = V0_8_1_SURFACE - current
+    assert not missing, (
+        f"furqan_lint.__all__ removed names from V0_8_1_SURFACE: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )

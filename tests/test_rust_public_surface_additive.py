@@ -45,6 +45,13 @@ _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_3: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFA
 # v0.8.0 lands the Go adapter; the rust_adapter public surface
 # is unchanged. Aliases v0.7.0.1.
 _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_0: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_0_1
+# v0.8.1 ships the Go diff path; the Rust adapter surface is
+# unchanged in v0.8.1 (Rust diff deferred to v0.8.2). Aliases
+# v0_7_0_1 per the per-version cadence (every shipped minor and
+# patch version gets a named frozenset constant, even when the
+# surface is unchanged -- the constant's existence is the
+# baseline, the name is the audit pin).
+_RUST_ADAPTER_PUBLIC_SURFACE_v0_8_1: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_7_0_1
 
 
 def test_rust_adapter_public_surface_is_superset_of_v0_7_0_baseline() -> None:
@@ -141,5 +148,21 @@ def test_rust_adapter_public_surface_is_superset_of_v0_8_0_baseline() -> None:
     missing = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_0 - current
     assert not missing, (
         f"rust_adapter.__all__ removed names from the v0.8.0 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_rust_adapter_public_surface_is_superset_of_v0_8_1_baseline() -> None:
+    """The v0.8.1 baseline (alias of v0_7_0_1; Rust diff deferred
+    to v0.8.2; no rust_adapter surface change in v0.8.1) must
+    remain a subset of the current surface. Removals require a
+    major-version bump.
+    """
+    from furqan_lint import rust_adapter
+
+    current = frozenset(rust_adapter.__all__)
+    missing = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_1 - current
+    assert not missing, (
+        f"rust_adapter.__all__ removed names from v0.8.1 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )

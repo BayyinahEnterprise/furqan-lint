@@ -60,21 +60,32 @@ def test_go_file_detected_by_extension(tmp_path: Path) -> None:
     assert "(D24, D11" in result.stdout
 
 
-def test_go_diff_returns_exit_2(tmp_path: Path) -> None:
-    """``furqan-lint diff foo.go bar.go`` returns exit 2 (PARSE
-    ERROR), NOT exit 0 (PASS).
+def test_go_diff_now_implemented_returns_exit_0_on_clean_pair(
+    tmp_path: Path,
+) -> None:
+    """``furqan-lint diff foo.go bar.go`` returns exit 0 (PASS)
+    on an additive-only diff in v0.8.1.
 
-    Locked decision 8: CI pipelines invoking ``furqan-lint diff
-    *.go`` must NOT silently treat the unimplemented case as
-    PASS. The exit code matches the framework's PARSE ERROR
-    semantics: the file cannot be parsed by the diff
-    implementation, so no honesty claim is made.
+    RETIREMENT NOTE (v0.8.1): This replaces the v0.8.0
+    ``test_go_diff_returns_exit_2`` test, which pinned locked
+    decision 8 (Go diff returns exit 2 because not implemented).
+    v0.8.1 implements Go diff via
+    :func:`furqan_lint.go_adapter.extract_public_names` plus
+    :func:`furqan_lint.additive.compare_name_sets`; the
+    dispatcher routes ``.go`` pairs to the new helper. Locked
+    decision 8 is now satisfied differently: the diff IS
+    implemented, so the verdict reflects actual additive-only
+    semantics, and CI pipelines that invoked
+    ``furqan-lint diff *.go`` get real PASS / MARAD signals
+    instead of an exit-2 placeholder.
 
-    This test is NOT skipped on missing-extras because the
-    decision is in the CLI dispatcher (cli._check_additive),
-    not the go_adapter package; the dispatch fires before the
-    extras would be loaded.
+    Detailed Go-diff coverage moved to
+    ``tests/test_go_diff.py`` (8 tests). This pin remains in
+    test_go_cli.py to make the retirement visible at the
+    suite-organization layer.
     """
+    if not _go_extras_present():
+        pytest.skip("goast binary not built; install [go] extras")
     v1 = tmp_path / "v1.go"
     v2 = tmp_path / "v2.go"
     v1.write_text("package x\nfunc F() {}\n")
@@ -85,12 +96,12 @@ def test_go_diff_returns_exit_2(tmp_path: Path) -> None:
         text=True,
         cwd=REPO_ROOT,
     )
-    assert result.returncode == 2, (
-        f"expected exit 2 (PARSE ERROR), got {result.returncode}\n"
+    assert result.returncode == 0, (
+        f"expected exit 0 (PASS), got {result.returncode}\n"
         f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
-    assert "Go diff is not implemented" in result.stdout
-    assert "see CHANGELOG" in result.stdout
+    assert "PASS" in result.stdout
+    assert "(additive-only)" in result.stdout
 
 
 def test_go_missing_extras_prints_install_hint(tmp_path: Path) -> None:

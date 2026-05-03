@@ -17,6 +17,10 @@ Public surface
 
 * ``parse_file(path)`` -> ``dict``: invoke the bundled goast
   binary on ``path`` and return parsed JSON.
+* ``extract_public_names(path)`` -> ``frozenset[str]``: return
+  the uppercase-initial Go identifiers exposed by ``path``. Used
+  by the additive-only diff path
+  (``furqan-lint diff old.go new.go``). Added in v0.8.1.
 * ``GoExtrasNotInstalled``: raised when the bundled binary is
   not present. CLI converts to exit code 1 plus the install hint.
 * ``GoParseError``: raised when goast fails to parse the source.
@@ -33,7 +37,12 @@ from furqan_lint.go_adapter._exceptions import (
     GoParseError,
 )
 
-__all__ = ("GoExtrasNotInstalled", "GoParseError", "parse_file")
+__all__ = (
+    "GoExtrasNotInstalled",
+    "GoParseError",
+    "extract_public_names",
+    "parse_file",
+)
 
 
 def parse_file(path: object) -> dict[str, object]:
@@ -49,3 +58,19 @@ def parse_file(path: object) -> dict[str, object]:
     if isinstance(path, Path):
         return _parse_file(path)
     return _parse_file(Path(str(path)))
+
+
+def extract_public_names(path: object) -> frozenset[str]:
+    """Return uppercase-initial Go identifier names exposed by ``path``.
+
+    Lazy-imports ``furqan_lint.go_adapter.public_names`` so this
+    package's import path does not require the bundled binary to
+    be present.
+    """
+    from pathlib import Path
+
+    from furqan_lint.go_adapter.public_names import extract_public_names as _extract
+
+    if isinstance(path, Path):
+        return _extract(path)
+    return _extract(Path(str(path)))
