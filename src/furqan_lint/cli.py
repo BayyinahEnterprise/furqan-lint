@@ -309,15 +309,28 @@ def _check_go_file(path: Path) -> int:
 
 
 def _check_additive(old_path: Path, new_path: Path) -> int:
-    if old_path.suffix == ".go" or new_path.suffix == ".go":
-        # Locked decision 8: Go diff is not implemented in v0.8.0.
-        # Return exit 2 (PARSE ERROR) NOT exit 0 (PASS) so CI
-        # pipelines invoking ``furqan-lint diff *.go`` do NOT
-        # silently treat the unimplemented case as a PASS.
-        print(f"PARSE ERROR  {new_path} (additive-only)")
-        print("  Go diff is not implemented in v0.8.0; see CHANGELOG " "for the schedule.")
-        return 2
+    """Dispatch the additive-only diff to the language-appropriate
+    helper based on file suffix.
 
+    v0.8.1 commit 2: minimal Go-or-Python dispatcher. The Go
+    path requires both arms to be ``.go``; otherwise routes to
+    the Python helper (which raises SyntaxError on non-Python
+    sources, mapped to exit 2). The cross-language rejection
+    and Rust-not-implemented guards land in v0.8.1 commit 3 with
+    their own pinning tests.
+    """
+    if old_path.suffix == ".go" and new_path.suffix == ".go":
+        return _check_go_additive(old_path, new_path)
+    return _check_python_additive(old_path, new_path)
+
+
+def _check_python_additive(old_path: Path, new_path: Path) -> int:
+    """Python additive-only diff via :func:`check_additive_api`.
+
+    Body lifted verbatim from v0.8.0's monolithic ``_check_additive``
+    minus the Go-rejection guard (now handled by the dispatcher).
+    All Python diff tests pass unchanged after the v0.8.1 refactor.
+    """
     from furqan_lint.additive import DynamicAllError, check_additive_api
 
     try:
@@ -344,6 +357,60 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
             "with a literal list or tuple of string literals."
         )
         return 2
+
+    if not diagnostics:
+        print(f"PASS  {new_path} (additive-only)")
+        print("  No public names removed.")
+        return 0
+
+    print(f"MARAD  {new_path} (additive-only)")
+    print(f"  {len(diagnostics)} violation(s):")
+    for m in diagnostics:
+        print(f"    [additive_only] {m.diagnosis}")
+        print(f"      fix: {m.minimal_fix}")
+    return 1
+
+
+def _check_go_additive(old_path: Path, new_path: Path) -> int:
+    """Go additive-only diff via :func:`compare_name_sets` plus
+    :func:`extract_public_names` from each ``.go`` file.
+
+    Catches ``GoExtrasNotInstalled`` (install hint, exit 1) and
+    ``GoParseError`` (exit 2) per the v0.7.0.1 typed-exception
+    pattern: the user sees a one-line message, not a Python
+    traceback.
+    """
+    try:
+        from furqan_lint.additive import compare_name_sets
+        from furqan_lint.go_adapter import (
+            GoExtrasNotInstalled,
+            GoParseError,
+            extract_public_names,
+        )
+    except ImportError:
+        print(
+            "Go support not installed. Run: pip install furqan-lint[go]",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        old_names = extract_public_names(old_path)
+        new_names = extract_public_names(new_path)
+    except GoExtrasNotInstalled as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    except GoParseError as e:
+        print(f"PARSE ERROR  {new_path} (additive-only)")
+        print(f"  {e}")
+        return 2
+
+    diagnostics = compare_name_sets(
+        previous_names=old_names,
+        current_names=new_names,
+        filename=str(new_path),
+        language="go",
+    )
 
     if not diagnostics:
         print(f"PASS  {new_path} (additive-only)")
