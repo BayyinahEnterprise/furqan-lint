@@ -60,6 +60,64 @@ def _is_optional_union(rt: object) -> bool:
     return "None" in names
 
 
+def _is_result_type(rt: object) -> bool:
+    """True iff ``rt`` is a Rust ``Result<T, E>`` translated to
+    ``UnionType(TypePath(T), TypePath(E))``.
+
+    Distinguished from ``Option<T>`` by the structural rule that
+    NEITHER arm has base ``"None"``. The Rust translator
+    represents ``Option<T>`` as ``UnionType(T, TypePath("None"))``
+    and ``Result<T, E>`` as ``UnionType(T, E)`` with concrete type
+    names; this predicate complements ``_is_optional_union``
+    without overlap.
+
+    Moved to this module in v0.8.0 as part of the Shape B
+    cross-language ``_is_may_fail_producer`` consolidation per
+    ADR-002 §10 Q3 follow-up. Was previously in
+    ``rust_adapter/runner.py`` (v0.7.2 - v0.7.3).
+    """
+    if not isinstance(rt, UnionType):
+        return False
+    return bool(rt.left.base != "None" and rt.right.base != "None")
+
+
+def _is_error_return(rt: object) -> bool:
+    """True iff ``rt`` is a Go ``(T, error)`` tuple translated to
+    a ``UnionType`` with one arm having base ``"error"``.
+
+    Symmetric: checks both arms. The Go translator emits ``error``
+    in the right arm by Go convention (error is conventionally the
+    last return value). The symmetry defends against translator-
+    contract drift; if a future translator change reorders, D11
+    does not silently break. Pinned by
+    ``test_go_translator_emits_error_in_right_arm``.
+
+    Added in v0.8.0 (Go adapter Phase 1) per locked decision 7.
+    """
+    if not isinstance(rt, UnionType):
+        return False
+    names = {rt.left.base, rt.right.base}
+    return "error" in names
+
+
+def _is_may_fail_producer(rt: object) -> bool:
+    """True iff ``rt`` is a may-fail producer in any supported
+    language: Python ``Optional[T]`` (None arm), Rust
+    ``Option<T>`` (None arm) / ``Result<T, E>`` (no None arm),
+    or Go ``(T, error)`` (error arm).
+
+    Composed of the three language-specific predicates. Shape B
+    locked in v0.8.0 per ADR-002 §10 Q3 follow-up: a single
+    cross-language predicate beats per-language duplication once
+    three data points exist.
+
+    Lives in this module (the cross-language home) so the Rust
+    runner imports from here rather than maintaining a parallel
+    composition. The Go runner also imports from here.
+    """
+    return _is_optional_union(rt) or _is_result_type(rt) or _is_error_return(rt)
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------

@@ -8,9 +8,9 @@ Phase 1 (v0.8.0) wires two checkers:
 * **D11 (status-coverage with the Go ``(T, error)`` firing
   shape)** via upstream ``check_status_coverage`` with the
   cross-language ``_is_may_fail_producer`` predicate from
-  ``furqan_lint.runner``. Phase B per ADR-002 §10 Q3 follow-up.
-  D11 wiring lands in v0.8.0 commit 4 (this commit ships D24
-  only).
+  ``furqan_lint.runner``. Shape B per ADR-002 §10 Q3 follow-up:
+  the predicate recognises Python ``Optional[T]``, Rust
+  ``Option<T>`` / ``Result<T, E>``, AND Go's ``(T, error)``.
 
 Order: D24 -> D11. They are independent of each other.
 
@@ -30,6 +30,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from furqan.checker.all_paths_return import check_all_paths_return
+from furqan.checker.status_coverage import check_status_coverage
+
+from furqan_lint.runner import _is_may_fail_producer
 
 if TYPE_CHECKING:
     from furqan.parser.ast_nodes import Module
@@ -38,15 +41,21 @@ if TYPE_CHECKING:
 def check_go_module(module: Module) -> list[tuple[str, object]]:
     """Run the v0.8.0 Go checker pipeline on a translated Module.
 
-    v0.8.0 commit 3 ships D24 only. Commit 4 adds D11 wiring with
-    the cross-language ``_is_may_fail_producer`` predicate.
+    Pipeline: D24 -> D11. R3 (check_ring_close) is NOT wired
+    because Go has no body-shape analogue to Rust's
+    annotated-fn-with-empty-body pattern; deferred to whichever
+    Phase introduces a Go-specific zero-return checker, if any.
 
-    Note: this runner does NOT call ``check_ring_close`` (R3).
-    Go has no body-shape analogue to Rust's annotated-fn-with-
-    empty-body pattern; deferred to whichever Phase introduces a
-    Go-specific zero-return checker, if any.
+    D11 uses the cross-language ``_is_may_fail_producer``
+    predicate from ``furqan_lint.runner`` (Shape B per ADR-002
+    §10 Q3 follow-up). The predicate fires on Go's ``(T, error)``
+    return shape; a caller declaring a concrete return type and
+    calling a ``(T, error)``-returning helper without propagating
+    the error union is flagged with D11 status_coverage.
     """
     diagnostics: list[tuple[str, object]] = []
     for d in check_all_paths_return(module):
         diagnostics.append(("all_paths_return", d))
+    for d in check_status_coverage(module, producer_predicate=_is_may_fail_producer):
+        diagnostics.append(("status_coverage", d))
     return diagnostics

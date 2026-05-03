@@ -320,12 +320,12 @@ def test_result_predicate_does_not_match_option() -> None:
     import tempfile
     from pathlib import Path
 
-    from furqan_lint.rust_adapter import parse_file
-    from furqan_lint.rust_adapter.runner import (
+    from furqan_lint.runner import (
         _is_may_fail_producer,
         _is_optional_union,
         _is_result_type,
     )
+    from furqan_lint.rust_adapter import parse_file
 
     with tempfile.NamedTemporaryFile(suffix=".rs", delete=False) as fp:
         fp.write(b"fn f() -> Option<i32> { Some(0) }\n")
