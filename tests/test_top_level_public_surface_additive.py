@@ -56,6 +56,11 @@ V0_7_1_SURFACE: frozenset[str] = V0_7_0_SURFACE
 # unchanged).
 V0_7_2_SURFACE: frozenset[str] = V0_7_0_SURFACE
 
+# v0.7.3 was a documentation-sweep + release-sweep-gate corrective;
+# no top-level public surface change. Aliases V0_7_0_SURFACE per
+# the per-version cadence.
+V0_7_3_SURFACE: frozenset[str] = V0_7_0_SURFACE
+
 
 def _current_surface() -> frozenset[str]:
     """Return the current ``furqan_lint.__all__`` as a frozenset.
@@ -124,3 +129,18 @@ def test_v0_7_2_surface_is_subset_of_current() -> None:
         f"furqan_lint.__all__ removed names from the v0.7.2 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )
+
+
+def test_v0_7_3_surface_is_subset_of_current() -> None:
+    """The v0.7.3 baseline (alias of v0.7.0; documentation-sweep
+    corrective; no surface change) must remain a subset of the
+    current surface. Round-18 audit caught that v0.7.3's release
+    commit body claimed this snapshot existed; v0.7.4 corrective
+    backfills the omission."""
+    current = _current_surface()
+    missing = V0_7_3_SURFACE - current
+    assert not missing, (
+        f"furqan_lint.__all__ removed names from the v0.7.3 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+

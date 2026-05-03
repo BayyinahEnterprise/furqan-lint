@@ -110,12 +110,13 @@ Per-finding commit decomposition (Bayyinah v1.2.3 pattern):
 
 ### Tests
 
-- 241 passed (was 236 in v0.7.2). Delta: +5 (4 parametrized
-  diverging-macro cases + 2 release-sweep gate tests + 2
-  surface-snapshot subset tests - 1 retired
-  macro_invocation_body pinning test).
-- Marker counts: 192 unit + 47 integration + 1 network
-  (network is also integration-marked) = 241.
+- 242 passed (was 236 in v0.7.2). Delta: +6 (4 parametrized
+  diverging-macro + 2 release-sweep gate + 1 rust_adapter v0.7.3
+  baseline subset - 1 retired macro_invocation_body pinning test;
+  v0.7.4 corrective backfills the missing top-level v0.7.3
+  baseline subset to bring net delta to +7).
+- Marker counts: 192 unit + 49 integration + 1 network
+  (network is also integration-marked) = 242.
 
 ### Five Questions (release level, per Bayyinah Engineering Discipline Framework v2.0 §11.3)
 
