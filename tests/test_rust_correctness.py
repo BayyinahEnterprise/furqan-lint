@@ -60,7 +60,7 @@ def test_simple_returning_fn_is_pass() -> None:
     result = _run_check("clean/simple_returning_fn.rs")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "PASS" in result.stdout
-    assert "Rust Phase 2: R3 + D24 + D11" in result.stdout
+    assert "R3, D24, D11" in result.stdout
 
 
 @pytestmark_rust
@@ -134,17 +134,6 @@ def test_match_missing_arm_return_fires_d24() -> None:
 # ---------------------------------------------------------------------------
 # documented_limits/ fixtures: pin current behaviour
 # ---------------------------------------------------------------------------
-
-
-@pytestmark_rust
-def test_macro_invocation_body_is_silent_pass() -> None:
-    """Phase 1 cannot see through macro expansion; a function whose
-    body is a macro invocation passes silently. The Rust analogue
-    of R3 is deferred to v0.7.1; this test pins the current limit
-    so a future fix transitions intentionally."""
-    result = _run_check("documented_limits/macro_invocation_body.rs")
-    assert result.returncode == 0
-    assert "PASS" in result.stdout
 
 
 @pytestmark_rust
@@ -239,13 +228,56 @@ def test_r3_fires_on_unrelated_macro_with_semicolon() -> None:
 
 @pytestmark_rust
 def test_r3_silent_on_panic_as_tail_expression() -> None:
-    """Documented limit (v0.7.1): ``panic!()`` (no semicolon) used
-    as a tail expression does NOT fire R3 because the translator
-    synthesizes a ReturnStmt for any tail expression. Phase 3 may
-    revisit if the Rust ecosystem standardizes a #[diverging]
-    attribute on macros."""
+    """Documented limit: ``panic!()`` (no semicolon) used as a
+    tail expression does NOT fire R3 because the translator
+    synthesizes a ReturnStmt for any tail expression. The
+    fixture file pins the panic case as the canonical example;
+    test_r3_silent_on_diverging_macros_as_tail_expression below
+    parametrizes over the full diverging-macro family (panic,
+    todo, unimplemented, unreachable) to lock the structural rule
+    that R3 is grammar-and-macro-agnostic."""
     result = _run_check("documented_limits/r3_panic_as_tail_expression.rs")
     assert result.returncode == 0
+    assert "PASS" in result.stdout
+
+
+@pytestmark_rust
+@pytest.mark.parametrize(
+    "macro_invocation",
+    [
+        'panic!("never returns")',
+        'todo!("not yet implemented")',
+        "unimplemented!()",
+        "unreachable!()",
+    ],
+)
+def test_r3_silent_on_diverging_macros_as_tail_expression(tmp_path, macro_invocation: str) -> None:
+    """Round-17 MEDIUM 4: macro_invocation_body.rs and
+    r3_panic_as_tail_expression.rs pinned the same underlying
+    limit under different labels. v0.7.3 retired
+    macro_invocation_body and consolidated the cases into this
+    parametrized test that exercises the full diverging-macro
+    family. The structural rule R3 enforces (zero-ReturnStmt +
+    annotated return type, where the translator's tail-expression
+    synthesis produces statements=1 for the no-semicolon case)
+    is macro-identity-agnostic; this test pins that the rule
+    silences uniformly across the four canonical diverging
+    macros."""
+    rust_source = f"fn f() -> i32 {{ {macro_invocation} }}\n"
+    fixture = tmp_path / "diverging_macro.rs"
+    fixture.write_text(rust_source)
+    result = subprocess.run(
+        [sys.executable, "-m", "furqan_lint.cli", "check", str(fixture)],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0, (
+        f"R3 unexpectedly fired on `{macro_invocation}` as tail "
+        f"expression. The structural rule should silence uniformly "
+        f"across diverging macros, NOT fire on a hardcoded macro "
+        f"name allowlist.\nstdout:\n{result.stdout}"
+    )
     assert "PASS" in result.stdout
 
 

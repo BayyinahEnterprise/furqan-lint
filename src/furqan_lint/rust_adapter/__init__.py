@@ -1,6 +1,6 @@
 """Rust adapter: parse .rs files into a Furqan ``Module`` for D24 + D11.
 
-Phase 1 (v0.7.0). Opt-in via the ``[rust]`` extra:
+Opt-in via the ``[rust]`` extra:
 
     pip install furqan-lint[rust]
 

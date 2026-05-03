@@ -1,6 +1,6 @@
 """Run structural checkers on a translated Rust ``Module``.
 
-Phase 2 (v0.7.1) wires three checkers:
+Wires three checkers (current as of v0.7.2):
 
 * **R3 (zero-return)** via upstream ``furqan.checker.check_ring_close``.
   ``check_ring_close`` emits R1 (unresolved type), R3

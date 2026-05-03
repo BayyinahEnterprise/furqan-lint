@@ -4,8 +4,8 @@ Walks parents of a given path looking for the nearest ``Cargo.toml``.
 If found, parses the ``[package].edition`` field (one of "2018",
 "2021", "2024"). If absent or malformed, defaults to "2021".
 
-Phase 1 does not branch on edition: every fixture parses identically
-across 2018/2021/2024. The hook exists so v0.7.x can add an
+The current implementation does not branch on edition: every
+fixture parses identically across 2018/2021/2024. The hook exists so v0.7.x can add an
 edition-conditional fixture without restructuring.
 """
 
@@ -38,7 +38,7 @@ def edition_for(source_path: Path) -> str:
 
     A missing / malformed Cargo.toml or an unrecognised edition
     value silently falls back to the default. The fallback path is
-    documented in the v0.7.0 README under "Rust support (Phase 1)".
+    documented in the README under "Rust support (opt-in)".
     """
     for cargo_toml in _find_nearest_cargo_toml(source_path):
         return _edition_from_cargo_toml(cargo_toml)

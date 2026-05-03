@@ -1,6 +1,6 @@
 """Translate a tree-sitter-rust CST into a Furqan ``Module``.
 
-Phase 1 supports D24 (all-paths-return) and D11 (status-coverage).
+The translator supports D24, D11, and R3 (R3 wired in the runner).
 The translation is intentionally lossy: it preserves enough
 control-flow shape and return-type structure for those two checkers
 and discards everything else (lifetimes, trait objects' payloads,
@@ -24,7 +24,7 @@ section 3.4:
   D24/D11 do not apply to interface declarations.
 * ``closure_expression``: the structural-honesty argument that
   motivates D24 is weaker for inline closures than for top-level
-  functions; Phase 2 may revisit.
+  functions; a future phase may revisit.
 
 Return type translation
 =======================
@@ -34,7 +34,7 @@ Return type translation
 * ``T`` (any other) -> ``TypePath(T)``.
 
 The choice of ``TypePath("None")`` for Rust ``Option::None`` is a
-Phase 1 simplification (see ADR-001 reversibility note). Both
+IR-shape simplification (see ADR-001 reversibility note). Both
 ``Result`` and ``Option`` produce the ``UnionType``-with-some-arm
 shape that D11's ``producer_predicate`` already fires on.
 
@@ -60,7 +60,7 @@ other expressions and statements are left as opaque markers
 * Tail expression with no trailing ``;`` -> synthesise a
   ``ReturnStmt(opaque)`` per validator finding R1.
 * ``panic!()`` / ``todo!()`` / ``unimplemented!()`` macro
-  invocation at tail position -> treated as opaque (Phase 1 does
+  invocation at tail position -> treated as opaque (the translator does
   not catch the empty-body / panic-only case; deferred to v0.7.1
   per documented_limits/empty_or_panic_only_body.rs).
 
@@ -141,7 +141,7 @@ class RustExtrasNotInstalled(ImportError):
 
 @dataclass(frozen=True, slots=True)
 class _Edition:
-    """Ambient edition for a translated module. Phase 1 does not
+    """Ambient edition for a translated module. The translator does not
     branch on this; it exists so v0.7.x can add edition-conditional
     fixtures without restructuring the call sites.
     """
@@ -256,7 +256,7 @@ def _translate_function(node: Node, source_bytes: bytes, filename: str) -> Funct
     Calls are extracted as bare-name references; method calls
     ``self.foo(...)`` reduce to the method name ``foo`` matching the
     Python adapter convention. Cross-module calls are out of scope
-    for Phase 1 (no symbol table).
+    for v0.7.x (no symbol table).
     """
     name = _function_name(node) or "<anonymous>"
     span = _span(filename, node.start_point[0] + 1, node.start_point[1])
@@ -283,7 +283,7 @@ def _extract_calls(body: Node, default_span: SourceSpan) -> list[CallRef]:
     ``CallRef`` per call site, naming the callee. The Furqan D11
     checker resolves callee return types by looking up the name in
     the same Module's function table; cross-module calls are out of
-    scope for Phase 1.
+    scope for v0.7.x.
 
     Skips nested function/closure bodies so that calls inside a
     closure or nested fn are attributed to that inner scope (when
@@ -472,7 +472,7 @@ def _generic_arguments(node: Node) -> list[Node]:
 def _as_typepath(t: TypePath | UnionType) -> TypePath:
     """Coerce a translated type to a ``TypePath`` for use as an arm
     of a ``UnionType``. Nested unions are flattened by taking the
-    left arm; this is a Phase 1 simplification (Rust does not have
+    left arm; this is an IR-shape simplification (Rust does not have
     syntactic ``A | B`` types yet outside trait bounds, so the
     nested case is exotic).
     """
@@ -484,7 +484,7 @@ def _as_typepath(t: TypePath | UnionType) -> TypePath:
 def _function_body_or_empty(node: Node) -> list[Node]:
     """Return a list containing the function's ``body`` block, or
     an empty list if the function is bodiless (signature-only).
-    Phase 1 skips signature-only functions at discovery time so the
+    The walker skips signature-only functions at discovery time so the
     empty case is a defensive guard.
 
     Returns ``list[Node]`` (length 0 or 1) rather than
@@ -756,8 +756,8 @@ def _translate_loop(node: Node, source_bytes: bytes, filename: str, span: Source
     times'. The Python adapter does the same for ``for``/``while``/
     ``with``/``try``/``match``; this is the consistent pattern.
 
-    A future Phase 2 might walk the loop body for conservative
-    analysis, but Phase 1 treats the whole loop as opaque.
+    A future phase might walk the loop body for conservative
+    analysis, but the current implementation treats the whole loop as opaque.
     """
     return [
         IfStmt(

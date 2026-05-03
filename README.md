@@ -35,7 +35,7 @@ pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-langua
 pip install furqan-lint
 ```
 
-### Rust support (Phase 1, opt-in)
+### Rust support (opt-in)
 
 As of v0.7.0, furqan-lint can lint `.rs` files. Rust support is
 behind an opt-in extra so the Python-only install path is unchanged:
@@ -47,19 +47,25 @@ pip install "furqan-lint[rust]"
 This pulls in `tree-sitter` and `tree-sitter-rust` (PyPI ships
 ARM64 and x86_64 wheels for both; no source build required).
 
-As of v0.7.1, `.rs` files run three checkers: R3 (ring-close,
+As of v0.7.2, `.rs` files run three checkers: R3 (ring-close,
 zero-return on annotated functions, via upstream
 `furqan.checker.check_ring_close`), D24 (all-paths-return), and
-D11 (status-coverage on `Option<T>`-returning helpers). Phase 3
-(v0.7.2+) will add a Rust analogue of `return_none_mismatch` and a
-Result-aware D11 producer predicate. Trait objects, lifetimes,
-macro expansion, closure return-type checks, and Cargo workspace
-traversal remain out of scope.
+D11 (status-coverage). The D11 producer predicate recognises
+both `Option<T>` and `Result<T, E>` returns; a caller that calls
+a may-fail helper without propagating the union is flagged.
+
+The planned analogue of `return_none_mismatch` was dropped per
+the v0.7.2 prompt-grounding self-check, which empirically
+demonstrated that the firing condition is unreachable on any
+compilable Rust source (`rustc` rejects `fn f() -> i32 { None }`
+at compile time before furqan-lint sees the file). Trait objects,
+lifetimes, macro expansion, closure return-type checks, and
+Cargo workspace traversal remain out of scope.
 
 Edition is read from the nearest ancestor `Cargo.toml`'s
 `[package].edition` field (one of "2018", "2021", "2024"); if
 no Cargo.toml is found or the field is malformed, edition
-defaults to "2021". Phase 1 does not branch on edition.
+defaults to "2021". The current implementation does not branch on edition.
 
 ## Usage
 
@@ -349,22 +355,16 @@ than silent.
   regression demonstrates otherwise, extend the function walker to
   descend into local `ClassDef` bodies and call
   `_collect_class_methods`.
-### Rust adapter (v0.7.0 Phase 1)
+### Rust adapter (current as of v0.7.3)
 
 Each Rust limit has a fixture in
 `tests/fixtures/rust/documented_limits/` and a pinning test in
 `tests/test_rust_correctness.py`.
 
-- **Macro-invocation bodies.** A function whose body is a single
-  macro invocation (`todo!()`, `unimplemented!()`, etc.) is treated
-  as opaque. Phase 1 cannot see through macro expansion. The
-  Python adapter's R3 catches the analogous Python case
-  (`def f() -> int: pass`); the Rust analogue is deferred to
-  v0.7.1. Pinned as `tests/fixtures/rust/documented_limits/macro_invocation_body.rs`.
 - **Trait-object return types.** Functions returning `Box<dyn Trait>`
   are translated to a `TypePath` that ignores the trait-object
   payload. Trait-object polymorphism is out of scope; a future
-  Phase 2 checker would be the right place to revisit. Pinned as
+  a future checker would be the right place to revisit. Pinned as
   `tests/fixtures/rust/documented_limits/trait_object_return.rs`.
 - **Lifetime-affected return types.** Functions with explicit
   lifetime parameters (`fn f<'a>(...) -> &'a str`) have their
@@ -376,7 +376,7 @@ Each Rust limit has a fixture in
 - **Closures with annotated return types.** `closure_expression`
   nodes are skipped for D24, D11, AND R3 in v0.7.1. The outer
   function is checked normally; the closure body is opaque.
-  Phase 3 may revisit when there is a concrete user-reported
+  A future phase may revisit when there is a concrete user-reported
   false negative. Pinned as
   `tests/fixtures/rust/documented_limits/closure_with_annotated_return.rs`.
 - **`panic!()` (or any diverging macro) used as a tail expression
@@ -385,7 +385,7 @@ Each Rust limit has a fixture in
   does not fire on `fn f() -> i32 { panic!() }`. Adding a fix
   would require either a hardcoded diverging-macro allowlist
   (brittle) or cross-file type inference of the macro's expansion
-  type (out of scope). Phase 3 may revisit if the Rust ecosystem
+  type (out of scope). A future phase may revisit if the Rust ecosystem
   standardizes a `#[diverging]` attribute. Pinned as
   `tests/fixtures/rust/documented_limits/r3_panic_as_tail_expression.rs`.
 

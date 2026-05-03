@@ -1,5 +1,194 @@
 # Changelog
 
+## [0.7.3] - 2026-05-03
+
+Documentation-sweep corrective for the round-17 audit findings.
+Five MEDIUMs in one equivalence class: v0.7.2's release-sweep
+workflow updated CHANGELOG correctly but missed the user-facing
+surfaces (README headings, README rationale text, source
+docstrings, CLI PASS string, documented_limits/README preamble)
+that referenced the prior version's Phase number. v0.7.3 sweeps
+all of them, retires one redundant documented limit, and adds a
+release-time pre-flight gate so the failure mode does not recur.
+
+Per-finding commit decomposition (Bayyinah v1.2.3 pattern):
+
+  1. doc(rust): comprehensive Phase-numbering sweep across
+     user-facing surfaces (closes MEDIUMs 1, 2, 5 + Aux 1, 2, 3).
+  2. retire(rust): macro_invocation_body documented_limit
+     (consolidate into r3_panic_as_tail) (closes MEDIUMs 3, 4).
+  3. chore(release): release-time sweep gate (Fraz round-17
+     workflow addition; prevents recurrence).
+  4. release v0.7.3 (this commit: version bump + CHANGELOG +
+     V0_7_3_SURFACE).
+
+### Fixed
+
+- **Phase numbering swept from user-facing surfaces.** The CLI
+  PASS string at ``cli.py:204`` no longer says "Rust Phase 2"
+  on every clean check; it now says "(R3, D24, D11 with Option-
+  and Result-aware status coverage)". The README ``Rust support``
+  heading no longer says "Phase 1, opt-in"; the body paragraph
+  now describes the v0.7.2 state (three checkers, the
+  Option/Result-aware predicate, the dropped return_none_mismatch
+  rationale). The README ``Remaining limitations`` Rust subsection
+  heading is no longer anchored to "v0.7.0 Phase 1". Source-comment
+  Phase references in ``rust_adapter/__init__.py``, ``runner.py``,
+  ``translator.py``, ``edition.py``, and ``cli.py`` are swept to
+  durable phrasing ("the current implementation", "a future phase").
+  The ``documented_limits/README.md`` preamble no longer says
+  "v0.7.0 Rust adapter (Phase 1: D24 + D11 only)".
+- **CHANGELOG v0.7.2 entry "+4 net" math typo corrected to +7.**
+  3 D11 tests + 1 dead-code regression + 3 surface-snapshot tests
+  = +7 net. The original "+4 net" framing with parenthetical
+  "(corrected count below)" hinted at the typo but the corrected
+  count never landed in the line above; v0.7.3 corrects.
+- **Stale "deferred to v0.7.1" framing in
+  ``macro_invocation_body.rs`` retired.** The fixture's claim
+  that the Rust analogue of R3 was deferred to v0.7.1 was
+  historically inaccurate after v0.7.1 shipped R3; the comment
+  was not updated when v0.7.1 landed. Fixture and bullet
+  retired in commit 2 of this release.
+
+### Limitations retired
+
+- **``macro_invocation_body.rs``.** Was a v0.7.0 documented
+  limit ("a function whose body is a single macro invocation
+  is treated as opaque"). The limit was the same underlying
+  R3-tail-expression behavior pinned by
+  ``r3_panic_as_tail_expression.rs``: both pinned the v0.7.0
+  R1 translator rule that synthesizes a ``ReturnStmt(opaque)``
+  for any tail expression. Two fixtures pinned one limit, not
+  two. Consolidated into ``r3_panic_as_tail_expression`` whose
+  pinning test now parametrizes over the diverging-macro family
+  (``panic!``, ``todo!``, ``unimplemented!``, ``unreachable!``).
+  The README "Remaining limitations" section now has one bullet
+  for this limit instead of two.
+
+### Added
+
+- **Release-time sweep gate** in
+  ``tests/test_release_sweep_gate.py`` (Fraz round-17 workflow
+  addition). Two tests:
+  - ``test_no_phase_numbering_in_rust_user_surfaces``: greps
+    for ``\bPhase \d+\b`` across README, the documented_limits
+    README, ``cli.py``, and the four rust_adapter modules.
+    Fails (with file:line:context findings) if any surface
+    references "Phase N" numbering.
+  - ``test_no_stale_version_anchored_claims_in_user_surfaces``:
+    greps for ``\bv0.X.Y(.Z)?\s+(Rust adapter|Phase N)\b``
+    across the same surfaces. Fails if any surface anchors
+    a claim to a specific prior version.
+
+  Verified empirically: temporarily reintroduced the v0.7.2
+  "Rust Phase 2" PASS string to ``cli.py`` and ran the gate;
+  it correctly fails with the offending line. Restored;
+  passes again. The gate's discriminating power is pinned.
+
+  The gate is intentionally narrow: CHANGELOG is excluded
+  (audit trail), Python adapter modules are excluded for now
+  (out of scope for this round-17 corrective), and source
+  code that names specific implementation choices with
+  version anchors ("v0.7.0 translator emits ...") is
+  preserved as historical anchor. Future v0.7.x or v0.8 may
+  broaden the gate scope.
+- **Parametrized diverging-macro pinning test** in
+  ``test_rust_correctness.py``:
+  ``test_r3_silent_on_diverging_macros_as_tail_expression``
+  exercises 4 cases (``panic!``, ``todo!``, ``unimplemented!``,
+  ``unreachable!``) to lock the structural rule that R3 is
+  grammar-and-macro-agnostic. Replaces the single-fixture pin
+  for the consolidated limit.
+- **Per-version surface snapshots extended.**
+  ``tests/test_rust_public_surface_additive.py`` gains
+  ``_RUST_ADAPTER_PUBLIC_SURFACE_v0_7_3`` baseline (alias of
+  ``v0_7_0_1``; no surface change in this corrective).
+  ``tests/test_top_level_public_surface_additive.py`` gains
+  ``V0_7_3_SURFACE`` (alias of ``V0_7_0_SURFACE``). Per
+  Bayyinah Engineering Discipline Framework v2.0 §7.6
+  per-version cadence.
+
+### Tests
+
+- 241 passed (was 236 in v0.7.2). Delta: +5 (4 parametrized
+  diverging-macro cases + 2 release-sweep gate tests + 2
+  surface-snapshot subset tests - 1 retired
+  macro_invocation_body pinning test).
+- Marker counts: 192 unit + 47 integration + 1 network
+  (network is also integration-marked) = 241.
+
+### Five Questions (release level, per Bayyinah Engineering Discipline Framework v2.0 §11.3)
+
+1. **Smallest input demonstrating the new capability:**
+   ``furqan-lint check tests/fixtures/rust/clean/simple_returning_fn.rs``
+   On v0.7.2: PASS message says "Rust Phase 2: R3 + D24 + D11"
+   (stale Phase number that contradicts the CHANGELOG which
+   said v0.7.2 was Phase 3). On v0.7.3: PASS message says
+   "R3, D24, D11 with Option- and Result-aware status coverage"
+   (substantive checker description, no stale Phase numbering).
+
+2. **Smallest input demonstrating the bug pre-fix:** same input
+   on v0.7.2 prints Phase 2 even though v0.7.2 IS the release
+   where Result-aware D11 landed. CHANGELOG said Phase 3; CLI
+   said Phase 2; user saw the contradiction every clean check.
+
+3. **What this release does NOT do:**
+   (a) No Python adapter docstring sweep. The Python adapter's
+       "Phase 1 / Phase 2" references describe Python-only
+       semantics that pre-date the multi-language release model.
+       Out of scope for this round-17 corrective; can be swept
+       in a future v0.7.x release if Fraz flags them.
+   (b) No source-code historical-anchor sweep. Statements like
+       "v0.7.0 translator emits ..." are intentional historical
+       references and are preserved.
+   (c) No new checker behavior. Pure documentation sweep + one
+       limit consolidation + one new release-time gate.
+   (d) Does not retroactively gate prior releases (gate fires
+       on v0.7.3+ surfaces only).
+
+4. **New code paths:**
+   ``tests/test_release_sweep_gate.py`` (~120 LoC, 2 tests +
+   _USER_VISIBLE_SURFACES tuple + 2 regex patterns). 1
+   parametrized test (4 cases) replacing 1 single-fixture
+   test in ``test_rust_correctness.py``. Per-version snapshot
+   baselines for v0.7.3 in both surface snapshot files.
+
+5. **Limits retired and added:** retired
+   ``macro_invocation_body.rs`` (consolidated into
+   ``r3_panic_as_tail_expression.rs`` per the four-place
+   pattern). Added: none.
+
+### Validator-bias self-disclosure (per v0.7.0.1 §5.1 standing requirement)
+
+**Sandbox state at the time of testing:**
+
+```
+$ pip freeze | grep -E "tree_sitter|tomli|furqan"
+furqan @ file:///[...]/furqan-programming-language
+furqan-lint @ -e file:///tmp/furqan-lint
+tomli==2.4.1
+tree-sitter==0.25.2
+tree-sitter-rust==0.24.2
+```
+
+Same posture as v0.7.1 / v0.7.2.
+
+**Gates run from a clean state:**
+
+Gate 9 (empirical missing-extras) was run AFTER ``pip
+uninstall -y tree_sitter tree_sitter_rust``. Output matches
+the v0.7.0.1 contract. The release-sweep gate (commit 3) is
+empirically verified by the regression-introduction reproducer
+documented in commit 3's body: temporarily reintroduce a
+"Rust Phase 2" string and confirm the gate fires.
+
+**Gates that could not be run from a clean state:**
+
+Air-gap (``unshare -n``) was attempted but the build sandbox
+lacks ``CAP_SYS_ADMIN`` to namespace-isolate. Verifiable on
+the deploy host; same posture as v0.7.0 / v0.7.0.1 / v0.7.1
+/ v0.7.2.
+
 ## [0.7.2] - 2026-05-03
 
 Feature release. Phase 3 of the Rust adapter, scope-narrowed
@@ -103,12 +292,12 @@ shipped; archived in the discussion record).
 
 ### Tests
 
-- 233 passed (was 229 in v0.7.1). Delta: +4 (3 new D11 tests +
-  1 dead-code regression test + 3 new surface-snapshot tests
-  - 0 retired = +7; corrected count below).
-- Actual delta after measurement: +4 net (the 3 surface tests
-  count toward the snapshot baselines and were not present in
-  v0.7.1's 229).
+- 236 passed (was 229 in v0.7.1). Delta: +7 (3 new D11 tests +
+  1 dead-code regression test + 3 new surface-snapshot tests).
+  v0.7.2's release commit message originally said "+4 net"; the
+  v0.7.3 documentation sweep corrected it to +7. The 3 surface
+  tests are real test functions (not just snapshot baselines)
+  and count toward the total.
 - Marker counts: 188 unit + 44 integration (1 also network).
 
 ### Five Questions (release level, per Bayyinah Engineering Discipline Framework v2.0 section 11.3)

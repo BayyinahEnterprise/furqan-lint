@@ -83,7 +83,7 @@ def _check_file(path: Path) -> int:
     """Dispatch a check by file suffix.
 
     .py -> existing Python adapter pipeline.
-    .rs -> Rust adapter (Phase 1, opt-in via [rust] extra). If
+    .rs -> Rust adapter (opt-in via [rust] extra). If
     tree-sitter is not installed, prints an install hint to stderr
     and exits 1 (not 2; not-installed is a configuration issue,
     not a parse failure).
@@ -154,11 +154,14 @@ def _check_python_file(path: Path) -> int:
 
 
 def _check_rust_file(path: Path) -> int:
-    """Lint a single .rs file using the Phase 1 Rust adapter.
+    """Lint a single .rs file using the Rust adapter.
 
-    Runs D24 (all-paths-return) and D11 (status-coverage) only.
-    Phase 2 will add the Rust analogue of return_none_mismatch and
-    a ring-close R3 equivalent.
+    Runs three checkers: R3 (zero-return via upstream
+    ``furqan.checker.check_ring_close``), D24 (all-paths-return),
+    and D11 (status-coverage with Option- AND Result-aware
+    producer predicate). The Rust analogue of return_none_mismatch
+    was dropped per the v0.7.2 prompt-grounding self-check; see
+    rust_adapter/runner.py docstring for the rationale.
     """
     try:
         from furqan_lint.rust_adapter import (
@@ -189,7 +192,7 @@ def _check_rust_file(path: Path) -> int:
         print(f"  {e.kind}")
         return 2
 
-    # Phase 2 (v0.7.1): R3 + D24 + D11 via the Rust runner. The
+    # Rust pipeline: R3 + D24 + D11 via the Rust runner (current as of v0.7.2). The
     # runner wires upstream check_ring_close (filtered to R3-shaped
     # diagnostics), check_all_paths_return (D24), and
     # check_status_coverage (D11) in the order R3 -> D24 -> D11.
@@ -201,7 +204,9 @@ def _check_rust_file(path: Path) -> int:
 
     if not diagnostics:
         print(f"PASS  {path}")
-        print("  3 structural checks ran (Rust Phase 2: R3 + D24 + D11). Zero diagnostics.")
+        print(
+            "  3 structural checks ran (R3, D24, D11 with Option- and Result-aware status coverage). Zero diagnostics."
+        )
         return 0
 
     if marads:
