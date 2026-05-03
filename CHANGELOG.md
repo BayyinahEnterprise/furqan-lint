@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.8.3] - <DATE>
+
+Corrective release. Round-21 found 1 HIGH (Rust diff parse-
+error gate missing), 2 MEDIUM (goast IndexListExpr +
+extract_public_names docstring), 2 LOW. Closes all five plus
+lands two automated gates (CHANGELOG-math + four-place-
+completeness). Per-version baselines added.
+
+This commit (commit 1 of 7) is the placeholder header so the
+CHANGELOG-math gate (introduced in commit 5) does not self-
+fail on intermediate commits 1-5. The release commit (7)
+replaces ``<DATE>`` and the ``<TBD>`` test count with the
+empirical values measured at release time via ``pytest
+--collect-only -q``.
+
+### Tests
+
+Test count: 309 (v0.8.2) -> <TBD> (v0.8.3). Net delta: <TBD>.
+
 ## [0.8.2] - 2026-05-03
 
 Feature release. Adds the Rust additive-only diff path
