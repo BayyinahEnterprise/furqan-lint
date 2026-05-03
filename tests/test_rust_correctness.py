@@ -247,3 +247,60 @@ def test_r3_silent_on_panic_as_tail_expression() -> None:
     result = _run_check("documented_limits/r3_panic_as_tail_expression.rs")
     assert result.returncode == 0
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 (v0.7.2): Result-aware D11
+# ---------------------------------------------------------------------------
+
+
+@pytestmark_rust
+def test_d11_fires_on_result_collapse() -> None:
+    """A function declaring a concrete return type but calling a
+    Result-returning helper without propagating the union must
+    fire D11. v0.7.1 D11 only fired on Option-returning helpers;
+    v0.7.2 widens the producer predicate to recognise Result
+    via _is_result_type."""
+    result = _run_check("failing/result_collapse.rs")
+    assert result.returncode == 1
+    assert "MARAD" in result.stdout
+    assert "status_coverage" in result.stdout
+    assert "function 'parse_age'" in result.stdout
+    assert "parse_helper" in result.stdout
+
+
+@pytestmark_rust
+def test_d11_clean_when_result_propagated() -> None:
+    """A function that calls a Result-returning helper and
+    propagates the union via its own Result return type does NOT
+    fire D11. The honesty discipline is satisfied: the may-fail
+    contract is preserved up the call stack."""
+    result = _run_check("clean/result_propagated.rs")
+    assert result.returncode == 0
+    assert "PASS" in result.stdout
+
+
+@pytestmark_rust
+def test_result_predicate_does_not_match_option() -> None:
+    """_is_result_type must not fire on Option<T>; that is
+    _is_optional_union's domain. The two predicates partition
+    the may-fail-producer space cleanly."""
+    import tempfile
+    from pathlib import Path
+
+    from furqan_lint.rust_adapter import parse_file
+    from furqan_lint.rust_adapter.runner import (
+        _is_may_fail_producer,
+        _is_optional_union,
+        _is_result_type,
+    )
+
+    with tempfile.NamedTemporaryFile(suffix=".rs", delete=False) as fp:
+        fp.write(b"fn f() -> Option<i32> { Some(0) }\n")
+        path = Path(fp.name)
+    module = parse_file(path)
+    rt = module.functions[0].return_type
+    assert _is_optional_union(rt) is True
+    assert _is_result_type(rt) is False
+    # _is_may_fail_producer fires on either; sanity check the union
+    assert _is_may_fail_producer(rt) is True

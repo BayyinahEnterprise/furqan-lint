@@ -49,6 +49,13 @@ V0_7_0_1_SURFACE: frozenset[str] = V0_7_0_SURFACE
 # remain consistent with.
 V0_7_1_SURFACE: frozenset[str] = V0_7_0_SURFACE
 
+# v0.7.2 adds Result-aware D11 plus the dead-code regression test
+# but does not change the top-level public surface. Aliases
+# V0_7_0_SURFACE per the per-version cadence (every shipped
+# version gets a named constant, even when the surface is
+# unchanged).
+V0_7_2_SURFACE: frozenset[str] = V0_7_0_SURFACE
+
 
 def _current_surface() -> frozenset[str]:
     """Return the current ``furqan_lint.__all__`` as a frozenset.
@@ -106,3 +113,14 @@ def test_current_surface_is_not_empty() -> None:
     bind nothing) and is almost always a mistake."""
     current = _current_surface()
     assert current, "furqan_lint.__all__ is empty"
+
+
+def test_v0_7_2_surface_is_subset_of_current() -> None:
+    """The v0.7.2 baseline (alias of v0.7.0; no surface change in
+    this release) must remain a subset of the current surface."""
+    current = _current_surface()
+    missing = V0_7_2_SURFACE - current
+    assert not missing, (
+        f"furqan_lint.__all__ removed names from the v0.7.2 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
