@@ -62,33 +62,53 @@ class DynamicAllError(Exception):
 # ---------------------------------------------------------------------------
 
 
-def check_additive_api(
-    current_source: str,
-    previous_source: str,
-    filename: str = "<module>",
+# Language-aware re-export hint prose. Each entry is a format
+# string with one ``{name}`` placeholder. The Python form preserves
+# the v0.3.0 wording (compatibility-alias assignment); the Rust
+# form points at ``pub use ... as`` re-exports; the Go form points
+# at ``var Name = <new>`` package-level re-exports. Adding a new
+# language only needs an entry here plus the call site passing
+# ``language=<key>``.
+_RENAME_HINT: dict[str, str] = {
+    "python": "Restore '{name}' in the current version, or add a compatibility alias: {name} = <new_name>",
+    "rust": "Restore '{name}' in the current version, or add a re-export: pub use <new> as {name};",
+    "go": "Restore '{name}' in the current version, or add a re-export: var {name} = <new>",
+}
+
+
+def compare_name_sets(
+    previous_names: frozenset[str] | set[str],
+    current_names: frozenset[str] | set[str],
+    filename: str,
+    *,
+    language: str = "python",
 ) -> list[Marad]:
-    """Compare two versions of a module's public API.
+    """Language-agnostic public-name set diff.
 
-    Returns one :class:`Marad` per public name that was present in
-    ``previous_source`` and absent in ``current_source``. The
-    diagnostics are emitted in sorted name order so callers (and
-    tests) get a stable sequence.
+    Returns one :class:`Marad` per name present in
+    ``previous_names`` and absent from ``current_names``. The
+    diagnostic prose's ``minimal_fix`` is language-aware via the
+    module-private ``_RENAME_HINT`` map: Python users see
+    ``Name = <new_name>`` alias syntax, Rust users see
+    ``pub use <new> as Name;``, Go users see
+    ``var Name = <new>``.
 
-    Raises :class:`DynamicAllError` if either source declares
-    ``__all__`` non-statically. The CLI maps this to exit code 2.
+    The set extraction is the caller's responsibility -- this
+    function operates on already-collected name sets so the same
+    language-agnostic body serves the Python, Rust (future), and
+    Go diff paths. Diagnostics are emitted in sorted name order
+    for stability.
+
+    ``language`` defaults to ``"python"`` to preserve the historic
+    diagnostic prose for the Python entry point. Unknown
+    ``language`` values fall back to the Python hint rather than
+    raising; the registered languages are an inventory, not a
+    correctness boundary.
     """
-    try:
-        current_names = _extract_public_names(current_source)
-    except DynamicAllError as e:
-        raise DynamicAllError("new", e.detail) from e
-    try:
-        previous_names = _extract_public_names(previous_source)
-    except DynamicAllError as e:
-        raise DynamicAllError("old", e.detail) from e
-
-    removed = previous_names - current_names
+    hint_template = _RENAME_HINT.get(language, _RENAME_HINT["python"])
+    removed = sorted(set(previous_names) - set(current_names))
     diagnostics: list[Marad] = []
-    for name in sorted(removed):
+    for name in removed:
         diagnostics.append(
             Marad(
                 primitive="additive_only",
@@ -101,10 +121,7 @@ def check_additive_api(
                     f"rename."
                 ),
                 location=SourceSpan(file=filename, line=1, column=0),
-                minimal_fix=(
-                    f"Restore '{name}' in the current version, or "
-                    f"add a compatibility alias: {name} = <new_name>"
-                ),
+                minimal_fix=hint_template.format(name=name),
                 regression_check=(
                     f"After restoring '{name}', re-run "
                     f"`furqan-lint diff <old> <new>` and confirm "
@@ -113,6 +130,45 @@ def check_additive_api(
             )
         )
     return diagnostics
+
+
+def check_additive_api(
+    current_source: str,
+    previous_source: str,
+    filename: str = "<module>",
+) -> list[Marad]:
+    """Python-specific wrapper. Compare two versions of a module's
+    public API.
+
+    Returns one :class:`Marad` per public name that was present in
+    ``previous_source`` and absent in ``current_source``. The
+    diagnostics are emitted in sorted name order so callers (and
+    tests) get a stable sequence.
+
+    Raises :class:`DynamicAllError` if either source declares
+    ``__all__`` non-statically. The CLI maps this to exit code 2.
+
+    Implementation: extracts both Python public-name sets via
+    :func:`_extract_public_names` (which is Python-bound: it walks
+    an ``ast.parse`` tree) and delegates to the language-agnostic
+    :func:`compare_name_sets`. The signature is preserved for
+    backward compatibility -- callers that imported
+    ``check_additive_api`` continue to work without changes.
+    """
+    try:
+        current_names = _extract_public_names(current_source)
+    except DynamicAllError as e:
+        raise DynamicAllError("new", e.detail) from e
+    try:
+        previous_names = _extract_public_names(previous_source)
+    except DynamicAllError as e:
+        raise DynamicAllError("old", e.detail) from e
+    return compare_name_sets(
+        previous_names=frozenset(previous_names),
+        current_names=frozenset(current_names),
+        filename=filename,
+        language="python",
+    )
 
 
 # ---------------------------------------------------------------------------
