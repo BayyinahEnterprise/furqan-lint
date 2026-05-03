@@ -67,6 +67,45 @@ Edition is read from the nearest ancestor `Cargo.toml`'s
 no Cargo.toml is found or the field is malformed, edition
 defaults to "2021". The current implementation does not branch on edition.
 
+
+### Go support (opt-in)
+
+As of v0.8.1, furqan-lint can lint `.go` files. Go support is
+behind an opt-in extra so the Python-only install path is unchanged:
+
+```bash
+pip install "furqan-lint[go]"
+```
+
+The Go toolchain (1.21+) is required at install time so the
+PEP 517 build hook can compile the bundled `goast` binary; it
+is not required at runtime.
+
+As of v0.8.1, `.go` files run two checkers: D24 (all-paths-
+return) and D11 (status-coverage with the `(T, error)` firing
+shape). The cross-language `_is_may_fail_producer` predicate
+(Shape B) recognizes the `(T, error)` return convention; a
+caller that calls a may-fail helper without propagating the
+union is flagged. R3 (zero-return) is documented not-applicable
+to Go: the Go compiler rejects all firing shapes at compile
+time.
+
+Additive-only diff is supported for `.go` files: `furqan-lint
+diff old.go new.go` extracts uppercase-initial public names
+from each file via `goast` and reports any names that were
+present in `old` but not in `new`. The diagnostic prose is
+language-aware: Go users see `var Name = <new>` re-export hints
+rather than Python alias syntax. Cross-language diffs (e.g.
+`foo.py` vs `bar.go`) return exit 2 with a "Cross-language
+diff not supported" message.
+
+Method-name conflation in `goast`'s `public_names` is a known
+limitation in v0.8.1: same-named methods on distinct receivers
+collapse into one bare name. A removal of one method is masked
+by the other if the same name is still defined elsewhere. This
+is fixed in v0.8.2 by emitting qualified method names from
+`goast`.
+
 ## Usage
 
 ```bash
@@ -388,6 +427,70 @@ Each Rust limit has a fixture in
   type (out of scope). A future phase may revisit if the Rust ecosystem
   standardizes a `#[diverging]` attribute. Pinned as
   `tests/fixtures/rust/documented_limits/r3_panic_as_tail_expression.rs`.
+
+
+
+### Go adapter (current as of v0.8.1)
+
+Each Go limit has a fixture in
+`tests/fixtures/go/documented_limits/` and a pinning test in
+`tests/test_go_documented_limits.py` (or, for the older
+translator-level limits, in `tests/test_go_translator.py`).
+
+- **3+-element return signatures.** Translate to opaque
+  `TypePath("<multi-return>")`. D24 and D11 see the function
+  but cannot reason about the individual arms. Pinned as
+  `tests/fixtures/go/documented_limits/multi_return_three_or_more.go`.
+- **2-element non-error tuple returns.** Translate to opaque
+  `TypePath("(T, U)")`. D11's may-fail predicate does NOT fire
+  on these; only `(T, error)` shapes are recognized as may-fail
+  per locked decision 4. Pinned as
+  `tests/fixtures/go/documented_limits/two_element_non_error_tuple.go`.
+- **`for` and `for-range` bodies.** Wrap as may-runs-0-or-N
+  opaque IfStmt. D24 cannot prove that a `for` body that always
+  returns guarantees coverage. Pinned as
+  `tests/fixtures/go/documented_limits/for_statement_opaque.go`.
+- **`switch` bodies.** Wrap as may-runs-0-or-N opaque IfStmt;
+  case-arm returns are invisible to D24. Pinned as
+  `tests/fixtures/go/documented_limits/switch_statement_opaque.go`.
+- **`select` bodies.** Wrap as may-runs-0-or-N opaque IfStmt.
+  Pinned as
+  `tests/fixtures/go/documented_limits/select_statement_opaque.go`.
+- **`defer` statements.** Wrap as opaque; the deferred call's
+  effect on control flow (panic recovery, resource cleanup) is
+  not modeled. Pinned as
+  `tests/fixtures/go/documented_limits/defer_statement_opaque.go`.
+- **Interface method dispatch.** Calls through interface
+  receivers are not specially modeled; the receiver type is
+  opaque to the adapter. Pinned as
+  `tests/fixtures/go/documented_limits/interface_method_dispatch.go`.
+- **Generic type parameters.** Syntactically allowed in
+  signatures but their constraints are ignored. Pinned as
+  `tests/fixtures/go/documented_limits/generic_type_parameters.go`.
+- **R3 not-applicable.** The Go compiler rejects all R3 firing
+  shapes (zero-return on annotated functions) at compile time;
+  the only compilable nearest-edge case is a named-return with
+  bare `return`, which the translator sees as having a return
+  statement. Pinned as
+  `tests/fixtures/go/documented_limits/r3_compile_rejected.go`
+  (added in v0.8.1).
+- **Method-name conflation in `public_names`.** Same-named
+  methods on distinct receivers collapse into one bare name in
+  `goast`'s `public_names` field; the additive-only diff
+  reports the receiver-type removal but cannot detect a method
+  removal whose name is still defined elsewhere. v0.8.2 fixes
+  via qualified method-name emission. Pinned as
+  `tests/fixtures/go/documented_limits/method_conflation_v1.go`
+  + `method_conflation_v2.go` (added in v0.8.1).
+- **Rust additive-only diff is not implemented in v0.8.1.**
+  `furqan-lint diff foo.rs bar.rs` returns exit 2 with the
+  message "Rust diff not implemented in v0.8.1. See CHANGELOG
+  for the v0.8.2 schedule." The Rust adapter does not yet
+  extract public names. Pinned via tmp_path-generated trivial
+  `.rs` files in
+  `tests/test_rust_diff_not_implemented.py`; see also
+  `tests/fixtures/rust/documented_limits/diff_not_implemented.rs`
+  for the documentation comment (added in v0.8.1).
 
 ## License
 

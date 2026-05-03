@@ -265,6 +265,23 @@ in commit 0 of this series. The §0 framing was therefore
 partially redundant (1 of 3 findings already closed); the
 v0.7.4 corrective scope shrank from 3 items to 2.
 
+## [0.7.4] - 2026-05-03 (absorbed into v0.8.0)
+
+### Fixed
+
+- Backfill ``V0_7_3_SURFACE`` constant in
+  ``tests/test_top_level_public_surface_additive.py``. Round-18
+  audit caught that v0.7.3's release commit body claimed the
+  snapshot existed in both surface tests; only the rust_adapter
+  test was extended.
+- Correct CHANGELOG ``### Tests`` math for v0.7.3: actual delta
+  is +6 (not +5); empirical pytest shows 242 (not 241).
+
+### Note
+
+This corrective was absorbed into v0.8.0's commit 0 rather than
+shipping as a separate tag.
+
 ## [0.7.3] - 2026-05-03
 
 Documentation-sweep corrective for the round-17 audit findings.
