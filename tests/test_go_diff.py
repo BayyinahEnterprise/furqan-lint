@@ -149,16 +149,23 @@ def test_extract_public_names_returns_frozenset(tmp_path: Path) -> None:
     assert isinstance(names, frozenset)
 
 
-def test_extract_public_names_includes_method_names_unqualified(
+def test_extract_public_names_includes_qualified_method_names(
     tmp_path: Path,
 ) -> None:
-    """Documents that method names are collected WITHOUT receiver
-    qualification. This is the load-bearing pin for the
-    method-conflation false-negative documented in
-    tests/test_go_documented_limits.py (added in v0.8.1 commit 4).
-    A future v0.8.2 fix that emits qualified method names will
-    flip this assertion to expect 'Counter.Foo' and 'Logger.Foo';
-    that flip will be intentional and visible.
+    """v0.8.2: method names are collected WITH receiver-type
+    qualification (Counter.Foo, Logger.Foo). This is the FLIPPED
+    form of the v0.8.1 anticipatory pin
+    test_extract_public_names_includes_method_names_unqualified
+    -- the v0.8.1 docstring explicitly noted "v0.8.2 will flip
+    this assertion".
+
+    The flip is what closes the v0.8.1-documented method-name
+    conflation false-negative: distinct Foo methods on different
+    receivers no longer collapse into one bare 'Foo' entry, so
+    the additive-only diff catches the removal of one of them
+    even when the other persists. The retirement of the
+    method_conflation_v1 / v2 documented-limit fixtures lands
+    in v0.8.2 commit 4.
     """
     from furqan_lint.go_adapter import extract_public_names
 
@@ -171,6 +178,62 @@ def test_extract_public_names_includes_method_names_unqualified(
         "func (l *Logger) Foo() {}\n"
     )
     names = extract_public_names(src)
-    # v0.8.1 contract: method names appear bare, no receiver-type
-    # qualification. Two distinct Foo methods collapse to one.
-    assert names == frozenset({"Counter", "Logger", "Foo"})
+    # v0.8.2 contract: method names are qualified by their
+    # receiver type. Two distinct Foo methods now appear as
+    # distinct names (Counter.Foo and Logger.Foo).
+    assert names == frozenset({"Counter", "Logger", "Counter.Foo", "Logger.Foo"})
+
+
+def test_go_diff_method_conflation_now_detected(tmp_path: Path) -> None:
+    """v0.8.2: with qualified method-name emission in goast, the
+    v0.8.1 method-name conflation false-negative is closed.
+
+    RETIREMENT INVERSION (v0.8.2): replaces v0.8.1's
+    test_go_diff_method_conflation_documented in
+    test_go_documented_limits.py, which pinned the false-
+    negative shape (only 'Logger' reported, 'Foo' missed).
+    v0.8.2's qualified emission means Counter.Foo and Logger.Foo
+    are distinct entries, so removing Logger AND Logger.Foo
+    surfaces both removals.
+
+    The fixture pair lived at
+    tests/fixtures/go/documented_limits/method_conflation_v1.go
+    and method_conflation_v2.go; both deleted in this commit.
+    Replacement uses tmp_path to avoid recreating documented-
+    limit infrastructure for a closed limit.
+    """
+    v1 = tmp_path / "v1.go"
+    v2 = tmp_path / "v2.go"
+    v1.write_text(
+        "package api\n"
+        "type Counter struct{}\n"
+        "type Logger struct{}\n"
+        "func (c *Counter) Foo() {}\n"
+        "func (l *Logger) Foo() {}\n"
+    )
+    v2.write_text("package api\n" "type Counter struct{}\n" "func (c *Counter) Foo() {}\n")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "furqan_lint.cli",
+            "diff",
+            str(v1),
+            str(v2),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "MARAD" in result.stdout
+    # Logger IS reported (type removal disappears from the set).
+    assert "'Logger'" in result.stdout
+    # Logger.Foo IS reported (the v0.8.1 false-negative is now
+    # closed; qualified emission keeps Logger.Foo and Counter.Foo
+    # as distinct entries).
+    assert "'Logger.Foo'" in result.stdout
+    # Counter is preserved (still in v2).
+    assert "'Counter'" not in result.stdout
+    # Counter.Foo is preserved (still in v2).
+    assert "'Counter.Foo'" not in result.stdout

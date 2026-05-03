@@ -317,10 +317,10 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
     1. Cross-language pairs (suffix mismatch) return exit 2 with
        a "Cross-language diff not supported" message. MUST be
        evaluated FIRST so a ``foo.py`` vs ``bar.rs`` pair says
-       "cross-language", not "Rust diff not implemented".
-    2. ``.rs`` vs ``.rs`` pairs return exit 2 with the
-       "Rust diff not implemented in v0.8.1" message (locked
-       decision 2: Rust diff deferred to v0.8.2).
+       "cross-language", not the language-specific verdict.
+    2. ``.rs`` vs ``.rs`` pairs route to ``_check_rust_additive``
+       (added in v0.8.2 commit 2; replaced the v0.8.1
+       not-implemented guard).
     3. ``.go`` vs ``.go`` pairs route to ``_check_go_additive``
        (added in v0.8.1 commit 2).
     4. Default: ``_check_python_additive`` (preserved verbatim
@@ -335,11 +335,9 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
         )
         return 2
 
-    # Guard 2: Rust diff not yet implemented (deferred to v0.8.2).
+    # Guard 2: Rust diff (added in v0.8.2 commit 2).
     if old_path.suffix == ".rs":
-        print(f"PARSE ERROR  {new_path} (additive-only)")
-        print("  Rust diff not implemented in v0.8.1. " "See CHANGELOG for the v0.8.2 schedule.")
-        return 2
+        return _check_rust_additive(old_path, new_path)
 
     # Guard 3: Go diff (added in v0.8.1 commit 2).
     if old_path.suffix == ".go":
@@ -382,6 +380,61 @@ def _check_python_additive(old_path: Path, new_path: Path) -> int:
             "with a literal list or tuple of string literals."
         )
         return 2
+
+    if not diagnostics:
+        print(f"PASS  {new_path} (additive-only)")
+        print("  No public names removed.")
+        return 0
+
+    print(f"MARAD  {new_path} (additive-only)")
+    print(f"  {len(diagnostics)} violation(s):")
+    for m in diagnostics:
+        print(f"    [additive_only] {m.diagnosis}")
+        print(f"      fix: {m.minimal_fix}")
+    return 1
+
+
+def _check_rust_additive(old_path: Path, new_path: Path) -> int:
+    """Rust additive-only diff via :func:`compare_name_sets` plus
+    :func:`extract_public_names` from each ``.rs`` file.
+
+    Catches ``RustExtrasNotInstalled`` (install hint, exit 1) and
+    ``RustParseError`` (exit 2) per the v0.7.0.1 typed-exception
+    pattern: the user sees a one-line message, not a Python
+    traceback. Mirrors :func:`_check_go_additive` exactly minus
+    the language tag.
+    """
+    try:
+        from furqan_lint.additive import compare_name_sets
+        from furqan_lint.rust_adapter import (
+            RustExtrasNotInstalled,
+            RustParseError,
+            extract_public_names,
+        )
+    except ImportError:
+        print(
+            "Rust support not installed. Run: pip install furqan-lint[rust]",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        old_names = extract_public_names(old_path)
+        new_names = extract_public_names(new_path)
+    except RustExtrasNotInstalled as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    except RustParseError as e:
+        print(f"PARSE ERROR  {new_path} (additive-only)")
+        print(f"  {e}")
+        return 2
+
+    diagnostics = compare_name_sets(
+        previous_names=old_names,
+        current_names=new_names,
+        filename=str(new_path),
+        language="rust",
+    )
 
     if not diagnostics:
         print(f"PASS  {new_path} (additive-only)")

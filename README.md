@@ -70,7 +70,7 @@ defaults to "2021". The current implementation does not branch on edition.
 
 ### Go support (opt-in)
 
-As of v0.8.1, furqan-lint can lint `.go` files. Go support is
+As of v0.8.1, furqan-lint can lint `.go` files (Go diff in v0.8.1; goast emits qualified method names as of v0.8.2). Go support is
 behind an opt-in extra so the Python-only install path is unchanged:
 
 ```bash
@@ -98,13 +98,6 @@ language-aware: Go users see `var Name = <new>` re-export hints
 rather than Python alias syntax. Cross-language diffs (e.g.
 `foo.py` vs `bar.go`) return exit 2 with a "Cross-language
 diff not supported" message.
-
-Method-name conflation in `goast`'s `public_names` is a known
-limitation in v0.8.1: same-named methods on distinct receivers
-collapse into one bare name. A removal of one method is masked
-by the other if the same name is still defined elsewhere. This
-is fixed in v0.8.2 by emitting qualified method names from
-`goast`.
 
 ## Usage
 
@@ -430,7 +423,7 @@ Each Rust limit has a fixture in
 
 
 
-### Go adapter (current as of v0.8.1)
+### Go adapter (current as of v0.8.2)
 
 Each Go limit has a fixture in
 `tests/fixtures/go/documented_limits/` and a pinning test in
@@ -474,23 +467,6 @@ translator-level limits, in `tests/test_go_translator.py`).
   statement. Pinned as
   `tests/fixtures/go/documented_limits/r3_compile_rejected.go`
   (added in v0.8.1).
-- **Method-name conflation in `public_names`.** Same-named
-  methods on distinct receivers collapse into one bare name in
-  `goast`'s `public_names` field; the additive-only diff
-  reports the receiver-type removal but cannot detect a method
-  removal whose name is still defined elsewhere. v0.8.2 fixes
-  via qualified method-name emission. Pinned as
-  `tests/fixtures/go/documented_limits/method_conflation_v1.go`
-  + `method_conflation_v2.go` (added in v0.8.1).
-- **Rust additive-only diff is not implemented in v0.8.1.**
-  `furqan-lint diff foo.rs bar.rs` returns exit 2 with the
-  message "Rust diff not implemented in v0.8.1. See CHANGELOG
-  for the v0.8.2 schedule." The Rust adapter does not yet
-  extract public names. Pinned via tmp_path-generated trivial
-  `.rs` files in
-  `tests/test_rust_diff_not_implemented.py`; see also
-  `tests/fixtures/rust/documented_limits/diff_not_implemented.rs`
-  for the documentation comment (added in v0.8.1).
 
 ## License
 

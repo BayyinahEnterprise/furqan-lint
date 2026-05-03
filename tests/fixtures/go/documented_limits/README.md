@@ -22,9 +22,29 @@ reflect in the test.
 | `interface_method_dispatch.go` | Calls through interface receivers are not specially modeled (the receiver type is opaque) | v0.8.0 | A future phase may add type-aware dispatch via `go/types` |
 | `generic_type_parameters.go` | Generic type parameters in function signatures are syntactically allowed; their constraints are ignored | v0.8.0 | A future phase may add type-parameter awareness |
 | `r3_compile_rejected.go` | R3 (zero-return) is documented not-applicable to Go: the compiler rejects all firing shapes | v0.8.1 | Predetermined; not a phase deferral |
-| `method_conflation_v1.go`, `method_conflation_v2.go` | Same-named methods on distinct receivers collapse in `public_names`; diff false-negative on partial removal | v0.8.0 (pre-existing in goast) | v0.8.2 fixes via qualified method-name emission in goast |
-| `diff_not_implemented_rust.rs` | Rust additive-only diff is not implemented in v0.8.1; see `tests/fixtures/rust/documented_limits/` for the mirror | v0.8.1 | v0.8.2 implements |
 
 The Go adapter (current as of v0.8.1) ships D24, D11, and an
 additive-only diff. R3 is documented not-applicable. The 8
 v0.8.0 limits above remain unchanged in v0.8.1.
+
+## Retired in v0.8.2
+
+- **Method-name conflation in `public_names`** (was v0.8.1).
+  Closed by the goast change in
+  `cmd/goast/main.go`'s `receiverTypeName` helper, which emits
+  qualified method names (`Counter.Foo`, `Logger.Foo`) so
+  distinct methods on different receivers no longer collapse.
+  Replacement positive test:
+  `test_go_diff_method_conflation_now_detected` in
+  `tests/test_go_diff.py` (uses `tmp_path` to avoid recreating
+  documented-limit infrastructure for a closed limit). Fixtures
+  `method_conflation_v1.go` and `method_conflation_v2.go`
+  deleted.
+
+- **Rust additive-only diff is not implemented** (was v0.8.1).
+  Closed by v0.8.2's `rust_adapter.public_names.extract_public_names`
+  plus the CLI dispatcher's new `_check_rust_additive` helper.
+  See `tests/test_rust_diff.py` for the v0.8.2 verdict
+  pinning. Mirror fixture
+  `tests/fixtures/rust/documented_limits/diff_not_implemented.rs`
+  deleted.
