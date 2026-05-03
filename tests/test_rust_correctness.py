@@ -364,6 +364,7 @@ def test_rust_extract_omits_impl_methods() -> None:
     assert names == frozenset({"Counter"}), f"Expected only 'Counter', got: {sorted(names)}"
 
 
+@pytestmark_rust
 def test_trait_object_return_documented_limit() -> None:
     """Backfill (v0.8.3): the v0.7.0 fixture
     ``trait_object_return.rs`` had a header comment and a
@@ -384,6 +385,7 @@ def test_trait_object_return_documented_limit() -> None:
     assert "PASS" in result.stdout
 
 
+@pytestmark_rust
 def test_lifetime_param_return_documented_limit() -> None:
     """Backfill (v0.8.3): the v0.7.0 fixture
     ``lifetime_param_return.rs`` had a header comment and a
