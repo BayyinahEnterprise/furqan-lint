@@ -162,9 +162,9 @@ def test_round7_bare_union_produces_helpful_fix_suggestion() -> None:
         f"incoherent Optional[Union] suggestion. v0.3.4 must "
         f"detect the bare-name case for Union as well."
     )
-    assert "not valid typing syntax" in fix or "Union[X]" in fix, (
-        f"_suggested_fix returned {fix!r} but does not name the real bug for bare Union."
-    )
+    assert (
+        "not valid typing syntax" in fix or "Union[X]" in fix
+    ), f"_suggested_fix returned {fix!r} but does not name the real bug for bare Union."
 
 
 def test_round7_normal_type_path_still_uses_optional_suggestion() -> None:
@@ -203,12 +203,12 @@ def test_bare_union_suggests_union_x_none_not_union_x() -> None:
         layer_alias_used=None,
     )
     fix = _suggested_fix(rt)
-    assert "Union[X, None]" in fix, (
-        f"v0.4.1: bare-Union fix must include 'Union[X, None]', got {fix!r}"
-    )
+    assert (
+        "Union[X, None]" in fix
+    ), f"v0.4.1: bare-Union fix must include 'Union[X, None]', got {fix!r}"
     # Must NOT recommend the degenerate one-arm Union[X] form
     # standalone. We allow the substring 'Union[X' as part of
     # 'Union[X, None]' but disallow the closed form 'Union[X]'.
-    assert "Union[X]" not in fix, (
-        f"v0.4.1: bare-Union fix should NOT suggest the degenerate Union[X] form, got {fix!r}"
-    )
+    assert (
+        "Union[X]" not in fix
+    ), f"v0.4.1: bare-Union fix should NOT suggest the degenerate Union[X] form, got {fix!r}"

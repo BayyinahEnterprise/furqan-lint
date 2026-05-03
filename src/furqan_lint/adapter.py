@@ -71,7 +71,7 @@ def _translate_module(tree: ast.Module, filename: str) -> Module:
     compound_types: list[CompoundTypeDef] = []
 
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             functions.append(_translate_function(node, filename))
         elif isinstance(node, ast.ClassDef):
             compound_types.append(_translate_class(node, filename))
@@ -136,7 +136,7 @@ def _collect_class_methods(
     """
     methods: list[FunctionDef] = []
     for child in class_node.body:
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
             methods.append(_translate_function(child, filename))
         elif isinstance(child, ast.ClassDef):
             methods.extend(_collect_class_methods(child, filename))
@@ -647,7 +647,7 @@ def _translate_body(
                     else_body=tuple(_translate_body(node.orelse, filename)),
                 )
             )
-        elif isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
+        elif isinstance(node, ast.For | ast.AsyncFor | ast.While):
             inner = _translate_body(node.body, filename)
             # for/while-else clauses run when the loop terminates
             # without break. They are equally "may run" for our
@@ -655,7 +655,7 @@ def _translate_body(
             inner.extend(_translate_body(node.orelse, filename))
             if inner:
                 result.append(_maybe_runs_if(inner, node, filename))
-        elif isinstance(node, (ast.With, ast.AsyncWith)):
+        elif isinstance(node, ast.With | ast.AsyncWith):
             result.extend(_translate_body(node.body, filename))
         elif isinstance(node, ast.Try):
             # v0.3.5: model try/except control flow correctly.
@@ -793,7 +793,7 @@ def _extract_calls(
         # calls are attributed to the inner definition (or to
         # nothing, if the inner def is itself a method whose
         # methods get extracted at module level).
-        if not is_root and isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if not is_root and isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             return
         if isinstance(n, ast.Call):
             name = _call_name(n)
@@ -809,7 +809,7 @@ def _extract_calls(
             # walking the root node.
             if (
                 is_root
-                and isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
                 and hasattr(n, "decorator_list")
                 and child in n.decorator_list
             ):

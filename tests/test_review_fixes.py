@@ -251,9 +251,9 @@ def test_bug4_d11_uses_producer_predicate_kwarg() -> None:
     # Sanity: the kwarg path still produces the expected D11 diagnostic
     # on this canonical Optional-collapse fixture.
     s_diags = [d for n, d in diags if n == "status_coverage"]
-    assert any(getattr(d, "diagnosis", "").find("validate") != -1 for d in s_diags), (
-        "Expected a status_coverage diagnostic naming 'validate'"
-    )
+    assert any(
+        getattr(d, "diagnosis", "").find("validate") != -1 for d in s_diags
+    ), "Expected a status_coverage diagnostic naming 'validate'"
 
 
 # ---------------------------------------------------------------------------

@@ -150,7 +150,7 @@ def _extract_public_names(source: str) -> set[str]:
 
     names: set[str] = set()
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             if not node.name.startswith("_"):
                 names.add(node.name)
         elif isinstance(node, ast.Assign):
@@ -182,7 +182,7 @@ def _extract_all_list(node: ast.expr) -> set[str]:
     for names that aren't actually removed, false negatives for
     names that are).
     """
-    if not isinstance(node, (ast.List, ast.Tuple)):
+    if not isinstance(node, ast.List | ast.Tuple):
         raise DynamicAllError(
             detail=(f"value is a {type(node).__name__}, not a literal list or tuple")
         )

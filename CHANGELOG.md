@@ -1,5 +1,71 @@
 # Changelog
 
+## [0.5.1] - 2026-05-03
+
+Round-9 corrective from Fraz Ashraf. CRITICAL: ruff version drift
+between CI and pre-commit caused CI to pass while the pre-commit
+dogfood would have failed; the v0.5.0 CHANGELOG claim "pre-commit
+run --all-files exits 0" was empirically false.
+
+### Fixed
+
+- **CRITICAL: ruff version drift between CI and pre-commit.** v0.5.0
+  declared `ruff>=0.8.0` (unpinned upper) in the `[dev]` extras. CI
+  resolved this to ruff 0.15.12 where UP038 was removed; pre-commit
+  pinned 0.8.0 where UP038 fires. CI passed; the pre-commit dogfood
+  failed; the CHANGELOG claim "pre-commit run --all-files exits 0"
+  was empirically false. Pinned `ruff==0.8.0` in `[dev]` so all four
+  surfaces (CI, pre-commit, contributor local, Fraz's reproducer)
+  run the same checks.
+- **CRITICAL: 8 UP038 violations in src/.** Migrated
+  `isinstance(x, (A, B))` to `isinstance(x, A | B)` in adapter.py
+  (6 sites) and additive.py (2 sites). Semantically identical on
+  Python 3.10+ (the project's minimum version).
+- **CRITICAL: 3 unformatted files.** Reformatted test_review_fixes.py,
+  test_round7_fixes.py, and test_tooling.py. Whitespace and line
+  wrapping only.
+- **HIGH: CHANGELOG unit count corrected.** v0.5.0 said "135 unit";
+  actual count is 138 unit. The 3 test_tooling.py tests are marked
+  unit but were counted separately in the narrative.
+
+### Added
+
+- Functional tests: `test_ruff_check_exits_zero_on_repo` and
+  `test_ruff_format_check_exits_zero_on_repo`. These are the
+  functional pair to the existing structural
+  `test_pyproject_has_ruff_config` per framework Section 8.6
+  (structural-vs-functional pairing). Catches the v0.5.0 CRITICAL
+  class: config exists but tool fails. The tests are meaningful
+  only because `[dev]` now pins ruff exactly.
+
+### Notes
+
+- CLI shows 0% branch coverage because tests run via subprocess
+  and coverage does not propagate through subprocess by default.
+  Functional coverage of the CLI is provided by tests/test_action.py
+  and the round-N regression tests. Subprocess coverage propagation
+  is a v0.6.0 candidate.
+- The version-drift root cause is the framework Section 8.6 pattern
+  applied to a transitive dependency surface: the project verified
+  the schema (`[tool.ruff]` exists in pyproject) but did not verify
+  the functional outcome under the pinned version contributors and
+  pre-commit actually run. Round-9 finding from Fraz Ashraf.
+
+### Five Questions (audit framework Section 11.3)
+
+1. **What does this commit change?** Pins ruff==0.8.0 in [dev],
+   migrates 8 isinstance tuples to X | Y, reformats 3 test files,
+   corrects CHANGELOG unit count, adds 2 functional tests.
+2. **What does it not change?** No checker behavior. No public API.
+   No fixture content. No ADR-backed decisions reversed.
+3. **What is the verification?** `ruff check .` exits 0,
+   `ruff format --check .` exits 0, `mypy` exits 0,
+   `pre-commit run --all-files` exits 0, all 154 tests pass.
+4. **What is deferred?** Subprocess coverage propagation (v0.6.0).
+   Considered ruff bump to 0.15+ (deferred to deliberate ADR).
+5. **What is the rollback?** `git revert` of the v0.5.1 commit
+   restores v0.5.0 state. No data migration.
+
 ## [0.5.0] - 2026-05-03
 
 Dev tooling integration. No new checker logic; the tool starts
@@ -47,7 +113,7 @@ checking itself.
   ignored with explanatory comments (PLW1510 is intentional;
   cli.py PLC0415 is the lazy-import-for-fast-version pattern;
   PLR0911/PLR0912 are pre-existing API surface).
-- All 148 existing tests carry pytest markers (135 unit, 13
+- All 148 existing tests carry pytest markers (138 unit, 13
   integration; the 1 v0.4.1 network test stays double-marked).
 
 ### Not added (deliberate, per recommendation document)
