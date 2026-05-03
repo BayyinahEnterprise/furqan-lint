@@ -31,6 +31,7 @@ EXCLUDED_DIRS: frozenset[str] = frozenset(
         "node_modules",
         ".tox",
         ".mypy_cache",
+        "target",
     }
 )
 
@@ -79,6 +80,23 @@ def _print_usage(file: TextIO | None = None) -> None:
 
 
 def _check_file(path: Path) -> int:
+    """Dispatch a check by file suffix.
+
+    .py -> existing Python adapter pipeline.
+    .rs -> Rust adapter (Phase 1, opt-in via [rust] extra). If
+    tree-sitter is not installed, prints an install hint to stderr
+    and exits 1 (not 2; not-installed is a configuration issue,
+    not a parse failure).
+
+    Any other suffix is treated as Python (back-compat with v0.6.x;
+    callers who pass a .py.bak or similar still get the old behaviour).
+    """
+    if path.suffix == ".rs":
+        return _check_rust_file(path)
+    return _check_python_file(path)
+
+
+def _check_python_file(path: Path) -> int:
     import ast as _ast
 
     from furqan.errors.marad import Advisory, Marad
@@ -135,6 +153,75 @@ def _check_file(path: Path) -> int:
     return 1 if is_failure else 0
 
 
+def _check_rust_file(path: Path) -> int:
+    """Lint a single .rs file using the Phase 1 Rust adapter.
+
+    Runs D24 (all-paths-return) and D11 (status-coverage) only.
+    Phase 2 will add the Rust analogue of return_none_mismatch and
+    a ring-close R3 equivalent.
+    """
+    try:
+        from furqan_lint.rust_adapter import RustParseError
+        from furqan_lint.rust_adapter import parse_file as parse_rust
+    except ImportError:
+        print(
+            "Rust support not installed. Run: pip install furqan-lint[rust]",
+            file=sys.stderr,
+        )
+        return 1
+
+    from furqan.errors.marad import Advisory, Marad
+
+    from furqan_lint.runner import _is_optional_union
+
+    try:
+        module = parse_rust(path)
+    except RustParseError as e:
+        print(f"PARSE ERROR  {path}:{e.line}")
+        print(f"  {e.kind}")
+        return 2
+
+    # Phase 1: D24 + D11 only. We call the Furqan checkers directly
+    # instead of going through check_python_module because the Python
+    # pipeline includes return_none and R3 which do not have Rust
+    # analogues yet.
+    from furqan.checker.all_paths_return import check_all_paths_return
+    from furqan.checker.status_coverage import check_status_coverage
+
+    diagnostics: list[tuple[str, object]] = []
+    for d in check_all_paths_return(module):
+        diagnostics.append(("all_paths_return", d))
+    for d in check_status_coverage(module, producer_predicate=_is_optional_union):
+        diagnostics.append(("status_coverage", d))
+
+    marads = [(n, d) for n, d in diagnostics if isinstance(d, Marad)]
+    advisories = [(n, d) for n, d in diagnostics if isinstance(d, Advisory)]
+
+    if not diagnostics:
+        print(f"PASS  {path}")
+        print("  2 structural checks ran (Rust Phase 1: D24 + D11). Zero diagnostics.")
+        return 0
+
+    if marads:
+        print(f"MARAD  {path}")
+        print(f"  {len(marads)} violation(s):")
+        for name, m in marads:
+            print(f"    [{name}] {m.diagnosis}")
+            fix = getattr(m, "minimal_fix", None)
+            if fix:
+                print(f"      fix: {fix}")
+        print()
+
+    if advisories:
+        print(f"ADVISORY  {path}")
+        print(f"  {len(advisories)} note(s):")
+        for name, a in advisories:
+            msg = getattr(a, "message", str(a))
+            print(f"    [{name}] {msg}")
+
+    return 1 if marads else 0
+
+
 def _check_additive(old_path: Path, new_path: Path) -> int:
     from furqan_lint.additive import DynamicAllError, check_additive_api
 
@@ -178,13 +265,17 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
 
 def _check_directory(directory: Path) -> int:
     exit_code = 0
-    py_files = sorted(
-        p for p in directory.rglob("*.py") if not any(part in EXCLUDED_DIRS for part in p.parts)
+    files = sorted(
+        p
+        for p in directory.rglob("*")
+        if p.is_file()
+        and p.suffix in {".py", ".rs"}
+        and not any(part in EXCLUDED_DIRS for part in p.parts)
     )
-    if not py_files:
-        print(f"No .py files found in {directory}")
+    if not files:
+        print(f"No .py or .rs files found in {directory}")
         return 0
-    for path in py_files:
+    for path in files:
         result = _check_file(path)
         exit_code = max(exit_code, result)
     return exit_code
