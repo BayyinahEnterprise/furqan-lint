@@ -19,7 +19,7 @@ introduced this convention.
 
 ---
 
-## [0.8.5] - <DATE>
+## [0.8.5] - 2026-05-03
 
 Documentation-only release. Single finding from the post-v0.8.4
 review: the audit chain's CHANGELOG and source-code attribution
@@ -49,6 +49,13 @@ preserved as-is per the immutability discipline.
 - Attribution discipline note at the top of CHANGELOG.md
   (above all release sections) explaining the framework's
   hybrid origin and the auditor role.
+- Per-version baselines for v0.8.5 in the three additive-only
+  surface snapshots (``tests/test_rust_public_surface_additive
+  .py``, ``tests/test_go_public_surface_additive.py``,
+  ``tests/test_top_level_public_surface_additive.py``). Each
+  aliases the v0.8.4 baseline since v0.8.5 introduces no
+  public surface change. Required by the section 7.6
+  per-version cadence.
 
 ### Changed
 
@@ -69,19 +76,37 @@ preserved as-is per the immutability discipline.
 
 ### Tests
 
-Test count: 342 (v0.8.4 ship state on origin/main) -> 342
-(v0.8.5). Net delta: 0.
+Test count: 344 (v0.8.4 ship state on origin/main) -> 347
+(v0.8.5). Net delta: +3.
 
-Documentation-only release; no new tests. The section 7.10
-CHANGELOG-math gate handles the zero-delta case: 342 - 342 = 0.
+The +3 delta is structural. Per the section 7.6 per-version
+cadence, every minor and patch version ships a per-version
+public-surface baseline pin in each of the three additive-only
+surface snapshots (rust_adapter, go_adapter, top-level
+furqan_lint). v0.8.5 introduces no Python public surface
+change; each baseline aliases v0.8.4. The three new pin tests
+assert that the corresponding ``__all__`` remains a superset
+of its v0.8.5 baseline, anchoring v0.8.5 in the per-version
+cadence required by section 7.6.
+
+Aside from the structural cadence pins, this release
+introduces no other tests: the attribution corrective is
+entirely documentation-and-comment-text and adds no new
+behavior to verify.
 
 Note on baseline: the v0.8.5 prompt cited 338 as the v0.8.4
-ship count. The empirical count on the merged v0.8.4 PR #10
-included the v0.8.4 hotfix tests (three per-version surface
-baseline pins for v0.8.4 plus one historical-untagged
-allowlist pin), bringing the actual v0.8.4 ship count to 342.
+ship count and predicted a 0 delta for v0.8.5. The empirical
+count on the merged v0.8.4 PR #10 included the v0.8.4 hotfix
+tests (three per-version surface baseline pins for v0.8.4
+plus one historical-untagged allowlist pin), bringing the
+actual v0.8.4 ship count (pytest --collect-only) to 344;
+v0.8.5 then adds three more per-version pins per the section
+7.6 cadence, landing at 347.
 Per the prompt's section 8 most-conservative-interpretation
-rule, the empirical count is used.
+rule, the empirical counts are used and the under-specification
+is documented here.
+
+The section 7.10 CHANGELOG-math gate verifies 347 - 344 = 3.
 
 ### Section 11.3 Five Questions
 
@@ -95,9 +120,11 @@ rule, the empirical count is used.
 4. **What did this release introduce as new limitations?**
    None.
 5. **What is the empirical evidence the substrate behaves as
-   claimed?** All 342 tests pass; em-dash gate confirms no
-   regression in the new content; ``git grep -n "Fraz" src/
-   tests/`` returns empty after commit 2.
+   claimed?** Pytest --collect-only reports 347 tests (344
+   carried forward from v0.8.4 plus 3 new per-version surface
+   baseline pins per the section 7.6 cadence); em-dash gate
+   confirms no regression in the new content; ``git grep -n
+   "Fraz" src/ tests/`` returns empty after commit 2.
 
 ### Section 5.1 Validator-bias self-disclosure
 
@@ -113,9 +140,10 @@ going-forward convention.
 
 ### Section 5.2 Prompt-grounding self-check log
 
-Pytest collect-only count: 342 (matches v0.8.4 ship state on
-origin/main after PR #10 merge). Delta: 342 - 342 = 0.
-CHANGELOG-math gate verified.
+Pytest collect-only count: 347 (344 carried forward from
+v0.8.4 ship state on origin/main after PR #10 merge plus 3
+new per-version surface baseline pins per the section 7.6
+cadence). Delta: 347 - 344 = 3. CHANGELOG-math gate verified.
 All verification gates pass: green.
 
 ## [0.8.4] - 2026-05-03
