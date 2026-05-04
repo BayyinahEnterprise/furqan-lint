@@ -19,6 +19,42 @@ introduced this convention.
 
 ---
 
+## [0.9.1] - <DATE>
+
+D11-onnx: shape-coverage on ONNX edges, deferred from v0.9.0 per
+Decision 3 of that prompt. Implementation uses
+``onnx.shape_inference.infer_shapes(model_proto, strict_mode=True)``
+(Decision 1 of the v0.9.1 prompt); strict_mode is the canonical
+ONNX mechanism for catching declared-vs-inferred shape
+disagreement and handles broadcasting + dim_param + empty
+dim_value silently and natively. Closes round-24 finding M3
+deferral and the v0.9.0 META observation that the
+``make_shape_mismatch_d11_deferred_model()`` builder did not
+actually contain a mismatch.
+
+### Fixed
+
+(populate during release commit 6)
+
+### Added
+
+(populate during release commit 6)
+
+### Changed
+
+(populate during release commit 6)
+
+### Retired
+
+(populate during release commit 6: shape_coverage_deferred fixture
++ test_onnx_d11_deferred_v0_9_0_passes pinning test, both per
+Decision 4 delete-plus-add discipline)
+
+### Tests
+
+Test count: 370 (v0.9.0 ship state) -> <TBD>
+(v0.9.1). Net delta: <TBD>.
+
 ## [0.9.0] - 2026-05-04
 
 ONNX adapter release. Extends structural-honesty diagnostics to
