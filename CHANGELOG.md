@@ -19,6 +19,47 @@ introduced this convention.
 
 ---
 
+## [0.9.3] - <DATE>
+
+numpy-vs-ONNX divergence detection. Closes Gap 4 (HIGH
+competition lever) per the round-32 NeuroGolf leverage analysis.
+A new optional ``[onnx-runtime]`` extra brings in
+``onnxruntime`` and ``numpy``; a fourth ONNX checker
+(``numpy_divergence``) loads a discoverable numpy reference
+function alongside each ``.onnx`` file, runs both on a probe
+grid extracted from the corresponding ARC-AGI task file, and
+fires when the outputs disagree.
+
+The check is opt-in by reference presence: it silent-passes
+when the ``[onnx-runtime]`` extra is not installed, when no
+``<basename>_build.py`` is discoverable, or when no
+``<basename>.json`` task file is discoverable. Generic ONNX
+users with no NeuroGolf-shaped sidecars see no behavior change.
+
+**Renumbering note.** The original v0.9.x sequence had v0.9.3
+= score-validity advisory and v0.9.4 = numpy-vs-ONNX
+divergence. The round-32 leverage analysis identified
+divergence detection as substantially higher-leverage; this
+release renumbers it to v0.9.3 to ship the lever sooner.
+Score-validity becomes v0.9.4.
+
+### Fixed
+
+(populate during release commit 7)
+
+### Added
+
+(populate during release commit 7)
+
+### Changed
+
+(populate during release commit 7)
+
+### Tests
+
+Test count: 389 (v0.9.2 ship state) -> <TBD>
+(v0.9.3). Net delta: <TBD>.
+
 ## [0.9.2] - 2026-05-04
 
 D11-onnx adds type-compliance via ``check_type=True``. Closes
