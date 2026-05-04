@@ -1,5 +1,171 @@
 # Changelog
 
+## [0.8.4] - 2026-05-03
+
+Corrective release. Round-22 found 1 LOW (Go ``extract_public_names``
+docstring sweep) and 1 LOW (CLI PARSE ERROR diagnostic naming the
+wrong filename on the failing side). Closes both plus lands three
+automated gates (release-sweep extension for source-file
+forward-references under section 7.5; extras-matrix gate under
+section 7.11; origin-tag-presence smoke under section 7.12), the CI
+matrix expansion to 14 jobs (sections 7.7 + 7.11), the PyPI Trusted
+Publishing release workflow (section 7.10), three community files
+(CONTRIBUTING + SECURITY + CODE_OF_CONDUCT), and a README install
+section rewrite per locked decision 6. Per-version baselines aliased
+to v0.8.3 (no public surface change in v0.8.4).
+
+### Fixed
+
+- **CLI PARSE ERROR diagnostic filename** (round-22 LOW). When
+  ``_check_rust_additive`` or ``_check_go_additive`` caught a
+  ``RustParseError`` / ``GoParseError`` raised by the new-side
+  ``extract_public_names`` call, the printed PARSE ERROR diagnostic
+  named the old-side filename (the one held in the loop variable at
+  raise time), confusing operators trying to locate the broken file.
+  The CLI now resolves the failing-side filename from the exception
+  context and emits ``PARSE ERROR (rust|go): <kind> at line <N>``
+  followed by ``  in <failing-side-path>``. Pinned by 2 new tests
+  (one Rust old-side, one Rust new-side) under ``@pytestmark_rust``.
+
+- **Stale forward-reference in ``rust_adapter.translator`` docstring**
+  (caught by the new section-7.5 release-sweep extension on first
+  run). The module docstring referenced ``deferred to v0.7.1 per
+  documented_limits/empty_or_panic_only_body.rs``, but the R3
+  zero-return checker shipped in v0.7.3 retired that fixture. Sweep
+  removed the dangling pointer in the same commit that introduced
+  the gate.
+
+### Added
+
+- **Section 7.5 release-sweep gate extension: source-file
+  forward-references** (``tests/test_release_sweep_gate.py``). New
+  ``test_no_forward_references_in_source_file_docstrings`` walks
+  ``src/`` looking for ``\bfuture v(\d+)\.(\d+)`` and ``\bdeferred
+  to v(\d+)\.(\d+)`` patterns whose target version is at or below
+  the current ``pyproject.toml`` version, failing with the offending
+  file + line + matched span. Self-test under ``tmp_path`` uses a
+  contrived ``deferred to v9.9`` (above current) plus a stale ``v0.1``
+  (below current) to exercise both directions.
+
+- **Section 7.11 extras-matrix gate**
+  (``tests/test_extras_matrix_gate.py``). AST-scans every test file
+  that imports from ``furqan_lint.rust_adapter`` or
+  ``furqan_lint.go_adapter``, asserting each test function carries
+  one of the accepted skip-guard forms (``@pytestmark_rust`` /
+  ``@pytestmark_go`` decorator, module-level ``pytestmark =
+  pytest.mark.skipif``, ``pytest.importorskip``, inline
+  ``pytest.skip``, or a fixture-injected ``rust_extras_available`` /
+  ``go_extras_available`` parameter). Heuristic includes a
+  name-based exemption for missing-extras-path tests (``missing_
+  extras``, ``without_tree_sitter``, ``without_goast``,
+  ``no_extras``, ``imports_without``) per locked reconciliation
+  authority. 2 self-tests pin the negative + positive cases.
+
+- **Section 7.12 origin-tag-presence script + smoke**
+  (``scripts/verify_origin_tags.py`` +
+  ``tests/test_origin_tag_presence_smoke.py``). Script extracts
+  every ``## [X.Y.Z] - <date>`` header from CHANGELOG.md, excludes
+  versions explicitly marked absorbed (e.g. v0.7.4 absorbed into
+  v0.8.0), and verifies each remaining version has a corresponding
+  ``v<X.Y.Z>`` tag at ``origin``. ``--dry-run`` prints the expected
+  tag list without a network call; the smoke test pins the dry-run
+  exit code, presence of v0.7.3 / v0.8.3 / v0.8.4, and absence of
+  v0.7.4. The gate exempts the *current* ``pyproject.toml``
+  version (tagged post-merge by design; release.yml keys on the
+  tag-push event) and a small ``_HISTORICAL_UNTAGGED_VERSIONS``
+  allowlist documented below.
+
+  *Audit note (historical-untagged allowlist).* When the gate ran
+  for the first time on PR #10, it surfaced two genuine origin-tag
+  gaps predating this discipline: ``v0.2.0`` (rolled forward into
+  v0.3.0 without a separate tag, pre-tag-discipline era) and
+  ``v0.7.0`` (superseded by v0.7.0.1, the four-component
+  corrective, before the v0.7.0 tag was pushed). Rather than
+  silently masking the gap or rewriting history with synthetic
+  tags from arbitrary commits, the script's
+  ``_HISTORICAL_UNTAGGED_VERSIONS`` frozenset acknowledges the
+  drift explicitly with per-entry comments. New (post-v0.8.4)
+  versions are NOT eligible for this allowlist; the gate must
+  catch them at PR time.
+
+- **CI matrix expansion to 14 jobs** (``.github/workflows/ci.yml``).
+  Five jobs: ``lint`` (ruff + mypy + em-dash + origin-tag-presence)
+  and four test variants ``test-python-only`` / ``test-rust`` /
+  ``test-go`` / ``test-full``, each crossed with Python 3.10 / 3.11
+  / 3.12 / 3.13. The em-dash check moves from a separate job into
+  the lint job and now extends to ``CHANGELOG.md`` + ``pyproject
+  .toml`` (with ``--exclude=CODE_OF_CONDUCT.md`` so the Contributor
+  Covenant verbatim text does not trip the gate). 4 new pin tests
+  cover the matrix shape, the em-dash extension, the em-dash check
+  living in the lint job, and the origin-tag-presence step.
+
+- **PyPI Trusted Publishing release workflow**
+  (``.github/workflows/release.yml``). Two-job split: ``build``
+  (fetch-depth: 0, build sdist + wheel via ``python -m build``,
+  verify the wheel filename ends ``-py3-none-any.whl``, assert
+  merge-base ancestry against ``origin/main``, sync the version-tag
+  + CHANGELOG version via ``tomllib`` from the standard library) +
+  ``publish`` (``id-token: write`` permission, ``environment:
+  pypi``, ``pypa/gh-action-pypi-publish@release/v1``). 3 new pin
+  tests cover the build-then-publish ordering, the Trusted
+  Publishing permission and environment, and the structural pins
+  (fetch-depth, ancestry check, wheel-name verification).
+
+- **Community files: CONTRIBUTING.md + SECURITY.md +
+  CODE_OF_CONDUCT.md.** ``CONTRIBUTING.md`` (~130 lines) covers
+  setup, the additive-only discipline, the verdict taxonomy, the
+  release-prompt cadence, the co-author trailer requirement, and
+  inline ~200-word reciprocal-contract terms (per locked decision 7
+  the contract is included inline rather than linked). ``SECURITY
+  .md`` lists supported versions, names
+  ``doctordopemusic@gmail.com`` as the reporting channel, and
+  commits to a 14-day initial-response window. ``CODE_OF_CONDUCT
+  .md`` is the Contributor Covenant v2.1 verbatim, with the
+  ``[INSERT CONTACT METHOD]`` placeholder replaced by
+  ``doctordopemusic@gmail.com``.
+
+- **README install section rewrite** (per locked decision 6). New
+  structure: PyPI default first; "Optional adapters" listing all
+  three install shapes (``pip install furqan-lint[rust]``, ``[go]``,
+  ``[all]``); "Install from a specific commit or tag" with a v0.8.4
+  worked example plus a release-history pointer; separate "Furqan
+  dependency" subsection naming the ``furqan>=0.11.0`` runtime
+  requirement plainly. README-drift gate continues to pass.
+
+- **Per-version baselines for v0.8.4** in the three additive-only
+  surface snapshots (``tests/test_rust_public_surface_additive.py``,
+  ``tests/test_go_public_surface_additive.py``,
+  ``tests/test_top_level_public_surface_additive.py``). Each
+  aliases the v0.8.3 baseline since v0.8.4 introduces no public
+  surface change.
+
+### Changed
+
+- **Em-dash check** moved from a standalone job into the ``lint``
+  job and extended to scan ``CHANGELOG.md`` and ``pyproject.toml``
+  in addition to the prior ``src/`` and ``tests/`` paths. Excludes
+  ``CODE_OF_CONDUCT.md`` so the Contributor Covenant verbatim text
+  is preserved as upstream-published.
+
+### Tests
+
+Delta: +13 net new passing tests. 325 baseline (323 pass + 2 skip)
+→ 338 passed + 2 skipped = 340 collected.
+
+Breakdown:
+- +2 PARSE ERROR diagnostic pins (Rust old-side, Rust new-side)
+  under ``@pytestmark_rust`` in ``tests/test_rust_correctness.py``.
+- +1 section-7.5 release-sweep extension (production gate +
+  self-test land together; the production gate is a search over
+  ``src/`` returning empty on a clean tree, structurally pinned by
+  the self-test under ``tmp_path``).
+- +2 section-7.11 extras-matrix gate self-tests.
+- +1 section-7.12 origin-tag-presence smoke.
+- +4 commit-7 CI workflow pins (matrix shape, em-dash extension,
+  em-dash placement, origin-tag-presence step).
+- +3 commit-8 release workflow pins (job-ordering, Trusted
+  Publishing permission/environment, structural pins).
+
 ## [0.8.3] - 2026-05-03
 
 Corrective release. Round-21 found 1 HIGH (Rust diff parse-

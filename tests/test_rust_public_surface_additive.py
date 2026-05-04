@@ -67,6 +67,11 @@ _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_2: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFA
 # documented limit (test/fixture/README, no surface change).
 # Aliases v0.8.2.
 _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_3: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_2
+# v0.8.4 corrective: round-22 patch (PARSE ERROR diagnostic
+# filename, Go docstring sweep, three CI gates, release
+# workflow, community files, README install rewrite). No
+# rust_adapter surface change. Aliases v0.8.3.
+_RUST_ADAPTER_PUBLIC_SURFACE_v0_8_4: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_3
 
 
 def test_rust_adapter_public_surface_is_superset_of_v0_7_0_baseline() -> None:
@@ -210,5 +215,22 @@ def test_rust_adapter_public_surface_is_superset_of_v0_8_3_baseline() -> None:
     missing = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_3 - current
     assert not missing, (
         f"rust_adapter.__all__ removed names from v0.8.3 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_rust_adapter_public_surface_is_superset_of_v0_8_4_baseline() -> None:
+    """The v0.8.4 baseline (alias of v0_8_3; the round-22
+    corrective patches the PARSE ERROR diagnostic filename,
+    sweeps Go docstrings, lands three CI gates and the release
+    workflow, but does not change the rust_adapter __all__
+    surface). Removals require a major-version bump.
+    """
+    from furqan_lint import rust_adapter
+
+    current = frozenset(rust_adapter.__all__)
+    missing = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_4 - current
+    assert not missing, (
+        f"rust_adapter.__all__ removed names from v0.8.4 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )

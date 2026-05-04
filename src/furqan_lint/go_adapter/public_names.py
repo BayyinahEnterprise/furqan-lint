@@ -6,8 +6,12 @@ in shape -- returns a frozenset of names exposed by a single
 file -- but reads from the goast binary's ``public_names`` JSON
 field rather than from a Python AST walk.
 
-Symmetric with the future ``rust_adapter.public_names`` module
-(deferred to v0.8.2 per locked decision 2).
+Symmetric with ``rust_adapter.public_names.extract_public_names``
+(shipped in v0.8.2). Both extractors feed
+``additive.compare_name_sets``. The v0.8.3 Rust adapter omits
+impl-block methods (documented limit
+``impl_methods_omitted.rs``); Go's goast emits qualified
+``Type.Method`` names for 6 receiver shapes since v0.8.2.
 """
 
 from __future__ import annotations

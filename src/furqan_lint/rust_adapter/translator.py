@@ -60,9 +60,11 @@ other expressions and statements are left as opaque markers
 * Tail expression with no trailing ``;`` -> synthesise a
   ``ReturnStmt(opaque)`` per validator finding R1.
 * ``panic!()`` / ``todo!()`` / ``unimplemented!()`` macro
-  invocation at tail position -> treated as opaque (the translator does
-  not catch the empty-body / panic-only case; deferred to v0.7.1
-  per documented_limits/empty_or_panic_only_body.rs).
+  invocation at tail position -> treated as opaque. The empty-body
+  and panic-only-body cases are caught by the R3 zero-return checker
+  (added in v0.7.3, which retired the
+  ``empty_or_panic_only_body.rs`` documented limit); the translator
+  itself does not need to recognise them as a special shape.
 
 Async functions (``async fn``) translate identically to non-async;
 the async-ness is irrelevant to D24/D11.

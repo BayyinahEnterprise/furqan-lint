@@ -8,10 +8,12 @@ on:
 
 jobs:
   lint:
-    # Style and type checks. Runs in ~10 seconds. Failing fast here
-    # saves the 4-version test matrix from running on style-broken
-    # code. Independent of the test matrix - if mypy fails, all
-    # Python versions would fail it identically.
+    # Style and type checks plus once-only repo-hygiene gates.
+    # Runs in ~10 seconds. Failing fast here saves the test matrix
+    # from running on style-broken code. The em-dash check and the
+    # origin-tag-presence gate live here (not in test) because they
+    # are once-only checks; running them per-Python-version would
+    # be redundant.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +38,25 @@ jobs:
       - name: Mypy
         run: mypy
 
-  test:
+      - name: Em-dash check
+        run: |
+          # CODE_OF_CONDUCT.md is Contributor Covenant v2.1 verbatim;
+          # third-party text is excluded per the policy that bans
+          # em-dashes from project-authored prose only.
+          if LC_ALL=C.UTF-8 grep -rPn --exclude=CODE_OF_CONDUCT.md '[\x{2013}\x{2014}]' src/ tests/ README.md CHANGELOG.md pyproject.toml; then
+            echo "Em-dash or en-dash found in source, tests, README, CHANGELOG, or pyproject.toml"
+            exit 1
+          fi
+          echo "Em-dash check: clean"
+
+      - name: Origin tag presence gate
+        run: python scripts/verify_origin_tags.py
+
+  test-python-only:
+    # The Python-only install path. Adapter tests self-skip via the
+    # §7.11-enforced skip-guards. Pinning that the full pytest -q
+    # suite passes here is the empirical guarantee that the no-
+    # extras user does not see traceback-style failures.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -74,10 +94,88 @@ jobs:
           print(f'Version sync OK: {__version__}')
           "
 
-      - name: Em-dash check
+  test-rust:
+    # The Rust-extras install path. Runs the full pytest -q suite;
+    # rust-adapter tests run for real, go-adapter tests self-skip.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
         run: |
-          if LC_ALL=C.UTF-8 grep -rPn '[\x{2013}\x{2014}]' src/ tests/ README.md; then
-            echo "Em-dash or en-dash found in src/, tests/, or README.md"
-            exit 1
-          fi
-          echo "Em-dash check: clean"
+          python -m pip install --upgrade pip
+          pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
+          pip install -e ".[dev,rust]"
+
+      - name: Run tests
+        run: python -m pytest -q
+
+  test-go:
+    # The Go-extras install path. Runs the full pytest -q suite;
+    # go-adapter tests run for real, rust-adapter tests self-skip.
+    # Sets up the Go 1.22 toolchain so the [go] extra's PEP 517
+    # build hook can compile the bundled goast binary.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
+          pip install -e ".[dev,go]"
+
+      - name: Run tests
+        run: python -m pytest -q
+
+  test-full:
+    # The everything-installed path. Pin that rust + go extras
+    # coexist on a single environment without conflict and that
+    # the full pytest -q suite passes with zero skips. Python 3.12
+    # only; the matrix coverage of rust + go individually across
+    # 3.10-3.13 is sufficient.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
+          pip install -e ".[dev,rust,go]"
+
+      - name: Run tests
+        run: python -m pytest -q

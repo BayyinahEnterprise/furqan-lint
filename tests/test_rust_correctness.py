@@ -398,3 +398,70 @@ def test_lifetime_param_return_documented_limit() -> None:
     result = _run_check("documented_limits/lifetime_param_return.rs")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# v0.8.4 commit 3 (Decision 2): PARSE ERROR diagnostic names failing-side
+# filename and qualifier. The header now carries the failing path plus an
+# (old side / new side, additive-only) qualifier; the indented detail line
+# drops the redundant filename prefix.
+# ---------------------------------------------------------------------------
+
+
+def _run_diff(old: Path, new: Path) -> subprocess.CompletedProcess[str]:
+    """Run ``furqan-lint diff <old> <new>`` and capture stdout."""
+    return subprocess.run(
+        [sys.executable, "-m", "furqan_lint.cli", "diff", str(old), str(new)],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+
+
+@pytestmark_rust
+def test_rust_diff_parse_error_names_failing_old_side(tmp_path: Path) -> None:
+    """v0.8.4 (Decision 2): when the OLD side fails to parse, the
+    header line carries the OLD path plus '(old side, additive-only)',
+    and the indented detail line drops the redundant filename
+    prefix that v0.8.3's shape carried.
+    """
+    old = tmp_path / "old.rs"
+    new = tmp_path / "new.rs"
+    old.write_text("pub fn ){ broken")
+    new.write_text("pub fn ok() {}\n")
+    result = _run_diff(old, new)
+    assert result.returncode == 2, result.stdout + result.stderr
+    expected_header = f"PARSE ERROR  {old}  (old side, additive-only)"
+    assert expected_header in result.stdout, result.stdout
+    # Detail line: 2-space indent, no redundant filename prefix.
+    lines = result.stdout.splitlines()
+    header_idx = next(i for i, line in enumerate(lines) if line == expected_header)
+    detail = lines[header_idx + 1]
+    assert detail.startswith("  "), f"expected 2-space indent, got: {detail!r}"
+    assert str(old) not in detail, f"detail line carries redundant filename: {detail!r}"
+    # Sanity: the parse-error kind/line still surfaces somewhere on the detail.
+    assert detail.strip(), "detail line is empty"
+
+
+@pytestmark_rust
+def test_rust_diff_parse_error_names_failing_new_side(tmp_path: Path) -> None:
+    """v0.8.4 (Decision 2): when the NEW side fails to parse, the
+    header line carries the NEW path plus '(new side, additive-only)',
+    and the indented detail line drops the redundant filename prefix.
+    Discriminating against the v0.8.3 shape that named ``new_path``
+    on both old-side and new-side failures.
+    """
+    old = tmp_path / "old.rs"
+    new = tmp_path / "new.rs"
+    old.write_text("pub fn ok() {}\n")
+    new.write_text("pub fn ){ broken")
+    result = _run_diff(old, new)
+    assert result.returncode == 2, result.stdout + result.stderr
+    expected_header = f"PARSE ERROR  {new}  (new side, additive-only)"
+    assert expected_header in result.stdout, result.stdout
+    lines = result.stdout.splitlines()
+    header_idx = next(i for i, line in enumerate(lines) if line == expected_header)
+    detail = lines[header_idx + 1]
+    assert detail.startswith("  "), f"expected 2-space indent, got: {detail!r}"
+    assert str(new) not in detail, f"detail line carries redundant filename: {detail!r}"
+    assert detail.strip(), "detail line is empty"
