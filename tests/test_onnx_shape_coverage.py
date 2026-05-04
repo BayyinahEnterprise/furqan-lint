@@ -157,7 +157,7 @@ def test_d11_onnx_parser_handles_single_op_message() -> None:
         "and existing shape differ in dimension 1: (20) vs (10)\n"
     )
 
-    def _raise(model_proto, strict_mode=True):
+    def _raise(model_proto, strict_mode=True, **kwargs):
         raise onnx.shape_inference.InferenceError(fake_message)
 
     with patch.object(onnx.shape_inference, "infer_shapes", _raise):
@@ -188,7 +188,7 @@ def test_d11_onnx_parser_handles_multi_op_message() -> None:
         "dimensions\n"
     )
 
-    def _raise(model_proto, strict_mode=True):
+    def _raise(model_proto, strict_mode=True, **kwargs):
         raise onnx.shape_inference.InferenceError(fake_message)
 
     with patch.object(onnx.shape_inference, "infer_shapes", _raise):
@@ -214,7 +214,7 @@ def test_d11_onnx_parser_unparseable_fallback() -> None:
         "differently and the regex misses everything"
     )
 
-    def _raise(model_proto, strict_mode=True):
+    def _raise(model_proto, strict_mode=True, **kwargs):
         raise onnx.shape_inference.InferenceError(fake_message)
 
     with patch.object(onnx.shape_inference, "infer_shapes", _raise):

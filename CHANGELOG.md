@@ -19,6 +19,176 @@ introduced this convention.
 
 ---
 
+## [0.9.2] - 2026-05-04
+
+D11-onnx adds type-compliance via ``check_type=True``. Closes
+Gap 1 from the v0.9.1 post-release NeuroGolf evaluation:
+opset-compliance was previously missing
+opset-correct-but-type-incompatible operator usages
+(Equal-on-float in opset 10 / cont46 NeuroGolf bug class).
+Decision 1 of the v0.9.2 prompt passes ``check_type=True``
+alongside ``strict_mode=True`` in the
+``onnx.shape_inference.infer_shapes`` call. Empirically verified
+against onnx 1.17.0: purely additive to ``strict_mode``; zero
+regressions on v0.9.1 silent-pass / firing cases.
+
+### Fixed
+
+- **Gap 1 closure (HIGH).** D11-onnx now catches type-restriction
+  failures via ``check_type=True``. Equal-on-float in opset 10
+  was silent under v0.9.1's ``strict_mode``-only call; v0.9.2
+  fires with ``category="type_mismatch"`` and
+  ``error_kind="TypeInferenceError"``. The failure mode is a
+  real one identified by the post-release NeuroGolf evaluation
+  (cont46 bug class) where users encountered it as a runtime
+  failure that the lint pipeline did not surface.
+- The ``ShapeCoverageDiagnostic.category`` field is **required**
+  (no default) per the round-30 fail-fast and round-32 MED-1
+  discipline. A future construction site that forgets to set
+  ``category`` raises ``TypeError`` at construction time rather
+  than silently mislabeling ``type_mismatch`` findings as
+  ``shape_mismatch``. The dataclass extension is additive for
+  consumers (existing fields unchanged) and breaking for
+  constructors; the only construction site is
+  ``check_shape_coverage`` in the same module, updated atomically.
+
+### Added
+
+- ``ShapeCoverageDiagnostic.category`` field discriminates three
+  sub-types: ``"shape_mismatch"`` (v0.9.1 behavior preserved),
+  ``"type_mismatch"`` (v0.9.2 addition under ``check_type=True``),
+  and ``"unparseable"`` (the fallback when neither known per-op
+  pattern matches). Decision 2 of the v0.9.2 prompt: same outer
+  diagnostic family with sub-type metadata on the dataclass,
+  preserving the v0.9.1 runner-tag contract.
+- ``_TYPE_MISMATCH_RE`` regex parses two empirical body shapes
+  observed against onnx 1.14-1.21:
+  ``(op_type:Equal): A typestr: T, has unsupported type: tensor(float)``
+  and
+  ``(op_type:Reshape, ...): shape typestr: tensor(int64), has unsupported type: tensor(float)``.
+  The first uses the schema parameter form; the second uses the
+  named-input form. Both share the literal ``" typestr: "``
+  substring; the regex captures the general ``<token> typestr:``
+  shape so both variants route to ``type_mismatch`` rather than
+  the unparseable-fallback.
+- ``_classify_per_op_finding(text)`` dispatcher tries
+  ``_SHAPE_MISMATCH_RE`` first per Decision 3 of the v0.9.2
+  prompt: shape-mismatch is preferred when both could match
+  because its ``error_kind`` is explicit. The fixed ordering is
+  the spec for future-onnx-version stability.
+- ``_format_for_category(op, body, category)`` produces sub-type-
+  specific diagnosis and ``minimal_fix`` prose. The
+  ``type_mismatch`` fix enumerates three actionable options:
+  Cast the input, raise the model's opset_import to a version
+  where the op accepts the current input type, or replace the op
+  with one that natively accepts the type.
+- Three new fixture builders in ``tests/fixtures/onnx/builders.py``:
+  ``make_equal_float_op10_model`` (fires type_mismatch),
+  ``make_equal_int64_op10_model`` (silent-pass, well-typed),
+  ``make_reshape_float_shape_op13_model`` (fires type_mismatch
+  via the shape-typestr body shape).
+
+### Changed
+
+- ``onnx.shape_inference.infer_shapes`` is now called with both
+  ``strict_mode=True`` and ``check_type=True``. Standing Rule of
+  the v0.9.2 prompt: the two flags are paired in v0.9.2+; no
+  path in ``shape_coverage.py`` uses one without the other.
+- ``check_shape_coverage`` rewrote its message-walking logic:
+  the master ``_OP_TYPE_MARKER`` regex locates each
+  ``(op_type:NAME):`` marker in the InferenceError message and
+  the per-marker classifier decides shape-mismatch vs
+  type-mismatch vs unparseable. Document order of findings is
+  preserved for diagnostic stability. The unparseable-fallback
+  fires only when no per-op marker is found anywhere in the
+  message, so a single multi-op message never duplicates the
+  generic finding alongside per-op findings.
+- The three v0.9.1 mock ``_raise`` functions in
+  ``tests/test_onnx_shape_coverage.py`` updated to accept
+  ``**kwargs`` so they match the new flag combination. The
+  v0.9.1 D11-onnx tests automatically become the regression
+  suite for the strict_mode + check_type combination per the
+  round-32 MED-2 closure.
+
+### Deferred
+
+- **Gap 2** (score-validity advisory via ``onnx_tool.profile``)
+  scheduled for **v0.9.3** per Decision 9. The new optional
+  extra (``[onnx-profile]`` pulling ``onnx-tool``) needs a
+  design round addressing dependency containment, gate semantics
+  (advisory vs MARAD), and message format. Closes MARAD-3 from
+  cont45 (TopK chain profiler-blocker), unblocks 2 rebuilds.
+  Estimated time budget 4 hours.
+- **Gap 3** (channel-sum / input-mask consistency) **held until
+  NeuroGolf provides a tight spec**. The substrate-side
+  consistency definition does not yet exist; implementing
+  without a spec would invent a definition that may not match
+  actual needs. Per the framework's reproducer-first discipline,
+  substrate must precede surface.
+- **Gap 4** (numpy-vs-ONNX divergence detection) scheduled for
+  **v0.9.4** per Decision 9. Per the round-32 NeuroGolf
+  leverage analysis, this is the dominant-failure-mode catch
+  (every NeuroGolf primitive has a numpy reference; the
+  substrate-vs-surface gap is structurally where bugs hide:
+  cont48, cont42 task284 first build, cont44 task313 prefix-sum
+  direction). v0.9.4 design round resolves the build-script-to-
+  lint contract for discovering numpy reference functions, the
+  probe-grid strategy, and the tolerance before commit 1.
+  Estimated 2 design + implementation sessions.
+- v1.3 paper revision waits for v0.9.2 to ship and tracks v0.9.2
+  substrate per Decision 8. The empirical record at v1.3
+  publication is "29 versions" instead of "28," and Gap 1
+  closure is cited as a worked example of the audit chain
+  working post-release.
+
+### Tests
+
+Test count: 380 (v0.9.1 ship state) -> 389 (v0.9.2). Net
+delta: +9.
+
+Breakdown:
+
+- Type-compliance firing tests: +2
+  (``test_d11_onnx_type_mismatch_fires_on_equal_float_op10``,
+  ``test_d11_onnx_type_mismatch_fires_on_reshape_float_shape_op13``)
+- Type-compliance silent-pass tests: +2
+  (``test_d11_onnx_type_compliance_silent_pass_on_well_typed_equal_int64``,
+  ``test_d11_onnx_type_compliance_silent_pass_on_well_typed_relu_float``)
+- Parser tests: +2
+  (``test_d11_onnx_type_mismatch_regex_matches_message``,
+  ``test_d11_onnx_classifier_prefers_shape_mismatch_first``)
+- Fallback test: +1
+  (``test_d11_onnx_classifier_unparseable_returns_category``)
+- Diagnostic-prose test: +1
+  (``test_d11_onnx_type_mismatch_diagnosis_prose``)
+- V0_9_2 surface snapshot: +1
+  (``test_v0_9_2_onnx_adapter_surface_snapshot``)
+
+Sum: 2 + 2 + 2 + 1 + 1 + 1 = +9 ✓
+
+The ten v0.9.1 D11-onnx tests in
+``tests/test_onnx_shape_coverage.py`` automatically become the
+regression suite for the strict_mode + check_type combination
+per Decision 1's "purely additive" property and round-32 MED-2
+closure. Their three mock ``_raise`` functions accept
+``**kwargs`` so they match the new flag combination without
+behavioral change.
+
+### Round-31 / 32 closure ledger
+
+| Finding | Source | Severity | Closure |
+| --- | --- | --- | --- |
+| Gap 1 | v0.9.1 NeuroGolf evaluation | HIGH | Closed in v0.9.2 round 31 via Decisions 1-3 (check_type=True flag, ShapeCoverageDiagnostic.category split, _TYPE_MISMATCH_RE regex extension). Empirically verified zero regressions; four firing cases confirmed. |
+| META: v0.9.1 missed check_type=True | round-31 audit-of-self | INFORMATIONAL | Acknowledged. The v0.9.1 round-29 design correctly identified strict-mode shape inference as canonical for shape mismatches; check_type was not considered because the round-29 empirical probes focused on shape, not type. The post-release NeuroGolf evaluation surfaced the gap; v0.9.2 closes it. The framework's reciprocal contract working as designed: substrate (NeuroGolf bug class) governs surface (v0.9.2 spec). |
+| Gap 2 | v0.9.1 NeuroGolf evaluation | MEDIUM | Scheduled for v0.9.3 per Decision 9. Tracked in ### Deferred section. |
+| Gap 3 | v0.9.1 NeuroGolf evaluation | MEDIUM | Held until NeuroGolf provides a tight spec. Tracked in ### Deferred section. |
+| Gap 4 | round-32 leverage analysis | HIGH (competition lever) | Scheduled for v0.9.4 per Decision 9. The dominant-failure-mode catch; alone catches ~4 historical sessions and likely prevents ~5-7 future ones. |
+| Round-32 MED-1: "purely additive" framing wrong for frozen dataclass | round-32 audit | MEDIUM | §3.1 wording corrected: additive for consumers, breaking for constructors. ``category`` kept required (no default) per round-30 fail-fast. The only construction site is ``check_shape_coverage``, updated atomically. |
+| Round-32 MED-2: regression test count duplicated v0.9.1 | round-32 audit | MEDIUM | Test math reduced from +12 to +9. The v0.9.1 D11-onnx tests automatically become the regression suite via the ``check_shape_coverage`` entry point; the v0.9.2 change is at the call site inside that function. The three mock ``_raise`` functions updated to accept ``**kwargs``. |
+| Round-32 LOW: Q1/Q2 strategic decisions left open | round-32 audit | LOW | §1 gains Decisions 8 and 9 locking v1.3-tracks-v0.9.2 and the v0.9.x competition-leverage sequence (v0.9.2 type-compliance, v0.9.3 score-validity, v0.9.4 numpy-vs-ONNX divergence). |
+
+Eight closures (1 HIGH closed in v0.9.2, 1 INFORMATIONAL, 2 deferrals tracked, 1 NEW HIGH scheduled for v0.9.4, 3 round-32 audit findings) plus the integration-items tracking from the NeuroGolf evaluation noted as out-of-scope deployment-side use cases.
+
 ## [0.9.1] - 2026-05-04
 
 D11-onnx (shape-coverage on ONNX edges) ships, deferred from
