@@ -38,6 +38,24 @@ EXCLUDED_DIRS: frozenset[str] = frozenset(
 )
 
 
+def _parse_error_detail(exc: Exception) -> str:
+    """Return a parse-error detail string with no redundant filename.
+
+    The header line of a ``PARSE ERROR`` block already prints the path
+    plus a ``(side, additive-only)`` qualifier; the indented detail line
+    only needs the parser-internal location and kind. For
+    :class:`RustParseError` we have structured ``kind``/``line``
+    attributes, so we format ``"{kind} at line {line}"``. For
+    :class:`GoParseError` (a plain ``Exception`` whose message is the
+    goast binary's stderr) we return ``str(exc)`` unchanged.
+    """
+    kind = getattr(exc, "kind", None)
+    line = getattr(exc, "line", None)
+    if kind is not None and line is not None:
+        return f"{kind} at line {line}"
+    return str(exc)
+
+
 def main() -> int:
     args = sys.argv[1:]
 
@@ -419,15 +437,21 @@ def _check_rust_additive(old_path: Path, new_path: Path) -> int:
         return 1
 
     try:
-        old_names = extract_public_names(old_path)
-        new_names = extract_public_names(new_path)
+        try:
+            old_names = extract_public_names(old_path)
+        except RustParseError as e:
+            print(f"PARSE ERROR  {old_path}  (old side, additive-only)")
+            print(f"  {_parse_error_detail(e)}")
+            return 2
+        try:
+            new_names = extract_public_names(new_path)
+        except RustParseError as e:
+            print(f"PARSE ERROR  {new_path}  (new side, additive-only)")
+            print(f"  {_parse_error_detail(e)}")
+            return 2
     except RustExtrasNotInstalled as e:
         print(str(e), file=sys.stderr)
         return 1
-    except RustParseError as e:
-        print(f"PARSE ERROR  {new_path} (additive-only)")
-        print(f"  {e}")
-        return 2
 
     diagnostics = compare_name_sets(
         previous_names=old_names,
@@ -473,15 +497,21 @@ def _check_go_additive(old_path: Path, new_path: Path) -> int:
         return 1
 
     try:
-        old_names = extract_public_names(old_path)
-        new_names = extract_public_names(new_path)
+        try:
+            old_names = extract_public_names(old_path)
+        except GoParseError as e:
+            print(f"PARSE ERROR  {old_path}  (old side, additive-only)")
+            print(f"  {_parse_error_detail(e)}")
+            return 2
+        try:
+            new_names = extract_public_names(new_path)
+        except GoParseError as e:
+            print(f"PARSE ERROR  {new_path}  (new side, additive-only)")
+            print(f"  {_parse_error_detail(e)}")
+            return 2
     except GoExtrasNotInstalled as e:
         print(str(e), file=sys.stderr)
         return 1
-    except GoParseError as e:
-        print(f"PARSE ERROR  {new_path} (additive-only)")
-        print(f"  {e}")
-        return 2
 
     diagnostics = compare_name_sets(
         previous_names=old_names,
