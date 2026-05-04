@@ -361,6 +361,10 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
     if old_path.suffix == ".go":
         return _check_go_additive(old_path, new_path)
 
+    # Guard 4: ONNX diff (added in v0.9.0).
+    if old_path.suffix == ".onnx":
+        return _check_onnx_additive(old_path, new_path)
+
     # Default: Python diff.
     return _check_python_additive(old_path, new_path)
 
@@ -518,6 +522,69 @@ def _check_go_additive(old_path: Path, new_path: Path) -> int:
         current_names=new_names,
         filename=str(new_path),
         language="go",
+    )
+
+    if not diagnostics:
+        print(f"PASS  {new_path} (additive-only)")
+        print("  No public names removed.")
+        return 0
+
+    print(f"MARAD  {new_path} (additive-only)")
+    print(f"  {len(diagnostics)} violation(s):")
+    for m in diagnostics:
+        print(f"    [additive_only] {m.diagnosis}")
+        print(f"      fix: {m.minimal_fix}")
+    return 1
+
+
+def _check_onnx_additive(old_path: Path, new_path: Path) -> int:
+    """ONNX additive-only diff via :func:`compare_name_sets` plus
+    :func:`extract_public_names` from each ``.onnx`` file.
+
+    Catches ``OnnxExtrasNotInstalled`` (install hint, exit 1) and
+    ``OnnxParseError`` (exit 2) per the typed-exception pattern
+    shared with the Rust and Go adapters: the user sees a one-line
+    message, not a Python traceback. Public names cover only
+    ``graph.input`` and ``graph.output`` ValueInfo entries with
+    their shapes (Decision 5 of the v0.9.0 prompt); intermediates
+    and initializers are out of scope.
+    """
+    try:
+        from furqan_lint.additive import compare_name_sets
+        from furqan_lint.onnx_adapter import (
+            OnnxExtrasNotInstalled,
+            OnnxParseError,
+            extract_public_names,
+        )
+    except ImportError:
+        print(
+            "ONNX support not installed. Run: pip install furqan-lint[onnx]",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        try:
+            old_names = extract_public_names(old_path)
+        except OnnxParseError as e:
+            print(f"PARSE ERROR  {old_path}  (old side, additive-only)")
+            print(f"  {e.detail}")
+            return 2
+        try:
+            new_names = extract_public_names(new_path)
+        except OnnxParseError as e:
+            print(f"PARSE ERROR  {new_path}  (new side, additive-only)")
+            print(f"  {e.detail}")
+            return 2
+    except OnnxExtrasNotInstalled as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    diagnostics = compare_name_sets(
+        previous_names=old_names,
+        current_names=new_names,
+        filename=str(new_path),
+        language="onnx",
     )
 
     if not diagnostics:

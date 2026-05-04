@@ -73,6 +73,7 @@ _RENAME_HINT: dict[str, str] = {
     "python": "Restore '{name}' in the current version, or add a compatibility alias: {name} = <new_name>",
     "rust": "Restore '{name}' in the current version, or add a re-export: pub use <new> as {name};",
     "go": "Restore '{name}' in the current version, or add a re-export: var {name} = <new>",
+    "onnx": "Restore '{name}' in the model's graph.output, or add a compatibility wrapper that maps the new name to the old name at inference time.",
 }
 
 

@@ -94,6 +94,7 @@ __all__ = (
     "OnnxModule",
     "OnnxParseError",
     "ValueInfoSummary",
+    "extract_public_names",
     "parse_model",
 )
 
@@ -113,3 +114,20 @@ def parse_model(path: Path | str) -> Any:
     from furqan_lint.onnx_adapter.parser import parse_model as _parse
 
     return _parse(path)
+
+
+def extract_public_names(path: Path | str) -> frozenset[str]:
+    """Return ``input:NAME:SHAPE`` / ``output:NAME:SHAPE`` identifiers.
+
+    Lazy-imports
+    ``furqan_lint.onnx_adapter.public_names.extract_public_names``
+    so this package's import path does not require the ``onnx``
+    package to be present (the missing-extras case is handled
+    inside the helper, which raises
+    :class:`OnnxExtrasNotInstalled` with the install hint).
+    """
+    from furqan_lint.onnx_adapter.public_names import (
+        extract_public_names as _extract,
+    )
+
+    return _extract(path)
