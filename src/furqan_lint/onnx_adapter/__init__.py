@@ -80,6 +80,20 @@ class OnnxParseError(Exception):
         super().__init__(f"{path}: {detail}")
 
 
+class OnnxRuntimeExtrasNotInstalled(ImportError):
+    """Raised when the ``[onnx-runtime]`` extra is missing.
+
+    Subclass of ``ImportError`` so callers that catch ``ImportError``
+    behave correctly. v0.9.3+: distinguishes the inference-extra
+    failure from the ``[onnx]`` graph-only extra failure
+    (``OnnxExtrasNotInstalled``). The numpy-vs-ONNX divergence
+    checker silent-passes when this would have been raised
+    (Decision 6 condition (a)); the exception type exists for
+    tests and any future caller that wants to surface the
+    install-failure mode explicitly.
+    """
+
+
 from furqan_lint.onnx_adapter.shape_coverage import (  # noqa: E402
     ShapeCoverageDiagnostic,
     check_shape_coverage,
