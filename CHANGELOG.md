@@ -19,54 +19,152 @@ introduced this convention.
 
 ---
 
-## [0.9.1] - <DATE>
+## [0.9.1] - 2026-05-04
 
-D11-onnx: shape-coverage on ONNX edges, deferred from v0.9.0 per
-Decision 3 of that prompt. Implementation uses
-``onnx.shape_inference.infer_shapes(model_proto, strict_mode=True)``
-(Decision 1 of the v0.9.1 prompt); strict_mode is the canonical
-ONNX mechanism for catching declared-vs-inferred shape
-disagreement and handles broadcasting + dim_param + empty
-dim_value silently and natively. Closes round-24 finding M3
-deferral and the v0.9.0 META observation that the
-``make_shape_mismatch_d11_deferred_model()`` builder did not
-actually contain a mismatch.
+D11-onnx (shape-coverage on ONNX edges) ships, deferred from
+v0.9.0 per Decision 3 of that prompt. Implementation per Decision
+1 of the v0.9.1 prompt: catch
+``onnx.shape_inference.InferenceError`` raised by
+``infer_shapes(model_proto, strict_mode=True)`` and parse the
+per-op diagnostic into structural-honesty findings. Strict-mode
+is the canonical ONNX mechanism for catching declared-vs-inferred
+shape disagreement; it uses ONNX's own per-op shape rules and
+silent-passes on broadcast / dim_param / empty dim_value
+(Decision 3).
+
+Closes round-24 finding M3 deferral. Closes the v0.9.0 META
+observation that ``make_shape_mismatch_d11_deferred_model()`` did
+not actually contain a mismatch (the builder shipped a clean
+Relu->Identity chain whose docstring claimed an "obvious shape
+mismatch on an internal edge"; the v0.9.0 pinning test was
+passing for the wrong reason). v0.9.1 fixes the builder as part
+of the retirement (Decision 4).
 
 ### Fixed
 
-(populate during release commit 6)
+- ``make_shape_mismatch_d11_deferred_model()`` in
+  ``tests/fixtures/onnx/builders.py``: replaced the clean
+  Relu->Identity chain with a Concat([1,10], [1,10], axis=1)
+  whose declared output is [1,10] (actual is [1,20]).
+  ``onnx.shape_inference.infer_shapes(..., strict_mode=True)``
+  now correctly raises ``InferenceError`` on this fixture, which
+  is what the v0.9.0 docstring already claimed and what the
+  v0.9.1 D11-onnx checker needs to fire on. Round-30 META
+  observation closure.
+- ``check_onnx_module`` signature: ``model_proto`` is a required
+  positional parameter (Decision 2 / round-30 MED-2 closure).
+  The fail-fast discipline favors a ``TypeError`` on a missing
+  argument over a silent-skip protected by a ``model_proto=None``
+  default; the single existing call site (``cli._check_onnx_file``)
+  is updated in the same commit. ``check_onnx_module`` is
+  internal API (not exported), so the signature change is
+  source-compatible for external callers and refactor-only for
+  the package itself.
+- CLI PASS message for ``.onnx`` files: now says
+  "3 structural checks ran (D24-onnx all-paths-emit,
+  opset-compliance, D11-onnx shape-coverage)" (was "2 structural
+  checks").
 
 ### Added
 
-(populate during release commit 6)
+- ``src/furqan_lint/onnx_adapter/shape_coverage.py``:
+  ``ShapeCoverageDiagnostic`` dataclass (with ``error_kind``
+  field per Decision 6 / round-30 m2 forensic-detail closure)
+  and ``check_shape_coverage(model_proto)`` entry point that
+  yields one diagnostic per per-op mismatch parsed from the
+  InferenceError message. Falls back to a single generic finding
+  if the message format is unparseable (defensive against future
+  onnx releases).
+- ``ShapeCoverageDiagnostic`` and ``check_shape_coverage`` added
+  to ``furqan_lint.onnx_adapter.__all__`` and pinned in the
+  ``ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1`` baseline (v0.9.0
+  baseline + 2 new names).
+- ``tests/fixtures/onnx/builders.py::make_dim_param_passthrough_model``:
+  builder for the dynamic-shape silent-pass pin.
+- ``dynamic_shape_silent_pass`` documented-limit fixture with
+  full four-place documentation (CHANGELOG / fixture /
+  pinning test / README): records that strict-mode
+  silent-passes on dim_param (symbolic) and empty dim_value
+  (dynamic) shapes per Decision 3.
 
 ### Changed
 
-(populate during release commit 6)
-
-### Added
-
-- ``dynamic_shape_silent_pass`` documented-limit fixture
-  (``tests/fixtures/onnx/documented_limits/``) plus pinning
-  test ``test_d11_onnx_dynamic_shape_silent_pass_pin``: records
-  that strict-mode shape inference silent-passes on dim_param
-  (symbolic) and empty dim_value (dynamic) shapes per
-  Decision 3 of the v0.9.1 prompt.
+- ``check_onnx_module(module, model_proto)`` runs three checkers
+  in order: ``all_paths_emit`` (D24-onnx, v0.9.0),
+  ``opset_compliance`` (v0.9.0), ``shape_coverage`` (D11-onnx,
+  v0.9.1). The new tuple shape ``("shape_coverage", d)`` is
+  populated; the slot was reserved in v0.9.0's runner docstring.
+- ``cli._check_onnx_file``: passes ``model`` (already in scope
+  from ``parse_model(path)``) to ``check_onnx_module``.
+- README "ONNX support (opt-in)" section updated to name
+  D11-onnx via strict-mode shape inference; the deferral prose
+  is removed. The "ONNX adapter (current as of v0.9.0)" section
+  is bumped to v0.9.1 and the ``dynamic_shape_silent_pass``
+  documented limit replaces the now-retired
+  ``shape_coverage_deferred`` entry.
+- ``tests/fixtures/onnx/documented_limits/README.md``: inventory
+  reflects the v0.9.1 state with a "## Retired" section naming
+  the ``shape_coverage_deferred`` deletion.
 
 ### Retired
 
-- ``shape_coverage_deferred`` documented-limit fixture (deleted
-  in commit 4) plus the v0.9.0 pinning test
-  ``test_onnx_d11_deferred_v0_9_0_passes`` (deleted in commit 4
-  after being skipped in commit 2). The retirement is a
-  delete-plus-add pair per Decision 4 of the v0.9.1 prompt
-  (round-30 finding MED-1 closure); the v0.9.1 firing test
-  ``test_d11_onnx_fires_on_shape_mismatch`` replaces it.
+- ``tests/fixtures/onnx/documented_limits/shape_coverage_deferred.py``
+  fixture: deleted in commit 4. The deferral entry is no longer
+  load-bearing because v0.9.1 ships D11-onnx.
+- ``tests/test_onnx_public_surface_additive.py::test_onnx_d11_deferred_v0_9_0_passes``
+  pinning test: skipped in commit 2 (kept the suite green at
+  the commit boundary), deleted in commit 4 (removed the
+  function body entirely). Per Decision 4 (delete-plus-add
+  discipline; round-30 MED-1 closure), the test is deleted
+  rather than renamed; the v0.9.1 firing test
+  ``test_d11_onnx_fires_on_shape_mismatch`` (in
+  ``tests/test_onnx_shape_coverage.py``) is the four-place
+  pinning-test slot for the new behavior. Deletion plus
+  addition reads more clearly in the retirement-ledger
+  discipline than a single rename would.
 
 ### Tests
 
-Test count: 370 (v0.9.0 ship state) -> <TBD>
-(v0.9.1). Net delta: <TBD>.
+Test count: 370 (v0.9.0 ship state) -> 380 (v0.9.1). Net
+delta: +10.
+
+Breakdown:
+
+- D11-onnx checker tests: +5
+  (``test_d11_onnx_fires_on_shape_mismatch``,
+  ``test_d11_onnx_clean_when_shapes_match``,
+  ``test_d11_onnx_clean_on_broadcast_compatible``,
+  ``test_d11_onnx_silent_pass_on_dim_param``,
+  ``test_d11_onnx_silent_pass_on_negative_dim``)
+- Diagnostic parser tests: +3
+  (``test_d11_onnx_parser_handles_single_op_message``,
+  ``test_d11_onnx_parser_handles_multi_op_message``,
+  ``test_d11_onnx_parser_unparseable_fallback``)
+- Runner integration: +1
+  (``test_d11_onnx_runner_alongside_d24_and_opset``)
+- v0.9.0 pin retirement: -1
+  (``test_onnx_d11_deferred_v0_9_0_passes`` deleted)
+- v0.9.1 dynamic-shape pin: +1
+  (``test_d11_onnx_dynamic_shape_silent_pass_pin``)
+- V0_9_1 surface snapshot: +1
+  (``test_v0_9_1_onnx_adapter_surface_snapshot``)
+
+Sum: 5 + 3 + 1 - 1 + 1 + 1 = +10 ✓
+
+### Round-30 closure ledger
+
+| Finding | Severity | Closure |
+| --- | --- | --- |
+| MED-1: rename obscures retirement-ledger discipline | MEDIUM | Decision 4 reframed as delete-plus-add pair. Commit 4 deletes ``test_onnx_d11_deferred_v0_9_0_passes`` outright (not rename); ``test_d11_onnx_fires_on_shape_mismatch`` lands in commit 3 as a fresh test on the now-correct builder. CHANGELOG retirement section names both deletions. |
+| MED-2: ``model_proto=None`` default introduces silent-skip risk | MEDIUM | Decision 2 reframed as required positional parameter. Calling ``check_onnx_module(module)`` raises ``TypeError`` (asserted by ``test_d11_onnx_runner_alongside_d24_and_opset``). The single call site (``cli._check_onnx_file``) is updated in the same commit. |
+| m1: commit hash unstable across pulls | MINOR | Branch base named as ``tag v0.9.0`` rather than commit hash. |
+| m2: ``error_kind`` field dropped from ShapeCoverageDiagnostic | MINOR | Decision 6 adds it back; populated from the regex's ``kind`` group at zero implementation cost. Forensic detail preserved. |
+| m3: test rename + skip during multi-commit refactor | MINOR | Commit 2 adds ``@pytest.mark.skip`` on the v0.9.0 pin (suite stays green at every commit boundary); commit 4 does the deletion together with the fixture retirement. |
+| m4: "no numpy" rule lacks upstream provenance | MINOR | §6 Standing Rule amended to name the round-28-to-round-29 lineage (strict_mode handles broadcasting natively, eliminating the round-28 numpy-reference reimplementation). |
+| Q1: onnx 1.18.0 vs round-26 1.21.0 verification | QUESTION | §2 pre-implementation re-runs registry-anchor checks against the installed onnx version (sandbox: 1.17.0; matrix: 1.14-1.21 stable). The four anchors (Relu@14, BitShift@10/11, Trilu@13/14, Equal@7/14) hold across the pin range. |
+| META: fixture-builder bug shape ungated | INFORMATIONAL | Audit-of-self spot-check during v0.9.1 cycle: sampled one fixture per language (Python aliased_optional_import, Rust trait_object_return, Go r3_compile_rejected, ONNX intermediates_excluded). All four correctly demonstrate their limits. The ``shape_coverage_deferred`` bug was specific to that fixture (docstring claimed mismatch but builder was clean), not a systemic shape across the 21 documented-limit fixtures. Future cycles can deepen the audit-of-self to all 21 fixtures empirically. |
+
+7 findings closed (2 MEDIUM, 4 MINOR, 1 QUESTION). 1 META observation noted with audit-of-self spot-check completed for v0.9.1.
 
 ## [0.9.0] - 2026-05-04
 
