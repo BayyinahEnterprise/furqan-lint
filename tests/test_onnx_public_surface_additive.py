@@ -56,6 +56,13 @@ ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1: frozenset[str] = ONNX_ADAPTER_PUBLIC_SURFACE
     "check_shape_coverage",
 }
 
+# v0.9.2 introduces no new public exports. The check_type=True
+# extension to D11-onnx adds a ``category`` field on the existing
+# ``ShapeCoverageDiagnostic`` dataclass (additive for consumers,
+# dataclass-internal); ``__all__`` is unchanged. Aliases the
+# v0.9.1 baseline per the per-version cadence.
+ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_2: frozenset[str] = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1
+
 
 def test_v0_9_0_onnx_adapter_surface_snapshot() -> None:
     """``furqan_lint.onnx_adapter.__all__`` must include every
@@ -193,3 +200,27 @@ def test_v0_9_1_onnx_adapter_surface_snapshot() -> None:
     )
     # Belt-and-braces: the v0.9.1 baseline is a strict superset of v0.9.0.
     assert ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_0 < ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1
+
+
+def test_v0_9_2_onnx_adapter_surface_snapshot() -> None:
+    """``furqan_lint.onnx_adapter.__all__`` must include every
+    name from the v0.9.2 baseline (alias of v0.9.1; v0.9.2's
+    type-compliance addition lives on the existing
+    ``ShapeCoverageDiagnostic`` dataclass via the new ``category``
+    field, not as a new public export). If a future version drops
+    a name listed here, this test fails and the version requires
+    a major bump.
+    """
+    pytest.importorskip("onnx")
+    from furqan_lint import onnx_adapter
+
+    current = frozenset(onnx_adapter.__all__)
+    missing = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_2 - current
+    assert not missing, (
+        f"onnx_adapter.__all__ removed names from the v0.9.2 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+    assert ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1 == ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_2, (
+        "v0.9.2 must alias v0.9.1; type-compliance added a "
+        "dataclass field, not a new __all__ export."
+    )
