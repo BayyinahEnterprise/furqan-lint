@@ -47,6 +47,17 @@ rust = [
 # compiles the goast binary); not at runtime. Marker-only extra:
 # no PyPI dependencies; Python-side adapter ships in the wheel.
 go = []
+# Optional ONNX adapter (v0.9.0: D24-onnx all-paths-emit +
+# opset-compliance with pinned op registry). pip install
+# furqan-lint[onnx]. Upper bound is load-bearing per Decision 4
+# of the v0.9.0 prompt: the ONNX op registry retroactively adds
+# operators across onnx package releases, so an unpinned upper
+# bound would silently change what counts as e.g. opset 11.
+# No onnxruntime dependency: lint-time checks operate on the
+# graph structure, not on inference.
+onnx = [
+    "onnx>=1.14,<1.18",
+]
 
 [project.scripts]
 furqan-lint = "furqan_lint.cli:main"
