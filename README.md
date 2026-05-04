@@ -28,12 +28,33 @@ into idiomatic Python. Four checks ship today:
 pip install furqan-lint
 ```
 
-Requires Python 3.10+ and `furqan>=0.11.0`. Furqan is not yet on PyPI; install it from GitHub:
+This installs the latest release from PyPI. Requires Python 3.10+ and `furqan>=0.11.0`.
+
+### Optional adapters
+
+```bash
+pip install "furqan-lint[rust]"      # tree-sitter Rust adapter
+pip install "furqan-lint[go]"        # Go adapter (requires Go 1.22+ toolchain at install time)
+pip install "furqan-lint[rust,go]"   # both adapters
+```
+
+### Install from a specific commit or tag
+
+```bash
+pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v0.8.4"
+```
+
+Replace `v0.8.4` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
+
+### Furqan dependency
+
+furqan-lint requires `furqan>=0.11.0`, the Furqan programming-language tooling. As of 2026-05-03 the PyPI release of `furqan` is at v0.10.1; install v0.11.1 directly from GitHub:
 
 ```bash
 pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
-pip install furqan-lint
 ```
+
+This GitHub-pin step will not be necessary once `furqan` v0.11.1 is published to PyPI.
 
 ### Rust support (opt-in)
 
