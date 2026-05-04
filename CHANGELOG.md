@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.4] - <DATE>
+
+### Fixed
+
+(populate during release commit 10)
+
+### Added
+
+(populate during release commit 10)
+
+### Changed
+
+(populate during release commit 10)
+
+### Tests
+
+(populate during release commit 10: count delta + breakdown)
+
 ## [0.8.3] - 2026-05-03
 
 Corrective release. Round-21 found 1 HIGH (Rust diff parse-
