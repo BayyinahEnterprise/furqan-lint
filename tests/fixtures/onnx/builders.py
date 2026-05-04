@@ -227,3 +227,27 @@ def write_model(path: Path, model) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     onnx.save(model, str(path))
     return path
+
+
+def make_dim_param_passthrough_model():
+    """A passthrough model with a symbolic ``dim_param`` batch dim.
+
+    Used by ``test_d11_onnx_dynamic_shape_silent_pass_pin`` to assert
+    that strict-mode shape inference silent-passes on dim_param,
+    matching the behavior named by the v0.9.1
+    ``dynamic_shape_silent_pass`` documented limit.
+    """
+    a = onnx.helper.make_tensor_value_info("x", onnx.TensorProto.FLOAT, ["batch", 10])
+    b = onnx.helper.make_tensor_value_info("y", onnx.TensorProto.FLOAT, ["batch", 10])
+    node = onnx.helper.make_node("Relu", ["x"], ["y"])
+    graph = onnx.helper.make_graph(
+        nodes=[node],
+        name="dim_param_passthrough",
+        inputs=[a],
+        outputs=[b],
+    )
+    return onnx.helper.make_model(
+        graph,
+        opset_imports=[onnx.helper.make_opsetid("", 14)],
+        ir_version=8,
+    )

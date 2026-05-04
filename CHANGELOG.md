@@ -44,11 +44,24 @@ actually contain a mismatch.
 
 (populate during release commit 6)
 
+### Added
+
+- ``dynamic_shape_silent_pass`` documented-limit fixture
+  (``tests/fixtures/onnx/documented_limits/``) plus pinning
+  test ``test_d11_onnx_dynamic_shape_silent_pass_pin``: records
+  that strict-mode shape inference silent-passes on dim_param
+  (symbolic) and empty dim_value (dynamic) shapes per
+  Decision 3 of the v0.9.1 prompt.
+
 ### Retired
 
-(populate during release commit 6: shape_coverage_deferred fixture
-+ test_onnx_d11_deferred_v0_9_0_passes pinning test, both per
-Decision 4 delete-plus-add discipline)
+- ``shape_coverage_deferred`` documented-limit fixture (deleted
+  in commit 4) plus the v0.9.0 pinning test
+  ``test_onnx_d11_deferred_v0_9_0_passes`` (deleted in commit 4
+  after being skipped in commit 2). The retirement is a
+  delete-plus-add pair per Decision 4 of the v0.9.1 prompt
+  (round-30 finding MED-1 closure); the v0.9.1 firing test
+  ``test_d11_onnx_fires_on_shape_mismatch`` replaces it.
 
 ### Tests
 

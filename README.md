@@ -137,7 +137,7 @@ package releases, so an unpinned upper bound would silently
 change what counts as e.g. opset 11. No `onnxruntime` dependency:
 lint-time checks operate on the graph structure, not on inference.
 
-`.onnx` files run two structural checks in v0.9.0:
+`.onnx` files run three structural checks (current as of v0.9.1):
 
 - **D24-onnx (all-paths-emit).** Every declared output in
   `graph.output` must be reachable from some node in the graph
@@ -147,6 +147,13 @@ lint-time checks operate on the graph structure, not on inference.
   declared opset, looked up via `onnx.defs.get_schema(...,
   max_inclusive_version=opset_version)` against the pinned
   `onnx>=1.14,<1.19` registry.
+- **D11-onnx (shape-coverage, v0.9.1).** Run
+  `onnx.shape_inference.infer_shapes(model_proto, strict_mode=True)`;
+  if it raises `InferenceError`, parse the per-op message and
+  emit one `shape_coverage` diagnostic per offender. Strict-mode
+  silent-passes on `dim_param` (symbolic) and empty `dim_value`
+  (dynamic) shapes; this is documented as the
+  `dynamic_shape_silent_pass` four-place limit.
 
 ONNX is structurally a different substrate from Python / Rust /
 Go source code. Nodes are not functions; edges are not return
@@ -157,12 +164,6 @@ structural-honesty primitives, not new instances of the existing
 unified IR. The diagnostic spirit is shared (surface claims must
 match substrate dataflow); the implementation is its own
 package with its own runner.
-
-D11-onnx (shape-coverage on ONNX edges) is deferred to v0.9.1.
-ONNX shape compatibility requires its own design round given
-symbolic dim_params, NumPy broadcasting, axis insertion, and
-dynamic shapes; shipping a one-sentence specification produces
-unbounded false positives.
 
 The additive-only diff covers `graph.input` and `graph.output`
 ValueInfo entries only. `graph.value_info` (intermediate tensors)
@@ -548,18 +549,23 @@ translator-level limits, in `tests/test_go_translator.py`).
   `tests/fixtures/go/documented_limits/r3_compile_rejected.go`
   (added in v0.8.1).
 
-### ONNX adapter (current as of v0.9.0)
+### ONNX adapter (current as of v0.9.1)
 
 Each ONNX limit has a fixture in
 `tests/fixtures/onnx/documented_limits/` and a pinning test in
-`tests/test_onnx_correctness.py` or
-`tests/test_onnx_public_surface_additive.py`.
+`tests/test_onnx_correctness.py`,
+`tests/test_onnx_public_surface_additive.py`, or
+`tests/test_onnx_shape_coverage.py`.
 
-- **D11-onnx (shape-coverage) deferred to v0.9.1.** ONNX shape
-  compatibility requires its own design round given symbolic
-  dim_params, broadcasting, and dynamic shapes. v0.9.0 ships
-  D24-onnx (all-paths-emit) and opset-compliance only. Pinned
-  as `tests/fixtures/onnx/documented_limits/shape_coverage_deferred.py`.
+- **Dynamic shape silent-pass.** Strict-mode shape inference
+  silent-passes on `dim_param` (symbolic batch / sequence dims
+  like `"batch"`) and empty `dim_value` (dynamic shapes). v0.9.1
+  takes the position that this is the right default because
+  ONNX models with `dim_param` are typically deployment-time
+  signature shapes that bind concrete values at runtime; a
+  future release may revisit if a concrete user-reported false
+  negative motivates a stricter mode. Pinned as
+  `tests/fixtures/onnx/documented_limits/dynamic_shape_silent_pass.py`.
 - **`graph.value_info` and `graph.initializer` not in additive
   contract.** The additive-only diff (`furqan-lint diff
   old.onnx new.onnx`) covers `graph.input` and `graph.output`
@@ -574,6 +580,17 @@ Each ONNX limit has a fixture in
   registry must wait for a furqan-lint patch release that bumps
   the pin. Pinned as
   `tests/fixtures/onnx/documented_limits/registry_pin_window.py`.
+
+### Retired in v0.9.1
+
+- **D11-onnx deferred to v0.9.1** (former `shape_coverage_deferred`
+  documented limit). v0.9.1 ships D11-onnx via strict-mode shape
+  inference, so the deferral entry is no longer load-bearing.
+  The companion v0.9.0 pinning test
+  `test_onnx_d11_deferred_v0_9_0_passes` is also deleted in
+  v0.9.1 commit 4 per the delete-plus-add discipline (round-30
+  MED-1 closure). The v0.9.1 firing test
+  `test_d11_onnx_fires_on_shape_mismatch` replaces it.
 
 ## License
 

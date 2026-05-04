@@ -244,3 +244,28 @@ def test_d11_onnx_runner_alongside_d24_and_opset(tmp_path: Path) -> None:
     # per Decision 2 (TypeError, not silent-skip).
     with pytest.raises(TypeError):
         check_onnx_module(module)  # type: ignore[call-arg]
+
+
+def test_d11_onnx_dynamic_shape_silent_pass_pin() -> None:
+    """v0.9.1 documented-limit pin (four-place pattern):
+    strict-mode shape inference silent-passes on dim_param.
+
+    A passthrough model with a symbolic ``dim_param`` batch dim
+    (``["batch", 10] -> Relu -> ["batch", 10]``) is accepted by
+    strict_mode without raising; the checker yields no findings.
+    The fixture documents this at
+    ``tests/fixtures/onnx/documented_limits/dynamic_shape_silent_pass.py``.
+
+    A future onnx release that changes the policy on dim_param
+    handling will fail this test; that is the four-place gate's
+    intended catch boundary.
+    """
+    from furqan_lint.onnx_adapter.shape_coverage import (
+        check_shape_coverage,
+    )
+    from tests.fixtures.onnx.builders import (
+        make_dim_param_passthrough_model,
+    )
+
+    findings = list(check_shape_coverage(make_dim_param_passthrough_model()))
+    assert findings == [], f"v0.9.1 strict_mode should silent-pass on dim_param; got {findings}"

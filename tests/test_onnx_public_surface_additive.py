@@ -132,43 +132,6 @@ def test_v0_9_0_rust_go_baselines_unchanged() -> None:
 # -------------------------------------------------------------
 
 
-@pytest.mark.skip(
-    reason=(
-        "v0.9.0 builder fixed in v0.9.1 commit 2 to actually contain "
-        "a static-shape mismatch (Concat [1,10]+[1,10] declared as "
-        "[1,10]); this pinning test is retired in v0.9.1 commit 4 per "
-        "Decision 4 delete-plus-add discipline. The skip marker keeps "
-        "the suite green at the commit-2 boundary; commit 4 deletes "
-        "this entire test function and the shape_coverage_deferred "
-        "documented-limit fixture."
-    )
-)
-def test_onnx_d11_deferred_v0_9_0_passes(tmp_path) -> None:
-    """D11-onnx (shape-coverage) is deferred to v0.9.1 per
-    Decision 3 of the v0.9.0 prompt.
-
-    A model with an internal-edge shape mismatch that v0.9.1's
-    D11-onnx would catch must NOT fire any finding in v0.9.0.
-    This pinning test records that v0.9.0 accepts the shape;
-    when v0.9.1 ships D11-onnx, this test will be replaced with
-    a positive-D11 fixture. The fixture builder lives at
-    ``tests/fixtures/onnx/builders.py`` per round-24 finding Q3.
-    """
-    pytest.importorskip("onnx")
-    from furqan_lint.onnx_adapter.runner import check_onnx_module
-    from furqan_lint.onnx_adapter.translator import to_onnx_module
-    from tests.fixtures.onnx.builders import (
-        make_shape_mismatch_d11_deferred_model,
-    )
-
-    module = to_onnx_module(make_shape_mismatch_d11_deferred_model())
-    findings = check_onnx_module(module)
-    assert findings == [], (
-        f"v0.9.0 should accept this model; D11-onnx is deferred to "
-        f"v0.9.1 per Decision 3. Got: {findings}"
-    )
-
-
 def test_onnx_diff_intermediates_excluded(tmp_path) -> None:
     """The additive-only diff covers ``graph.input`` and
     ``graph.output`` ValueInfo only (Decision 5 / round-24
