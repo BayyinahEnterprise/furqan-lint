@@ -46,6 +46,16 @@ ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_0: frozenset[str] = frozenset(
     }
 )
 
+# v0.9.1 grows the surface by exactly two names: ShapeCoverageDiagnostic
+# (the D11-onnx finding dataclass) and check_shape_coverage (the
+# checker entry point). Both land via shape_coverage.py per Decision 1
+# of the v0.9.1 prompt. The union form (vs. an explicit literal set)
+# makes the delta textually visible in the source.
+ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1: frozenset[str] = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_0 | {
+    "ShapeCoverageDiagnostic",
+    "check_shape_coverage",
+}
+
 
 def test_v0_9_0_onnx_adapter_surface_snapshot() -> None:
     """``furqan_lint.onnx_adapter.__all__`` must include every
@@ -132,32 +142,6 @@ def test_v0_9_0_rust_go_baselines_unchanged() -> None:
 # -------------------------------------------------------------
 
 
-def test_onnx_d11_deferred_v0_9_0_passes(tmp_path) -> None:
-    """D11-onnx (shape-coverage) is deferred to v0.9.1 per
-    Decision 3 of the v0.9.0 prompt.
-
-    A model with an internal-edge shape mismatch that v0.9.1's
-    D11-onnx would catch must NOT fire any finding in v0.9.0.
-    This pinning test records that v0.9.0 accepts the shape;
-    when v0.9.1 ships D11-onnx, this test will be replaced with
-    a positive-D11 fixture. The fixture builder lives at
-    ``tests/fixtures/onnx/builders.py`` per round-24 finding Q3.
-    """
-    pytest.importorskip("onnx")
-    from furqan_lint.onnx_adapter.runner import check_onnx_module
-    from furqan_lint.onnx_adapter.translator import to_onnx_module
-    from tests.fixtures.onnx.builders import (
-        make_shape_mismatch_d11_deferred_model,
-    )
-
-    module = to_onnx_module(make_shape_mismatch_d11_deferred_model())
-    findings = check_onnx_module(module)
-    assert findings == [], (
-        f"v0.9.0 should accept this model; D11-onnx is deferred to "
-        f"v0.9.1 per Decision 3. Got: {findings}"
-    )
-
-
 def test_onnx_diff_intermediates_excluded(tmp_path) -> None:
     """The additive-only diff covers ``graph.input`` and
     ``graph.output`` ValueInfo only (Decision 5 / round-24
@@ -189,3 +173,23 @@ def test_onnx_diff_intermediates_excluded(tmp_path) -> None:
     assert diags == [], (
         f"intermediate-only diff should not fire MARAD per Decision 5; " f"got: {diags}"
     )
+
+
+def test_v0_9_1_onnx_adapter_surface_snapshot() -> None:
+    """``furqan_lint.onnx_adapter.__all__`` must include every
+    name from the v0.9.1 baseline (v0.9.0 + ShapeCoverageDiagnostic
+    + check_shape_coverage). If a future version drops a name
+    listed here, this test fails and the version requires a major
+    bump.
+    """
+    pytest.importorskip("onnx")
+    from furqan_lint import onnx_adapter
+
+    current = frozenset(onnx_adapter.__all__)
+    missing = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1 - current
+    assert not missing, (
+        f"onnx_adapter.__all__ removed names from the v0.9.1 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+    # Belt-and-braces: the v0.9.1 baseline is a strict superset of v0.9.0.
+    assert ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_0 < ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1

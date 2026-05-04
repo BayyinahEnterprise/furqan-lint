@@ -342,9 +342,12 @@ def _check_onnx_file(path: Path) -> int:
     """Lint a single .onnx file using the v0.9.0 ONNX adapter.
 
     Runs the ONNX checker pipeline (D24-onnx all-paths-emit +
-    opset-compliance with the pinned op registry). D11-onnx
-    (shape-coverage) is deferred to v0.9.1 per Decision 3 of
-    the v0.9.0 prompt.
+    opset-compliance with the pinned op registry + D11-onnx
+    shape-coverage via strict-mode shape inference). D11-onnx
+    landed in v0.9.1 per Decision 1 of that prompt; the call
+    site passes ``model`` (the ModelProto returned by
+    ``parse_model``) to ``check_onnx_module`` so strict-mode
+    inference can run on the protobuf directly.
 
     Typed ``OnnxExtrasNotInstalled`` is raised by parse_model
     when the [onnx] extra is missing; the CLI catches it and
@@ -361,6 +364,9 @@ def _check_onnx_file(path: Path) -> int:
             AllPathsEmitDiagnostic,
             OpsetComplianceDiagnostic,
             check_onnx_module,
+        )
+        from furqan_lint.onnx_adapter.shape_coverage import (
+            ShapeCoverageDiagnostic,
         )
         from furqan_lint.onnx_adapter.translator import to_onnx_module
     except ImportError:
@@ -381,21 +387,23 @@ def _check_onnx_file(path: Path) -> int:
         return 2
 
     module = to_onnx_module(model)
-    diagnostics = check_onnx_module(module)
+    diagnostics = check_onnx_module(module, model)
 
     if not diagnostics:
         print(f"PASS  {path}")
         print(
-            "  2 structural checks ran "
-            "(D24-onnx all-paths-emit, opset-compliance). "
-            "Zero diagnostics."
+            "  3 structural checks ran "
+            "(D24-onnx all-paths-emit, opset-compliance, "
+            "D11-onnx shape-coverage). Zero diagnostics."
         )
         return 0
 
     print(f"MARAD  {path}")
     print(f"  {len(diagnostics)} violation(s):")
     for name, d in diagnostics:
-        if isinstance(d, AllPathsEmitDiagnostic | OpsetComplianceDiagnostic):
+        if isinstance(
+            d, AllPathsEmitDiagnostic | OpsetComplianceDiagnostic | ShapeCoverageDiagnostic
+        ):
             print(f"    [{name}] {d.diagnosis}")
     return 1
 

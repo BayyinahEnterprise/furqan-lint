@@ -23,15 +23,25 @@ opset-compliance (Decision 4):
     package; ``test_opset_registry_version_pinned`` verifies the
     pin.
 
-D11-onnx (shape-coverage, Decision 3) is deferred to v0.9.1.
-The runner reserves the slot via the ``("shape_coverage", d)``
-tuple shape but does not register the checker. v0.9.1 will
-specify the predicate.
+D11-onnx (shape-coverage, v0.9.1):
+    Run ``onnx.shape_inference.infer_shapes(model_proto,
+    strict_mode=True)``; if it raises ``InferenceError``, parse
+    the per-op message into structural-honesty findings.
+    Strict-mode is the canonical ONNX mechanism per Decision 1
+    of the v0.9.1 prompt. The implementation lives in
+    ``onnx_adapter.shape_coverage``; ``check_onnx_module``
+    requires ``model_proto`` (round-30 MED-2: required
+    positional, not ``=None`` default, so missing arguments
+    raise ``TypeError`` rather than silent-skip).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from furqan_lint.onnx_adapter.shape_coverage import ShapeCoverageDiagnostic
 
 from furqan_lint.onnx_adapter.translator import OnnxModule
 
@@ -176,18 +186,43 @@ def check_opset_compliance(module: OnnxModule) -> list[OpsetComplianceDiagnostic
 
 def check_onnx_module(
     module: OnnxModule,
-) -> list[tuple[str, AllPathsEmitDiagnostic | OpsetComplianceDiagnostic]]:
-    """Run every v0.9.0 ONNX checker against ``module``.
+    model_proto: Any,
+) -> list[
+    tuple[
+        str,
+        AllPathsEmitDiagnostic | OpsetComplianceDiagnostic | ShapeCoverageDiagnostic,
+    ]
+]:
+    """Run every ONNX checker against ``module`` and ``model_proto``.
+
+    ``model_proto`` is a **required positional parameter** per
+    Decision 2 of the v0.9.1 prompt (round-30 finding MED-2
+    closure). The fail-fast discipline favors a ``TypeError`` on
+    a missing argument over silently skipping the
+    ``shape_coverage`` checker. The single existing call site is
+    ``cli._check_onnx_file``, which has ``model_proto`` in scope
+    from ``parse_model(path)``.
 
     Returns a list of ``(name, diagnostic)`` pairs where ``name``
-    identifies the checker (``"all_paths_emit"`` or
-    ``"opset_compliance"``). The slot ``("shape_coverage", d)``
-    is reserved for v0.9.1's D11-onnx but no checker registers
-    against it in v0.9.0 (Decision 3).
+    identifies the checker:
+
+    * ``"all_paths_emit"`` - D24-onnx (v0.9.0)
+    * ``"opset_compliance"`` - opset registry check (v0.9.0)
+    * ``"shape_coverage"`` - D11-onnx via strict-mode shape
+      inference (v0.9.1; Decision 1 of v0.9.1 prompt)
     """
-    diagnostics: list[tuple[str, AllPathsEmitDiagnostic | OpsetComplianceDiagnostic]] = []
+    from furqan_lint.onnx_adapter.shape_coverage import check_shape_coverage
+
+    diagnostics: list[
+        tuple[
+            str,
+            AllPathsEmitDiagnostic | OpsetComplianceDiagnostic | ShapeCoverageDiagnostic,
+        ]
+    ] = []
     for d_apr in check_all_paths_emit(module):
         diagnostics.append(("all_paths_emit", d_apr))
     for d_op in check_opset_compliance(module):
         diagnostics.append(("opset_compliance", d_op))
+    for d_sc in check_shape_coverage(model_proto):
+        diagnostics.append(("shape_coverage", d_sc))
     return diagnostics

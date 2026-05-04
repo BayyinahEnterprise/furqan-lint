@@ -80,6 +80,10 @@ class OnnxParseError(Exception):
         super().__init__(f"{path}: {detail}")
 
 
+from furqan_lint.onnx_adapter.shape_coverage import (  # noqa: E402
+    ShapeCoverageDiagnostic,
+    check_shape_coverage,
+)
 from furqan_lint.onnx_adapter.translator import (  # noqa: E402
     BranchSummary,
     NodeSummary,
@@ -93,7 +97,9 @@ __all__ = (
     "OnnxExtrasNotInstalled",
     "OnnxModule",
     "OnnxParseError",
+    "ShapeCoverageDiagnostic",
     "ValueInfoSummary",
+    "check_shape_coverage",
     "extract_public_names",
     "parse_model",
 )

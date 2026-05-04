@@ -80,7 +80,7 @@ _README_TOPIC_KEYWORDS: dict[str, tuple[str, ...] | None] = {
     "generic_type_parameters": ("Generic type parameters", "generic type"),
     "r3_compile_rejected": ("R3 not-applicable", "R3 not_applicable", "compiler rejects"),
     # ONNX documented_limits (v0.9.0).
-    "shape_coverage_deferred": ("D11-onnx", "shape-coverage", "shape coverage"),
+    "dynamic_shape_silent_pass": ("dim_param", "dynamic shape", "strict_mode"),
     "intermediates_excluded": ("intermediates", "graph.value_info", "intermediate tensor"),
     "registry_pin_window": ("onnx>=1.14", "op registry", "op-registry"),
 }

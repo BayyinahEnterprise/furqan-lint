@@ -190,22 +190,29 @@ def make_intermediates_only_diff_model():
 
 
 def make_shape_mismatch_d11_deferred_model():
-    """A model with an obvious shape mismatch on an internal edge
-    that v0.9.0's D11-onnx would catch if it shipped. v0.9.0
-    accepts this model (D11-onnx is deferred to v0.9.1 per
-    Decision 3); the pinning test
-    ``test_onnx_d11_deferred_v0_9_0_passes`` asserts that it does.
+    """A model with an actual static-shape mismatch on the output
+    ValueInfo. ``Concat([1,10], [1,10], axis=1)`` produces ``[1,20]``
+    but the graph declares the output as ``[1,10]``;
+    ``onnx.shape_inference.infer_shapes(..., strict_mode=True)``
+    raises ``InferenceError``.
 
-    Constructed so opset-compliance and D24-onnx still pass: every
-    op exists in opset 14 and every declared output is reachable.
+    v0.9.0 shipped this builder with a clean Relu->Identity chain
+    (no mismatch) under the same name; the round-30 audit caught
+    that the pinning test ``test_onnx_d11_deferred_v0_9_0_passes``
+    was passing for the wrong reason (model was clean, not because
+    D11 was deferred). v0.9.1 fixes the builder as part of the
+    retirement (Decision 4 of the v0.9.1 prompt).
+
+    Constructed so opset-compliance and D24-onnx still pass: Concat
+    is in opset 14 and the declared output ``c`` is reachable from
+    the Concat node.
     """
-    node_a = onnx.helper.make_node("Relu", ["x"], ["mid"], name="relu_a")
-    node_b = onnx.helper.make_node("Identity", ["mid"], ["y"], name="ident_b")
+    node = onnx.helper.make_node("Concat", ["a", "b"], ["c"], axis=1, name="concat_c")
     graph = onnx.helper.make_graph(
-        nodes=[node_a, node_b],
-        name="test_d11_deferred",
-        inputs=[_vi("x", [1, 4])],
-        outputs=[_vi("y", [1, 4])],
+        nodes=[node],
+        name="test_d11_static_mismatch",
+        inputs=[_vi("a", [1, 10]), _vi("b", [1, 10])],
+        outputs=[_vi("c", [1, 10])],  # WRONG: actual is [1, 20] from Concat axis=1
     )
     return onnx.helper.make_model(
         graph,
@@ -220,3 +227,27 @@ def write_model(path: Path, model) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     onnx.save(model, str(path))
     return path
+
+
+def make_dim_param_passthrough_model():
+    """A passthrough model with a symbolic ``dim_param`` batch dim.
+
+    Used by ``test_d11_onnx_dynamic_shape_silent_pass_pin`` to assert
+    that strict-mode shape inference silent-passes on dim_param,
+    matching the behavior named by the v0.9.1
+    ``dynamic_shape_silent_pass`` documented limit.
+    """
+    a = onnx.helper.make_tensor_value_info("x", onnx.TensorProto.FLOAT, ["batch", 10])
+    b = onnx.helper.make_tensor_value_info("y", onnx.TensorProto.FLOAT, ["batch", 10])
+    node = onnx.helper.make_node("Relu", ["x"], ["y"])
+    graph = onnx.helper.make_graph(
+        nodes=[node],
+        name="dim_param_passthrough",
+        inputs=[a],
+        outputs=[b],
+    )
+    return onnx.helper.make_model(
+        graph,
+        opset_imports=[onnx.helper.make_opsetid("", 14)],
+        ir_version=8,
+    )
