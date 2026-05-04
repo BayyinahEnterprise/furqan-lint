@@ -1,4 +1,4 @@
-"""Release-time sweep gate (v0.7.3, Fraz round-17 workflow addition).
+"""Release-time sweep gate (v0.7.3, round-17 workflow addition).
 
 Round 17 found 5 MEDIUMs all in the same equivalence class:
 v0.7.2's release-sweep workflow updated CHANGELOG correctly but
@@ -6,7 +6,7 @@ missed the user-facing surfaces (README headings, README rationale
 text, source docstrings, CLI PASS string, documented_limits/README
 preamble) that referenced the prior version's Phase number.
 
-Fraz's recommendation:
+Round-17 recommendation:
 
 > Add a release-time pre-flight gate: a grep across user-visible
 > surfaces for the prior version's Phase number or version-anchored

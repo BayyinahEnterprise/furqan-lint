@@ -9,6 +9,11 @@ description = "Structural-honesty checks for Python, powered by Furqan"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
+# Authors list reflects framework co-authorship. Bilal Syed
+# Arfeen is the project lead and auditor; Fraz Ashraf is
+# co-author of the audit framework that the audit chain
+# applies. See CHANGELOG.md "Attribution discipline" note for
+# details.
 authors = [
     { name = "Bilal Syed Arfeen" },
     { name = "Fraz Ashraf" },

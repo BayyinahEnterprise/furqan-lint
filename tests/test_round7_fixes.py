@@ -1,6 +1,6 @@
 """Regression tests for the v0.3.4 round-7 review fixes.
 
-Three quality-tier observations from Fraz's round-7 review of
+Three quality-tier observations from the round-7 review of
 v0.3.3, none blocking, all asymmetries between code paths that
 currently produce correct answers but for incidental reasons:
 

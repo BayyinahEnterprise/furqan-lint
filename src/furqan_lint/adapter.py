@@ -131,7 +131,7 @@ def _collect_class_methods(
     """Yield translated ``FunctionDef`` nodes for every method in
     ``class_node`` and recursively in any nested classes.
 
-    v0.3.2 fix for Finding 3 of Fraz's round-5 review. Pre-v0.3.2,
+    v0.3.2 fix for Finding 3 of the round-5 review. Pre-v0.3.2,
     ``_translate_module`` walked one level into a class body and
     only collected ``FunctionDef``/``AsyncFunctionDef`` children.
     Methods of an inner class (e.g., ``Outer.Inner.method``) were
@@ -260,7 +260,7 @@ def _translate_return_annotation(
     """Translate a return-type annotation, mapping ``Optional[X]``,
     ``X | None``, and ``Union[X, None]`` to a Furqan ``UnionType``.
 
-    v0.3.2 fix for Finding 2 of Fraz's round-5 review: when the
+    v0.3.2 fix for Finding 2 of the round-5 review: when the
     annotation is a string literal (the PEP 484 forward-reference
     form, ubiquitous in ``TYPE_CHECKING`` patterns and ORM models
     that need to break circular imports), the literal is parsed as
@@ -301,7 +301,7 @@ def _translate_return_annotation(
         # binary ``UnionType`` with both arms None, which is not
         # semantically meaningful and would break the day someone
         # refactors the matcher to require distinct arms. Caught by
-        # Fraz's round-7 review (Observation 1).
+        # Round-7 review (Observation 1).
         if _is_none_literal(inner):
             return TypePath(
                 base="None",
@@ -390,7 +390,7 @@ def _translate_return_annotation(
     # rejects this shape (the predicate is the contract
     # ``_extract_union_with_none_inner`` can satisfy, which is binary
     # ``Optional``-equivalence; degenerate Unions need their own
-    # branch). Caught by Fraz's round-6 review of v0.3.2.
+    # branch). Caught by the round-6 review of v0.3.2.
     if _is_all_none_union(node):
         return TypePath(
             base="None",
@@ -456,14 +456,14 @@ def _is_union_with_none(node: ast.expr) -> bool:
     ``typing.Union[..., None]`` (or the ``t.Union`` alias) where at
     least one arm is ``None`` AND at least one arm is non-None.
 
-    v0.3.2 fix for Finding 1 of Fraz's round-5 review. Older code
+    v0.3.2 fix for Finding 1 of the round-5 review. Older code
     (pre-PEP 604) routinely uses ``Union[X, None]`` as the spelling
     for what newer code writes as ``Optional[X]`` or ``X | None``.
     mypy and pyright treat all three forms identically; v0.3.1's
     matcher only recognised the latter two, producing a false
     positive ``return_none_mismatch`` on the ``Union`` form.
 
-    v0.3.3 boundary fix for Fraz's round-6 review (the IndexError
+    v0.3.3 boundary fix for the round-6 review (the IndexError
     crash on ``Union[None]``, ``Union[None, None]``, and
     ``Union[None, None, None]``). The predicate is the truthful
     contract that ``_extract_union_with_none_inner`` can satisfy:
@@ -497,7 +497,7 @@ def _extract_union_with_none_inner(node: ast.Subscript) -> ast.expr:
     elts = _slice_elements(node.slice)
     non_none = [e for e in elts if not _is_none_literal(e)]
     # Precondition (enforced by ``_is_union_with_none``): at least
-    # one non-None arm. v0.3.3 added the upstream check after Fraz's
+    # one non-None arm. v0.3.3 added the upstream check after the
     # round-6 review caught the IndexError crash on ``Union[None]``,
     # ``Union[None, None]``, and ``Union[None, None, None]``. This
     # assertion is defense in depth so a future caller that skips
@@ -521,7 +521,7 @@ def _is_all_none_union(node: ast.expr) -> bool:
     the ``None`` literal: ``Union[None]``, ``Union[None, None]``,
     ``Union[None, None, None]``, etc.
 
-    v0.3.3 boundary helper for Fraz's round-6 review. ``typing.Union``
+    v0.3.3 boundary helper for the round-6 review. ``typing.Union``
     evaluates these forms to ``type(None)`` at runtime, so the
     semantically correct translation is a bare
     ``TypePath(base="None")`` rather than a binary ``UnionType``
