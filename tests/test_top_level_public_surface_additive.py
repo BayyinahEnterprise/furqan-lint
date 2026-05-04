@@ -82,6 +82,13 @@ V0_8_2_SURFACE: frozenset[str] = V0_7_0_SURFACE
 # top-level furqan_lint surface (all changes live in
 # subpackage / binary / test layers). Aliases V0_7_0_SURFACE.
 V0_8_3_SURFACE: frozenset[str] = V0_7_0_SURFACE
+# v0.8.4 corrective release: round-22 patch (PARSE ERROR
+# diagnostic filename, Go docstring sweep, three CI gates
+# under sections 7.5/7.11/7.12, CI matrix expansion to 14
+# jobs, release.yml PyPI Trusted Publishing, community files,
+# README install rewrite). None of these touch the top-level
+# furqan_lint surface. Aliases V0_7_0_SURFACE.
+V0_8_4_SURFACE: frozenset[str] = V0_7_0_SURFACE
 
 
 def _current_surface() -> frozenset[str]:
@@ -226,5 +233,23 @@ def test_v0_8_3_surface_is_subset_of_current() -> None:
     missing = V0_8_3_SURFACE - current
     assert not missing, (
         f"furqan_lint.__all__ removed names from V0_8_3_SURFACE: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_v0_8_4_surface_is_subset_of_current() -> None:
+    """The v0.8.4 baseline (alias of V0_7_0_SURFACE; the v0.8.4
+    round-22 patch lands a PARSE ERROR diagnostic fix, Go
+    docstring sweep, three CI gates, CI matrix expansion,
+    release workflow, community files, and a README rewrite.
+    None of these touch the top-level surface) must remain a
+    subset of the current furqan_lint.__all__.
+    """
+    import furqan_lint
+
+    current = frozenset(furqan_lint.__all__)
+    missing = V0_8_4_SURFACE - current
+    assert not missing, (
+        f"furqan_lint.__all__ removed names from V0_8_4_SURFACE: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )

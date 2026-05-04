@@ -49,6 +49,11 @@ _GO_ADAPTER_PUBLIC_SURFACE_v0_8_2: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v
 # format refinement, not a Python __all__ change). Aliases
 # v0_8_2 per the per-version cadence.
 _GO_ADAPTER_PUBLIC_SURFACE_v0_8_3: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_2
+# v0.8.4 corrective: round-22 patch sweeps two go_adapter
+# docstrings (no surface change), patches PARSE ERROR
+# diagnostic filename, lands three CI gates and the release
+# workflow. No go_adapter __all__ change. Aliases v0.8.3.
+_GO_ADAPTER_PUBLIC_SURFACE_v0_8_4: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_3
 
 
 def test_go_adapter_public_surface_is_superset_of_v0_8_0_baseline() -> None:
@@ -120,5 +125,21 @@ def test_go_adapter_public_surface_is_superset_of_v0_8_3_baseline() -> None:
     missing = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_3 - current
     assert not missing, (
         f"go_adapter.__all__ removed names from v0.8.3 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_go_adapter_public_surface_is_superset_of_v0_8_4_baseline() -> None:
+    """The v0.8.4 baseline (alias of v0_8_3; the round-22
+    corrective sweeps two go_adapter docstrings and lands
+    PARSE ERROR diagnostic + CI gates + release workflow,
+    none of which change the go_adapter __all__ surface).
+    """
+    from furqan_lint import go_adapter
+
+    current = frozenset(go_adapter.__all__)
+    missing = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_4 - current
+    assert not missing, (
+        f"go_adapter.__all__ removed names from v0.8.4 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )
