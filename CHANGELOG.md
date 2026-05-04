@@ -19,6 +19,42 @@ introduced this convention.
 
 ---
 
+## [0.9.2] - <DATE>
+
+D11-onnx adds type-compliance via ``check_type=True``. Closes
+Gap 1 from the v0.9.1 post-release NeuroGolf evaluation:
+``check_type=True`` is the canonical ONNX mechanism for catching
+opset-correct-but-type-incompatible operator usages
+(e.g. Equal-on-float in opset 10). Empirically verified
+against onnx 1.17.0 in the sandbox: purely additive to
+strict_mode, zero regressions on v0.9.1 silent-pass / firing
+cases.
+
+### Fixed
+
+(populate during release commit 4)
+
+### Added
+
+(populate during release commit 4)
+
+### Changed
+
+(populate during release commit 4)
+
+### Deferred
+
+(populate during release commit 4: Gap 2 (score-validity
+advisory) scheduled for v0.9.3 per Decision 9; Gap 3
+(channel-sum / input-mask consistency) held until NeuroGolf
+provides a tight spec; Gap 4 (numpy-vs-ONNX divergence
+detection) scheduled for v0.9.4 per Decision 9.)
+
+### Tests
+
+Test count: 380 (v0.9.1 ship state) -> <TBD>
+(v0.9.2). Net delta: <TBD>.
+
 ## [0.9.1] - 2026-05-04
 
 D11-onnx (shape-coverage on ONNX edges) ships, deferred from
