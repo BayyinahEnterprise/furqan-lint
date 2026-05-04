@@ -1,6 +1,6 @@
 """Regression tests for the v0.3.5 corrective fixes.
 
-Two documented limitations from the Fraz audit chain are
+Two documented limitations from the audit chain are
 promoted to fixes in v0.3.5:
 
 * try/except modeling - the false-negative D24 case (a function

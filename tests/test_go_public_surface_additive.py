@@ -54,6 +54,9 @@ _GO_ADAPTER_PUBLIC_SURFACE_v0_8_3: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v
 # diagnostic filename, lands three CI gates and the release
 # workflow. No go_adapter __all__ change. Aliases v0.8.3.
 _GO_ADAPTER_PUBLIC_SURFACE_v0_8_4: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_3
+# v0.8.5 attribution-corrective: documentation-only release.
+# No go_adapter __all__ change. Aliases v0.8.4.
+_GO_ADAPTER_PUBLIC_SURFACE_v0_8_5: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_4
 
 
 def test_go_adapter_public_surface_is_superset_of_v0_8_0_baseline() -> None:
@@ -141,5 +144,20 @@ def test_go_adapter_public_surface_is_superset_of_v0_8_4_baseline() -> None:
     missing = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_4 - current
     assert not missing, (
         f"go_adapter.__all__ removed names from v0.8.4 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_go_adapter_public_surface_is_superset_of_v0_8_5_baseline() -> None:
+    """The v0.8.5 baseline (alias of v0_8_4; the v0.8.5
+    attribution-corrective is a documentation-only release
+    that does not change the go_adapter __all__ surface).
+    """
+    from furqan_lint import go_adapter
+
+    current = frozenset(go_adapter.__all__)
+    missing = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_5 - current
+    assert not missing, (
+        f"go_adapter.__all__ removed names from v0.8.5 baseline: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )

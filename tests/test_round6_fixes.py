@@ -1,6 +1,6 @@
 """Regression tests for the v0.3.3 round-6 review fixes.
 
-One blocking finding from Fraz's round-6 review of v0.3.2,
+One blocking finding from the round-6 review of v0.3.2,
 empirically reproduced before fixing:
 
 * Boundary crash on degenerate ``Union[None, ...]`` shapes.

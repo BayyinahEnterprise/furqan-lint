@@ -87,7 +87,7 @@ def _suggested_fix(return_type: object) -> str:
     """Generate the ``minimal_fix`` string with awareness of
     malformed bare annotations.
 
-    v0.3.4 fix for Fraz's round-7 review (Observation 3). When the
+    v0.3.4 fix for the round-7 review (Observation 3). When the
     user writes a bare ``Optional`` or bare ``Union`` (no
     subscript), the adapter translates the annotation as a plain
     ``TypePath`` whose ``base`` is the literal string ``"Optional"``

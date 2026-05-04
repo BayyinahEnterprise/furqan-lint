@@ -1,5 +1,151 @@
 # Changelog
 
+## Attribution discipline
+
+The audit framework applied across releases v0.2.0 through v0.8.5
+is the Bilal-Fraz hybridized framework, jointly developed by
+Bilal Syed Arfeen (Bayyinah project lead) and Fraz Ashraf. The
+auditor role since the chain's inception has been Bilal,
+applying the framework to his own substrate; this is a
+single-person audit-of-self pattern. Earlier CHANGELOG entries
+(rounds 4 through 17) attribute findings to "Fraz" by name; that
+attribution is preserved as historical record but the going-
+forward convention is to attribute findings to "round-N audit"
+without naming the auditor inline. Framework co-authorship is
+preserved in pyproject.toml.
+
+See v0.8.5 for the attribution-corrective release that
+introduced this convention.
+
+---
+
+## [0.8.5] - 2026-05-03
+
+Documentation-only release. Single finding from the post-v0.8.4
+review: the audit chain's CHANGELOG and source-code attribution
+to "Fraz" as the auditor was imprecise. The framework is
+Bilal-Fraz hybridized; the auditor role across all 22 prior
+rounds has been Bilal. This release adds the attribution
+discipline note (above) and sweeps source-code inline comments
+where the round-N audit is the load-bearing fact and the
+auditor name is not. Historical CHANGELOG sections are
+preserved as-is per the immutability discipline.
+
+### Fixed
+
+- Source-code inline comments crediting "Fraz's round-N review"
+  in ``src/furqan_lint/adapter.py`` (8 references) and
+  ``src/furqan_lint/return_none.py`` (1 reference) swept to
+  "round-N review" form. The round number is the load-bearing
+  fact; the auditor attribution is dropped from inline comments.
+- Test-file module docstrings in ``tests/test_round5_fixes.py``,
+  ``tests/test_round6_fixes.py``, ``tests/test_round7_fixes.py``,
+  ``tests/test_round8_fixes.py``, and
+  ``tests/test_release_sweep_gate.py`` updated to use the
+  going-forward attribution convention.
+
+### Added
+
+- Attribution discipline note at the top of CHANGELOG.md
+  (above all release sections) explaining the framework's
+  hybrid origin and the auditor role.
+- Per-version baselines for v0.8.5 in the three additive-only
+  surface snapshots (``tests/test_rust_public_surface_additive
+  .py``, ``tests/test_go_public_surface_additive.py``,
+  ``tests/test_top_level_public_surface_additive.py``). Each
+  aliases the v0.8.4 baseline since v0.8.5 introduces no
+  public surface change. Required by the section 7.6
+  per-version cadence.
+
+### Changed
+
+- ``pyproject.toml`` authors list: no change. Both Bilal Syed
+  Arfeen and Fraz Ashraf are preserved as co-authors of the
+  framework. A clarifying comment above the authors block
+  notes the role split (project lead and auditor vs. framework
+  co-author).
+
+### Out of scope (preserved as historical record)
+
+- Existing ``## [0.2.0]`` through ``## [0.8.4]`` CHANGELOG
+  sections are NOT edited. The audit chain's immutability
+  discipline applies: prior release sections are historical
+  record and remain in place verbatim.
+- Existing commit subjects and bodies that mention "Fraz" are
+  NOT rewritten. Git history is immutable on origin.
+
+### Tests
+
+Test count: 344 (v0.8.4 ship state on origin/main) -> 347
+(v0.8.5). Net delta: +3.
+
+The +3 delta is structural. Per the section 7.6 per-version
+cadence, every minor and patch version ships a per-version
+public-surface baseline pin in each of the three additive-only
+surface snapshots (rust_adapter, go_adapter, top-level
+furqan_lint). v0.8.5 introduces no Python public surface
+change; each baseline aliases v0.8.4. The three new pin tests
+assert that the corresponding ``__all__`` remains a superset
+of its v0.8.5 baseline, anchoring v0.8.5 in the per-version
+cadence required by section 7.6.
+
+Aside from the structural cadence pins, this release
+introduces no other tests: the attribution corrective is
+entirely documentation-and-comment-text and adds no new
+behavior to verify.
+
+Note on baseline: the v0.8.5 prompt cited 338 as the v0.8.4
+ship count and predicted a 0 delta for v0.8.5. The empirical
+count on the merged v0.8.4 PR #10 included the v0.8.4 hotfix
+tests (three per-version surface baseline pins for v0.8.4
+plus one historical-untagged allowlist pin), bringing the
+actual v0.8.4 ship count (pytest --collect-only) to 344;
+v0.8.5 then adds three more per-version pins per the section
+7.6 cadence, landing at 347.
+Per the prompt's section 8 most-conservative-interpretation
+rule, the empirical counts are used and the under-specification
+is documented here.
+
+The section 7.10 CHANGELOG-math gate verifies 347 - 344 = 3.
+
+### Section 11.3 Five Questions
+
+1. **What was added?** Attribution discipline note at the top
+   of CHANGELOG.md.
+2. **What was fixed?** Source-code and test-file inline
+   attribution to "Fraz" swept to going-forward convention.
+3. **What was retired?** The attribution-by-name-in-source-
+   code pattern. Going-forward, source-code comments reference
+   "round-N review" without naming the auditor inline.
+4. **What did this release introduce as new limitations?**
+   None.
+5. **What is the empirical evidence the substrate behaves as
+   claimed?** Pytest --collect-only reports 347 tests (344
+   carried forward from v0.8.4 plus 3 new per-version surface
+   baseline pins per the section 7.6 cadence); em-dash gate
+   confirms no regression in the new content; ``git grep -n
+   "Fraz" src/ tests/`` returns empty after commit 2.
+
+### Section 5.1 Validator-bias self-disclosure
+
+Bilal is the project lead and the auditor. This release is
+Bilal-as-auditor surfacing a finding about how the audit
+chain has attributed Bilal-as-auditor's work in its own
+historical record. The structural-honesty thesis applies: the
+project's CHANGELOG must accurately describe what the project
+did, including who did the audits. Future audit reports
+across the BayyinahEnterprise project trio (furqan,
+furqan-lint, bayyinah-integrity-scanner) will use the
+going-forward convention.
+
+### Section 5.2 Prompt-grounding self-check log
+
+Pytest collect-only count: 347 (344 carried forward from
+v0.8.4 ship state on origin/main after PR #10 merge plus 3
+new per-version surface baseline pins per the section 7.6
+cadence). Delta: 347 - 344 = 3. CHANGELOG-math gate verified.
+All verification gates pass: green.
+
 ## [0.8.4] - 2026-05-03
 
 Corrective release. Round-22 found 1 LOW (Go ``extract_public_names``

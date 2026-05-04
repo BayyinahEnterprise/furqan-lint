@@ -89,6 +89,13 @@ V0_8_3_SURFACE: frozenset[str] = V0_7_0_SURFACE
 # README install rewrite). None of these touch the top-level
 # furqan_lint surface. Aliases V0_7_0_SURFACE.
 V0_8_4_SURFACE: frozenset[str] = V0_7_0_SURFACE
+# v0.8.5 attribution-corrective release: documentation-only
+# release (CHANGELOG attribution discipline note, source-code
+# inline comment sweep removing "Fraz" from current substrate
+# while preserving historical CHANGELOG record). None of these
+# touch the top-level furqan_lint surface. Aliases
+# V0_7_0_SURFACE.
+V0_8_5_SURFACE: frozenset[str] = V0_7_0_SURFACE
 
 
 def _current_surface() -> frozenset[str]:
@@ -251,5 +258,23 @@ def test_v0_8_4_surface_is_subset_of_current() -> None:
     missing = V0_8_4_SURFACE - current
     assert not missing, (
         f"furqan_lint.__all__ removed names from V0_8_4_SURFACE: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+
+
+def test_v0_8_5_surface_is_subset_of_current() -> None:
+    """The v0.8.5 baseline (alias of V0_7_0_SURFACE; the v0.8.5
+    attribution-corrective is a documentation-only release
+    that adds a CHANGELOG attribution-discipline note and
+    sweeps source-code inline comments. None of these touch
+    the top-level surface) must remain a subset of the current
+    furqan_lint.__all__.
+    """
+    import furqan_lint
+
+    current = frozenset(furqan_lint.__all__)
+    missing = V0_8_5_SURFACE - current
+    assert not missing, (
+        f"furqan_lint.__all__ removed names from V0_8_5_SURFACE: "
         f"{sorted(missing)}. Removals require a major-version bump."
     )

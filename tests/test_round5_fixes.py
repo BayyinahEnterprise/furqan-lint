@@ -1,6 +1,6 @@
 """Regression tests for the v0.3.2 round-5 review fixes.
 
-Three findings from Fraz's round-5 review of v0.3.1, all empirically
+Three findings from the round-5 review of v0.3.1, all empirically
 reproduced before fixing:
 
 * Finding 1 (Union[X, None]) - the matcher now recognises
