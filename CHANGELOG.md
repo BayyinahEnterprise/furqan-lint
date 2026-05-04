@@ -19,6 +19,36 @@ introduced this convention.
 
 ---
 
+## [0.9.0] - <DATE>
+
+ONNX adapter release. Extends structural-honesty diagnostics to
+ONNX computational graphs as a parallel diagnostic family
+(D24-onnx all-paths-emit + opset-compliance with pinned op
+registry); this is honest divergence from the Python/Rust/Go
+checker pipeline, not an instance of the existing
+check_d24 / check_status_coverage checkers operating on
+a unified IR. Closes 17 valid findings across rounds 24 and 25
+(13 from round-24 prompt audit combining Bilal and Grok review;
+4 from round-25 corrections audit). See round-24/25 closure
+ledger below.
+
+### Fixed
+
+(populate during release commit 7)
+
+### Added
+
+(populate during release commit 7)
+
+### Changed
+
+(populate during release commit 7)
+
+### Tests
+
+Test count: 347 (v0.8.5 ship state on origin/main) -> <TBD>
+(v0.9.0). Net delta: <TBD>.
+
 ## [0.8.5] - 2026-05-03
 
 Documentation-only release. Single finding from the post-v0.8.4
