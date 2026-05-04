@@ -132,8 +132,17 @@ def test_gate_changelog_math_v0_9_0() -> None:
     end = (start + 1 + next_entry.start()) if next_entry else len(changelog)
     block = changelog[start:end]
 
-    if "<DATE>" in block or "<TBD>" in block:
-        pytest.skip("v0.9.0 CHANGELOG entry still in placeholder form")
+    # In-flight markers ONLY in the entry header (## [v] - <DATE>)
+    # or the canonical "-> <TBD>" arithmetic. Backtick-quoted prose
+    # references to the literal strings (release bodies that
+    # describe the placeholder mechanism) do NOT count; mirrors
+    # tests/test_changelog_math_gate.py lines 54-82.
+    if re.search(r"^## \[[^\]]+\] - <DATE>", block, re.MULTILINE):
+        pytest.skip("v0.9.0 CHANGELOG entry still has <DATE> in header")
+    if re.search(r"->\s*<TBD>", block):
+        pytest.skip("v0.9.0 CHANGELOG entry still has -> <TBD> in Tests block")
+    if re.search(r"Net delta:\s*<TBD>", block):
+        pytest.skip("v0.9.0 CHANGELOG entry still has Net delta: <TBD>")
 
     # Populated form: parse the canonical "Test count: X (...) -> Y (...). Net delta: +Z" sentence.
     m = re.search(

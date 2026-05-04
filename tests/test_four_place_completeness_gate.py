@@ -79,6 +79,10 @@ _README_TOPIC_KEYWORDS: dict[str, tuple[str, ...] | None] = {
     "interface_method_dispatch": ("Interface method dispatch", "interface dispatch"),
     "generic_type_parameters": ("Generic type parameters", "generic type"),
     "r3_compile_rejected": ("R3 not-applicable", "R3 not_applicable", "compiler rejects"),
+    # ONNX documented_limits (v0.9.0).
+    "shape_coverage_deferred": ("D11-onnx", "shape-coverage", "shape coverage"),
+    "intermediates_excluded": ("intermediates", "graph.value_info", "intermediate tensor"),
+    "registry_pin_window": ("onnx>=1.14", "op registry", "op-registry"),
 }
 
 
