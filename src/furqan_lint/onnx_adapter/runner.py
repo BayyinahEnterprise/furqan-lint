@@ -19,7 +19,7 @@ opset-compliance (Decision 4):
     ``onnx.defs.get_schema(op_type, max_inclusive_version=version,
     domain=node.domain)``. If the lookup raises (op not present
     at the declared opset), that is a finding. The op-registry
-    source is ``onnx.defs`` from the pinned ``onnx>=1.14,<1.18``
+    source is ``onnx.defs`` from the pinned ``onnx>=1.14,<1.19``
     package; ``test_opset_registry_version_pinned`` verifies the
     pin.
 
@@ -140,7 +140,7 @@ def check_opset_compliance(module: OnnxModule) -> list[OpsetComplianceDiagnostic
     (a missing custom-domain schema is still reported).
 
     A node whose op_type is not present at the declared version
-    fires a finding. The pinned ``onnx>=1.14,<1.18`` registry
+    fires a finding. The pinned ``onnx>=1.14,<1.19`` registry
     (Decision 4) ensures this lookup is deterministic across
     package upgrades.
     """
@@ -167,7 +167,7 @@ def check_opset_compliance(module: OnnxModule) -> list[OpsetComplianceDiagnostic
                         f"'{node.op_type}' which is not present in "
                         f"opset {module.opset_version} "
                         f"(domain={domain!r}); see "
-                        f"onnx>=1.14,<1.18 op registry."
+                        f"onnx>=1.14,<1.19 op registry."
                     ),
                 )
             )

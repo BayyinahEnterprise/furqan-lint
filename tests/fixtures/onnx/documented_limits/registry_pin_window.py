@@ -1,6 +1,6 @@
 """Documented-limit fixture: registry_pin_window.
 
-The ONNX op-registry pin window is ``onnx>=1.14,<1.18`` per
+The ONNX op-registry pin window is ``onnx>=1.14,<1.19`` per
 Decision 4 of the v0.9.0 prompt. The upper bound is load-bearing:
 the ONNX op registry retroactively adds operators to historical
 opsets across ``onnx`` package releases, so an unpinned upper

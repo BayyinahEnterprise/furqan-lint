@@ -56,7 +56,7 @@ go = []
 # No onnxruntime dependency: lint-time checks operate on the
 # graph structure, not on inference.
 onnx = [
-    "onnx>=1.14,<1.18",
+    "onnx>=1.14,<1.19",
 ]
 
 [project.scripts]

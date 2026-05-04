@@ -131,7 +131,7 @@ path is unchanged:
 pip install "furqan-lint[onnx]"
 ```
 
-This pulls in `onnx>=1.14,<1.18`. The upper bound is load-bearing:
+This pulls in `onnx>=1.14,<1.19`. The upper bound is load-bearing:
 the ONNX op registry retroactively adds operators across `onnx`
 package releases, so an unpinned upper bound would silently
 change what counts as e.g. opset 11. No `onnxruntime` dependency:
@@ -146,7 +146,7 @@ lint-time checks operate on the graph structure, not on inference.
 - **opset-compliance.** Every node's `op_type` must exist in the
   declared opset, looked up via `onnx.defs.get_schema(...,
   max_inclusive_version=opset_version)` against the pinned
-  `onnx>=1.14,<1.18` registry.
+  `onnx>=1.14,<1.19` registry.
 
 ONNX is structurally a different substrate from Python / Rust /
 Go source code. Nodes are not functions; edges are not return
@@ -567,7 +567,7 @@ Each ONNX limit has a fixture in
   of scope per Decision 5 of the v0.9.0 prompt; including them
   would create false positives on every model retraining.
   Pinned as `tests/fixtures/onnx/documented_limits/intermediates_excluded.py`.
-- **ONNX op-registry pin window `>=1.14,<1.18`.** Op registry
+- **ONNX op-registry pin window `>=1.14,<1.19`.** Op registry
   version is pinned to prevent silent semantics drift across
   `onnx` package upgrades (the ONNX op registry retroactively
   adds operators across releases). Consumers requiring a newer

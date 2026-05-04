@@ -10,7 +10,7 @@ Covers the five commit-3 tests:
 
 The pin test (round-24 finding M2 closure) reads the resolved
 ``onnx.__version__`` and asserts it falls within the declared
-``>=1.14,<1.18`` window. It also asserts deterministic schema
+``>=1.14,<1.19`` window. It also asserts deterministic schema
 lookup behaviour for two retroactive-addition cases.
 """
 
@@ -84,7 +84,7 @@ def test_onnx_opset_clean_when_all_ops_in_declared_opset() -> None:
 
 def test_opset_registry_version_pinned() -> None:
     """The installed onnx package version must fall within the
-    declared >=1.14,<1.18 pin window (round-24 finding M2 / Decision 4).
+    declared >=1.14,<1.19 pin window (round-24 finding M2 / Decision 4).
 
     Also asserts that a canonical opset-14 op (Relu) and a
     canonical opset-13 op (Identity) are both deterministically
@@ -99,14 +99,14 @@ def test_opset_registry_version_pinned() -> None:
     m = re.match(r"^(\d+)\.(\d+)", version)
     assert m, f"could not parse onnx version: {version}"
     major, minor = int(m.group(1)), int(m.group(2))
-    # >= 1.14 and < 1.18
+    # >= 1.14 and < 1.19
     assert (major, minor) >= (1, 14), (
         f"onnx version {version} below the pinned lower bound 1.14; "
-        f"the [onnx] extra in pyproject.toml requires >=1.14,<1.18."
+        f"the [onnx] extra in pyproject.toml requires >=1.14,<1.19."
     )
-    assert (major, minor) < (1, 18), (
-        f"onnx version {version} at or above the pinned upper bound 1.18; "
-        f"the [onnx] extra in pyproject.toml requires <1.18 to keep the "
+    assert (major, minor) < (1, 19), (
+        f"onnx version {version} at or above the pinned upper bound 1.19; "
+        f"the [onnx] extra in pyproject.toml requires <1.19 to keep the "
         f"op registry deterministic across package upgrades."
     )
     # Two known retroactive-addition cases handled deterministically.

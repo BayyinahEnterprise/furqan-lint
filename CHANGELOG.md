@@ -55,7 +55,7 @@ round-24 / 25 closure ledger below.
   ``src/furqan_lint/onnx_adapter/__init__.py``.
 - Round-24 finding M2 (MAJOR): opset-compliance had no
   specified op-registry source or version pin. Decision 4
-  specifies ``onnx.defs`` from the pinned ``onnx>=1.14,<1.18``
+  specifies ``onnx.defs`` from the pinned ``onnx>=1.14,<1.19``
   package; the pin is enforced by
   ``test_opset_registry_version_pinned``. The pin is documented
   as a four-place limit at
@@ -95,7 +95,7 @@ round-24 / 25 closure ledger below.
   ``onnx`` package is imported lazily; the [onnx] extra gates
   the import; the typed ``OnnxExtrasNotInstalled`` exception
   carries the install hint.
-- ``[onnx]`` pip extra pulling ``onnx>=1.14,<1.18`` (Decision 6).
+- ``[onnx]`` pip extra pulling ``onnx>=1.14,<1.19`` (Decision 6).
   Upper bound is load-bearing per Decision 4: the ONNX op
   registry retroactively adds operators across ``onnx`` package
   releases, so an unpinned upper bound would silently change
@@ -107,7 +107,7 @@ round-24 / 25 closure ledger below.
 - opset-compliance (Decision 4): every node's ``op_type`` must
   exist in the declared opset, looked up via
   ``onnx.defs.get_schema(..., max_inclusive_version=...)``
-  from the pinned ``onnx>=1.14,<1.18`` registry.
+  from the pinned ``onnx>=1.14,<1.19`` registry.
 - Additive-only diff on ``graph.input`` / ``graph.output``
   ValueInfo names + shapes formatted as ``input:NAME:SHAPE``
   and ``output:NAME:SHAPE`` (Decision 5). Intermediates
@@ -129,7 +129,7 @@ round-24 / 25 closure ledger below.
   ``shape_coverage_deferred`` (D11-onnx deferred to v0.9.1 per
   Decision 3), ``intermediates_excluded`` (additive contract
   covers graph.input / graph.output only), and
-  ``registry_pin_window`` (op-registry pin >=1.14,<1.18).
+  ``registry_pin_window`` (op-registry pin >=1.14,<1.19).
 - ``_RENAME_HINT["onnx"]`` entry in
   ``src/furqan_lint/additive.py`` for the ONNX additive-diff
   user-visible rename hint prose.
@@ -202,7 +202,7 @@ Breakdown:
 | C1 | Bilal | CRITICAL | Framing note + runner.py docstring (parallel diagnostic family) |
 | C2 | Bilal | CRITICAL | _SUPPORTED_EXTENSIONS + walker fix + ``test_onnx_files_walked_in_directory_check`` |
 | M1 | Bilal | MAJOR | ``onnx.checker.check_model()`` not invoked; parser docstring + Decision 1 |
-| M2 | Bilal | MAJOR | ``onnx.defs`` registry pin >=1.14,<1.18; ``test_opset_registry_version_pinned`` |
+| M2 | Bilal | MAJOR | ``onnx.defs`` registry pin >=1.14,<1.19; ``test_opset_registry_version_pinned`` |
 | M3 | Bilal | MAJOR | D11-onnx deferred to v0.9.1 (Decision 3) + four-place fixture ``shape_coverage_deferred`` |
 | M4 | Bilal | MAJOR | §4 test count = 370 enforced by CHANGELOG-math gate |
 | m1 | Bilal | MINOR | Guard 4 ordering pinned in ``_check_additive`` docstring |

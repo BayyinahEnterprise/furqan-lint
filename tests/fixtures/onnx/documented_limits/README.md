@@ -16,6 +16,6 @@ and at least one pinning test under `tests/test_*.py`.
   finding m2. Pinned by
   `tests/test_onnx_public_surface_additive.py::test_onnx_diff_intermediates_excluded`.
 
-- `registry_pin_window`: the `[onnx]` extra pins `onnx>=1.14,<1.18`
+- `registry_pin_window`: the `[onnx]` extra pins `onnx>=1.14,<1.19`
   per Decision 4 / round-24 finding M2. Pinned by
   `tests/test_onnx_correctness.py::test_opset_registry_version_pinned`.
