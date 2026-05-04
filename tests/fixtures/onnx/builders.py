@@ -251,3 +251,77 @@ def make_dim_param_passthrough_model():
         opset_imports=[onnx.helper.make_opsetid("", 14)],
         ir_version=8,
     )
+
+
+def make_equal_float_op10_model():
+    """Equal-on-float in opset 10: type-mismatch under check_type=True.
+
+    Equal at opset 10 supports only int / bool tensors; float was
+    added in opset 11. ``infer_shapes(..., check_type=True)`` raises
+    ``InferenceError`` with the message
+    ``(op_type:Equal): A typestr: T, has unsupported type: tensor(float)``.
+
+    Used by ``test_d11_onnx_type_mismatch_fires_on_equal_float_op10``
+    and routed through ``check_shape_coverage`` to produce a
+    ``ShapeCoverageDiagnostic`` with ``category="type_mismatch"``.
+    """
+    a = onnx.helper.make_tensor_value_info("a", onnx.TensorProto.FLOAT, [1, 4])
+    b = onnx.helper.make_tensor_value_info("b", onnx.TensorProto.FLOAT, [1, 4])
+    c = onnx.helper.make_tensor_value_info("c", onnx.TensorProto.BOOL, [1, 4])
+    node = onnx.helper.make_node("Equal", ["a", "b"], ["c"], name="eq_float")
+    graph = onnx.helper.make_graph(
+        nodes=[node],
+        name="equal_float_op10",
+        inputs=[a, b],
+        outputs=[c],
+    )
+    return onnx.helper.make_model(
+        graph,
+        opset_imports=[onnx.helper.make_opsetid("", 10)],
+        ir_version=7,
+    )
+
+
+def make_equal_int64_op10_model():
+    """Equal-on-int64 in opset 10: well-typed; silent-passes."""
+    a = onnx.helper.make_tensor_value_info("a", onnx.TensorProto.INT64, [1, 4])
+    b = onnx.helper.make_tensor_value_info("b", onnx.TensorProto.INT64, [1, 4])
+    c = onnx.helper.make_tensor_value_info("c", onnx.TensorProto.BOOL, [1, 4])
+    node = onnx.helper.make_node("Equal", ["a", "b"], ["c"], name="eq_int64")
+    graph = onnx.helper.make_graph(
+        nodes=[node],
+        name="equal_int64_op10",
+        inputs=[a, b],
+        outputs=[c],
+    )
+    return onnx.helper.make_model(
+        graph,
+        opset_imports=[onnx.helper.make_opsetid("", 10)],
+        ir_version=7,
+    )
+
+
+def make_reshape_float_shape_op13_model():
+    """Reshape with non-int64 shape input at opset 13.
+
+    ``Reshape`` at opset 13 requires its second input ``shape``
+    to be ``int64``; passing ``float`` triggers the type-restriction
+    rule under ``check_type=True``. The second non-Equal type-mismatch
+    fixture per §4 of the v0.9.2 prompt.
+    """
+    data = onnx.helper.make_tensor_value_info("data", onnx.TensorProto.FLOAT, [1, 4])
+    # WRONG dtype on the shape input (should be INT64).
+    shape = onnx.helper.make_tensor_value_info("shape", onnx.TensorProto.FLOAT, [2])
+    out = onnx.helper.make_tensor_value_info("out", onnx.TensorProto.FLOAT, [4, 1])
+    node = onnx.helper.make_node("Reshape", ["data", "shape"], ["out"], name="reshape_bad_shape")
+    graph = onnx.helper.make_graph(
+        nodes=[node],
+        name="reshape_float_shape_op13",
+        inputs=[data, shape],
+        outputs=[out],
+    )
+    return onnx.helper.make_model(
+        graph,
+        opset_imports=[onnx.helper.make_opsetid("", 13)],
+        ir_version=8,
+    )
