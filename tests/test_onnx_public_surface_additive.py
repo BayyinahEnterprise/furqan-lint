@@ -132,6 +132,17 @@ def test_v0_9_0_rust_go_baselines_unchanged() -> None:
 # -------------------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason=(
+        "v0.9.0 builder fixed in v0.9.1 commit 2 to actually contain "
+        "a static-shape mismatch (Concat [1,10]+[1,10] declared as "
+        "[1,10]); this pinning test is retired in v0.9.1 commit 4 per "
+        "Decision 4 delete-plus-add discipline. The skip marker keeps "
+        "the suite green at the commit-2 boundary; commit 4 deletes "
+        "this entire test function and the shape_coverage_deferred "
+        "documented-limit fixture."
+    )
+)
 def test_onnx_d11_deferred_v0_9_0_passes(tmp_path) -> None:
     """D11-onnx (shape-coverage) is deferred to v0.9.1 per
     Decision 3 of the v0.9.0 prompt.
