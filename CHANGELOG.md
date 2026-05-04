@@ -70,7 +70,23 @@ to v0.8.3 (no public surface change in v0.8.4).
   ``v<X.Y.Z>`` tag at ``origin``. ``--dry-run`` prints the expected
   tag list without a network call; the smoke test pins the dry-run
   exit code, presence of v0.7.3 / v0.8.3 / v0.8.4, and absence of
-  v0.7.4.
+  v0.7.4. The gate exempts the *current* ``pyproject.toml``
+  version (tagged post-merge by design; release.yml keys on the
+  tag-push event) and a small ``_HISTORICAL_UNTAGGED_VERSIONS``
+  allowlist documented below.
+
+  *Audit note (historical-untagged allowlist).* When the gate ran
+  for the first time on PR #10, it surfaced two genuine origin-tag
+  gaps predating this discipline: ``v0.2.0`` (rolled forward into
+  v0.3.0 without a separate tag, pre-tag-discipline era) and
+  ``v0.7.0`` (superseded by v0.7.0.1, the four-component
+  corrective, before the v0.7.0 tag was pushed). Rather than
+  silently masking the gap or rewriting history with synthetic
+  tags from arbitrary commits, the script's
+  ``_HISTORICAL_UNTAGGED_VERSIONS`` frozenset acknowledges the
+  drift explicitly with per-entry comments. New (post-v0.8.4)
+  versions are NOT eligible for this allowlist; the gate must
+  catch them at PR time.
 
 - **CI matrix expansion to 14 jobs** (``.github/workflows/ci.yml``).
   Five jobs: ``lint`` (ruff + mypy + em-dash + origin-tag-presence)

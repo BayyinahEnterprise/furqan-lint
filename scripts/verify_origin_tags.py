@@ -44,8 +44,42 @@ import subprocess
 import sys
 from pathlib import Path
 
+import tomllib
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
+PYPROJECT = REPO_ROOT / "pyproject.toml"
+
+# Historical-gap allowlist. These versions appear in CHANGELOG.md
+# but were never tagged on origin (the tag-push step was skipped at
+# the original release moment, predating this gate). The gate
+# acknowledges the gap explicitly rather than silently masking it or
+# rewriting history with synthetic tags from arbitrary commits.
+#
+# Adding entries here requires an audit note in CHANGELOG.md. New
+# (post-v0.8.4) versions are NOT eligible for this allowlist; the
+# gate must catch them at PR time.
+_HISTORICAL_UNTAGGED_VERSIONS: frozenset[str] = frozenset(
+    {
+        "v0.2.0",  # Pre-tag-discipline; the v0.2.0 line was rolled
+        # forward into v0.3.0 without a separate origin tag.
+        "v0.7.0",  # Superseded by v0.7.0.1 (the four-component
+        # corrective) before the v0.7.0 tag was pushed.
+    }
+)
+
+
+def _current_pyproject_version() -> str:
+    """Return the current ``pyproject.toml`` version string
+    prefixed with ``v`` (e.g. ``v0.8.4``). The current version is
+    expected to be absent from origin tags during a release-prep
+    PR; the tag push happens post-merge by design (the release.yml
+    workflow keys on the tag-push event).
+    """
+    data = tomllib.loads(PYPROJECT.read_text())
+    version = data["project"]["version"]
+    return f"v{version}"
+
 
 # Header pattern: "## [X.Y.Z] - YYYY-MM-DD" or
 # "## [X.Y.Z.W] - YYYY-MM-DD" (the v0.7.0.1 four-component case).
@@ -130,8 +164,15 @@ def main() -> int:
             print(tag)
         return 0
 
+    current_version_tag = _current_pyproject_version()
     origin_tags = query_origin_tags()
-    missing = [tag for tag in expected if tag not in origin_tags]
+    missing = [
+        tag
+        for tag in expected
+        if tag not in origin_tags
+        and tag != current_version_tag
+        and tag not in _HISTORICAL_UNTAGGED_VERSIONS
+    ]
     if missing:
         print(
             "CHANGELOG-listed versions without a corresponding origin tag:",

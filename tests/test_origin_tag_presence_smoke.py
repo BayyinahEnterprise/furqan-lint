@@ -55,3 +55,32 @@ def test_origin_tag_script_dry_run_emits_expected_versions() -> None:
     assert (
         "v0.7.4" not in tags
     ), f"v0.7.4 was absorbed into v0.8.0 and must be excluded; got: {tags}"
+
+
+def test_historical_untagged_allowlist_is_documented_and_frozen() -> None:
+    """The script's ``_HISTORICAL_UNTAGGED_VERSIONS`` allowlist is the
+    explicit acknowledgement of the v0.2.0 / v0.7.0 historical drift
+    surfaced when the gate ran for the first time on PR #10. Pin the
+    allowlist's exact contents so any future edit (additions or
+    removals) requires an explicit code change visible in diff.
+
+    Adding a post-v0.8.4 version to this allowlist is forbidden by
+    the docstring contract; the gate must catch new versions at PR
+    time. This test does not enforce that contract directly (a
+    test cannot infer release-time intent), but it does make any
+    silent extension of the allowlist visible.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("verify_origin_tags", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    allowlist = module._HISTORICAL_UNTAGGED_VERSIONS
+    assert allowlist == frozenset({"v0.2.0", "v0.7.0"}), (
+        f"historical-untagged allowlist drifted from the documented"
+        f" v0.2.0 / v0.7.0 pair; got {sorted(allowlist)}. Any change"
+        f" requires an audit note in CHANGELOG.md per the script's"
+        f" allowlist contract."
+    )
