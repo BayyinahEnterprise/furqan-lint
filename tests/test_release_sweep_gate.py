@@ -169,3 +169,123 @@ def test_no_stale_version_anchored_claims_in_user_surfaces() -> None:
         for rel, line_no, line in findings:
             msg_lines.append(f"  {rel}:{line_no}  {line[:120]}")
         pytest.fail("\n".join(msg_lines))
+
+
+# ---------------------------------------------------------------------------
+# v0.8.4 §7.5 extension: source-file forward-reference detection
+# ---------------------------------------------------------------------------
+#
+# Round-22 LOW found go_adapter/public_names.py referencing
+# "future v0.8.2" and "deferred to v0.8.2" though v0.8.2 had already
+# shipped. Same shape as the existing phase-numbering check; this
+# extension generalizes the family.
+#
+# Scope (per locked decision): cover ONLY source-code Python files at
+# src/furqan_lint/**/*.py (module docstrings + inline comments). Do
+# NOT scan CHANGELOG.md, README.md, or other narrative-prose files;
+# those legitimately reference past versions in history-describing
+# prose (e.g. "deferred to v0.8.4 in the original prompt"), and the
+# regex would false-positive on honest narrative.
+
+_FORWARD_REF_PATTERN = re.compile(
+    r"\b(?:future|deferred to)\s+v(\d+)\.(\d+)(?:\.(\d+))?\b",
+    re.IGNORECASE,
+)
+
+
+def _current_version_tuple() -> tuple[int, int, int]:
+    """Parse the current version from pyproject.toml as a tuple."""
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text()
+    match = re.search(r'^version\s*=\s*"(\d+)\.(\d+)\.(\d+)"', pyproject, re.MULTILINE)
+    if match is None:
+        pytest.fail("could not parse version from pyproject.toml")
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+
+
+def _find_stale_forward_references(
+    search_root: Path,
+    current_version: tuple[int, int, int],
+) -> list[tuple[Path, int, str]]:
+    """Scan every ``.py`` file under ``search_root`` for stale
+    forward-references of the shape ``future vN.M`` or
+    ``deferred to vN.M`` where ``N.M[.P] <= current_version``.
+
+    Returns a list of ``(path, line_no, line_text)`` tuples for
+    each stale match. An empty list means the gate passes.
+    """
+    findings: list[tuple[Path, int, str]] = []
+    for py_file in sorted(search_root.rglob("*.py")):
+        try:
+            text = py_file.read_text()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            for match in _FORWARD_REF_PATTERN.finditer(line):
+                major = int(match.group(1))
+                minor = int(match.group(2))
+                patch = int(match.group(3)) if match.group(3) else 0
+                if (major, minor, patch) <= current_version:
+                    findings.append((py_file, line_no, line.strip()))
+    return findings
+
+
+def test_no_forward_references_in_source_file_docstrings() -> None:
+    """No source-file module-docstring or comment may reference
+    'future vN.M' or 'deferred to vN.M' where N.M <= current
+    version. Round-22 LOW found go_adapter/public_names.py
+    referencing 'future v0.8.2' / 'deferred to v0.8.2' though
+    v0.8.2 had shipped. Same shape as the existing phase-numbering
+    check; mechanical extension.
+    """
+    search_root = REPO_ROOT / "src" / "furqan_lint"
+    current = _current_version_tuple()
+    findings = _find_stale_forward_references(search_root, current)
+    if findings:
+        msg_lines = [
+            "Found stale forward-references in source-code .py files.",
+            f"Current version: v{current[0]}.{current[1]}.{current[2]}.",
+            "Phrases like 'future vN.M' or 'deferred to vN.M' that name a",
+            "version <= current are stale and must be updated to describe",
+            "the actual state, or pointed at a genuinely-future version.",
+            "",
+            "Findings:",
+        ]
+        for path, line_no, line in findings:
+            rel = path.relative_to(REPO_ROOT)
+            msg_lines.append(f"  {rel}:{line_no}  {line[:120]}")
+        pytest.fail("\n".join(msg_lines))
+
+
+def test_forward_reference_gate_self_test(tmp_path: Path) -> None:
+    """Self-test: the gate must catch a stale forward-reference
+    AND skip a genuinely-future one.
+
+    Synthesizes two .py files under ``tmp_path``:
+
+    * ``stale.py``: docstring references ``future v0.8.0`` (already
+      shipped against a current version of 0.8.4). Must be reported.
+    * ``future.py``: docstring references ``deferred to v0.9.0``
+      (genuinely-future against a current version of 0.8.4). Must
+      NOT be reported.
+
+    Pinned current version of (0, 8, 4) makes the assertion deterministic
+    independent of the real pyproject.toml version (which bumps in
+    commit 10 of this same release).
+    """
+    stale = tmp_path / "stale.py"
+    stale.write_text('"""Module that references future v0.8.0."""\n')
+    future = tmp_path / "future.py"
+    future.write_text('"""Module that defers behavior to v0.9.0."""\n# deferred to v0.9.0\n')
+
+    findings = _find_stale_forward_references(tmp_path, current_version=(0, 8, 4))
+
+    stale_hits = [f for f in findings if f[0] == stale]
+    future_hits = [f for f in findings if f[0] == future]
+
+    assert stale_hits, (
+        f"gate failed to catch the stale 'future v0.8.0' reference; " f"findings: {findings}"
+    )
+    assert not future_hits, (
+        f"gate false-positived on genuinely-future 'deferred to v0.9.0'; "
+        f"findings: {future_hits}"
+    )
