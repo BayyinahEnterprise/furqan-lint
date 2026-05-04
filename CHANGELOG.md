@@ -1,5 +1,123 @@
 # Changelog
 
+## Attribution discipline
+
+The audit framework applied across releases v0.2.0 through v0.8.5
+is the Bilal-Fraz hybridized framework, jointly developed by
+Bilal Syed Arfeen (Bayyinah project lead) and Fraz Ashraf. The
+auditor role since the chain's inception has been Bilal,
+applying the framework to his own substrate; this is a
+single-person audit-of-self pattern. Earlier CHANGELOG entries
+(rounds 4 through 17) attribute findings to "Fraz" by name; that
+attribution is preserved as historical record but the going-
+forward convention is to attribute findings to "round-N audit"
+without naming the auditor inline. Framework co-authorship is
+preserved in pyproject.toml.
+
+See v0.8.5 for the attribution-corrective release that
+introduced this convention.
+
+---
+
+## [0.8.5] - <DATE>
+
+Documentation-only release. Single finding from the post-v0.8.4
+review: the audit chain's CHANGELOG and source-code attribution
+to "Fraz" as the auditor was imprecise. The framework is
+Bilal-Fraz hybridized; the auditor role across all 22 prior
+rounds has been Bilal. This release adds the attribution
+discipline note (above) and sweeps source-code inline comments
+where the round-N audit is the load-bearing fact and the
+auditor name is not. Historical CHANGELOG sections are
+preserved as-is per the immutability discipline.
+
+### Fixed
+
+- Source-code inline comments crediting "Fraz's round-N review"
+  in ``src/furqan_lint/adapter.py`` (8 references) and
+  ``src/furqan_lint/return_none.py`` (1 reference) swept to
+  "round-N review" form. The round number is the load-bearing
+  fact; the auditor attribution is dropped from inline comments.
+- Test-file module docstrings in ``tests/test_round5_fixes.py``,
+  ``tests/test_round6_fixes.py``, ``tests/test_round7_fixes.py``,
+  ``tests/test_round8_fixes.py``, and
+  ``tests/test_release_sweep_gate.py`` updated to use the
+  going-forward attribution convention.
+
+### Added
+
+- Attribution discipline note at the top of CHANGELOG.md
+  (above all release sections) explaining the framework's
+  hybrid origin and the auditor role.
+
+### Changed
+
+- ``pyproject.toml`` authors list: no change. Both Bilal Syed
+  Arfeen and Fraz Ashraf are preserved as co-authors of the
+  framework. A clarifying comment above the authors block
+  notes the role split (project lead and auditor vs. framework
+  co-author).
+
+### Out of scope (preserved as historical record)
+
+- Existing ``## [0.2.0]`` through ``## [0.8.4]`` CHANGELOG
+  sections are NOT edited. The audit chain's immutability
+  discipline applies: prior release sections are historical
+  record and remain in place verbatim.
+- Existing commit subjects and bodies that mention "Fraz" are
+  NOT rewritten. Git history is immutable on origin.
+
+### Tests
+
+Test count: 342 (v0.8.4 ship state on origin/main) -> 342
+(v0.8.5). Net delta: 0.
+
+Documentation-only release; no new tests. The section 7.10
+CHANGELOG-math gate handles the zero-delta case: 342 - 342 = 0.
+
+Note on baseline: the v0.8.5 prompt cited 338 as the v0.8.4
+ship count. The empirical count on the merged v0.8.4 PR #10
+included the v0.8.4 hotfix tests (three per-version surface
+baseline pins for v0.8.4 plus one historical-untagged
+allowlist pin), bringing the actual v0.8.4 ship count to 342.
+Per the prompt's section 8 most-conservative-interpretation
+rule, the empirical count is used.
+
+### Section 11.3 Five Questions
+
+1. **What was added?** Attribution discipline note at the top
+   of CHANGELOG.md.
+2. **What was fixed?** Source-code and test-file inline
+   attribution to "Fraz" swept to going-forward convention.
+3. **What was retired?** The attribution-by-name-in-source-
+   code pattern. Going-forward, source-code comments reference
+   "round-N review" without naming the auditor inline.
+4. **What did this release introduce as new limitations?**
+   None.
+5. **What is the empirical evidence the substrate behaves as
+   claimed?** All 342 tests pass; em-dash gate confirms no
+   regression in the new content; ``git grep -n "Fraz" src/
+   tests/`` returns empty after commit 2.
+
+### Section 5.1 Validator-bias self-disclosure
+
+Bilal is the project lead and the auditor. This release is
+Bilal-as-auditor surfacing a finding about how the audit
+chain has attributed Bilal-as-auditor's work in its own
+historical record. The structural-honesty thesis applies: the
+project's CHANGELOG must accurately describe what the project
+did, including who did the audits. Future audit reports
+across the BayyinahEnterprise project trio (furqan,
+furqan-lint, bayyinah-integrity-scanner) will use the
+going-forward convention.
+
+### Section 5.2 Prompt-grounding self-check log
+
+Pytest collect-only count: 342 (matches v0.8.4 ship state on
+origin/main after PR #10 merge). Delta: 342 - 342 = 0.
+CHANGELOG-math gate verified.
+All verification gates pass: green.
+
 ## [0.8.4] - 2026-05-03
 
 Corrective release. Round-22 found 1 LOW (Go ``extract_public_names``
