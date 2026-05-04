@@ -44,11 +44,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-import tomllib
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
+
+# Matches the canonical pyproject.toml ``version = "X.Y.Z"`` line
+# (or ``X.Y.Z.W`` for the four-component case). Anchored on line
+# start so it does not pick up build-system or other tables'
+# ``version = ...`` keys.
+_PYPROJECT_VERSION_PATTERN = re.compile(
+    r'^version\s*=\s*"(\d+\.\d+\.\d+(?:\.\d+)?)"',
+    re.MULTILINE,
+)
 
 # Historical-gap allowlist. These versions appear in CHANGELOG.md
 # but were never tagged on origin (the tag-push step was skipped at
@@ -76,9 +83,19 @@ def _current_pyproject_version() -> str:
     PR; the tag push happens post-merge by design (the release.yml
     workflow keys on the tag-push event).
     """
-    data = tomllib.loads(PYPROJECT.read_text())
-    version = data["project"]["version"]
-    return f"v{version}"
+    # Regex-extract the [project] table's ``version = "X.Y.Z"``
+    # key. Avoids a tomllib / tomli import to keep this script
+    # dependency-free across the supported 3.10 / 3.11 / 3.12 /
+    # 3.13 matrix without adding ``tomli`` to [dev]. The regex
+    # is anchored on a line-start ``version`` key with a
+    # double-quoted string value, which is exactly the shape
+    # pyproject.toml carries; if the file shape ever changes,
+    # this script's strictness fails closed (no version match -
+    # raise) rather than silently passing.
+    match = _PYPROJECT_VERSION_PATTERN.search(PYPROJECT.read_text())
+    if match is None:
+        raise RuntimeError(f'could not locate ``version = "X.Y.Z"`` line in {PYPROJECT}')
+    return f"v{match.group(1)}"
 
 
 # Header pattern: "## [X.Y.Z] - YYYY-MM-DD" or
