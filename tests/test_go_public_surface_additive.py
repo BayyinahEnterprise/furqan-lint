@@ -57,6 +57,10 @@ _GO_ADAPTER_PUBLIC_SURFACE_v0_8_4: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v
 # v0.8.5 attribution-corrective: documentation-only release.
 # No go_adapter __all__ change. Aliases v0.8.4.
 _GO_ADAPTER_PUBLIC_SURFACE_v0_8_5: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_4
+# v0.9.0 ships the ONNX adapter Phase 1 in its own subpackage.
+# The go_adapter public surface is unchanged. Aliases v0.8.5
+# per the per-version cadence.
+_GO_ADAPTER_PUBLIC_SURFACE_v0_9_0: frozenset[str] = _GO_ADAPTER_PUBLIC_SURFACE_v0_8_5
 
 
 def test_go_adapter_public_surface_is_superset_of_v0_8_0_baseline() -> None:

@@ -76,6 +76,10 @@ _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_4: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFA
 # (CHANGELOG attribution discipline note, source-code inline
 # comment sweep). No rust_adapter surface change. Aliases v0.8.4.
 _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_5: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_4
+# v0.9.0 ships the ONNX adapter Phase 1 in its own subpackage.
+# The rust_adapter public surface is unchanged. Aliases v0.8.5
+# per the per-version cadence.
+_RUST_ADAPTER_PUBLIC_SURFACE_v0_9_0: frozenset[str] = _RUST_ADAPTER_PUBLIC_SURFACE_v0_8_5
 
 
 def test_rust_adapter_public_surface_is_superset_of_v0_7_0_baseline() -> None:

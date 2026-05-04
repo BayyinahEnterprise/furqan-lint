@@ -33,9 +33,10 @@ This installs the latest release from PyPI. Requires Python 3.10+ and `furqan>=0
 ### Optional adapters
 
 ```bash
-pip install "furqan-lint[rust]"      # tree-sitter Rust adapter
-pip install "furqan-lint[go]"        # Go adapter (requires Go 1.22+ toolchain at install time)
-pip install "furqan-lint[rust,go]"   # both adapters
+pip install "furqan-lint[rust]"           # tree-sitter Rust adapter
+pip install "furqan-lint[go]"             # Go adapter (requires Go 1.22+ toolchain at install time)
+pip install "furqan-lint[onnx]"           # ONNX adapter (D24-onnx + opset-compliance)
+pip install "furqan-lint[rust,go,onnx]"   # all three adapters
 ```
 
 ### Install from a specific commit or tag
@@ -119,6 +120,55 @@ language-aware: Go users see `var Name = <new>` re-export hints
 rather than Python alias syntax. Cross-language diffs (e.g.
 `foo.py` vs `bar.go`) return exit 2 with a "Cross-language
 diff not supported" message.
+
+### ONNX support (opt-in)
+
+As of v0.9.0, furqan-lint can lint `.onnx` model files. ONNX
+support is behind an opt-in extra so the Python-only install
+path is unchanged:
+
+```bash
+pip install "furqan-lint[onnx]"
+```
+
+This pulls in `onnx>=1.14,<1.19`. The upper bound is load-bearing:
+the ONNX op registry retroactively adds operators across `onnx`
+package releases, so an unpinned upper bound would silently
+change what counts as e.g. opset 11. No `onnxruntime` dependency:
+lint-time checks operate on the graph structure, not on inference.
+
+`.onnx` files run two structural checks in v0.9.0:
+
+- **D24-onnx (all-paths-emit).** Every declared output in
+  `graph.output` must be reachable from some node in the graph
+  (or be a graph input passed through). The structural shape
+  mirrors a function with a missing return statement.
+- **opset-compliance.** Every node's `op_type` must exist in the
+  declared opset, looked up via `onnx.defs.get_schema(...,
+  max_inclusive_version=opset_version)` against the pinned
+  `onnx>=1.14,<1.19` registry.
+
+ONNX is structurally a different substrate from Python / Rust /
+Go source code. Nodes are not functions; edges are not return
+statements; ValueInfo is not a type signature. The ONNX adapter
+ships a *parallel diagnostic family* inspired by the Furqan
+structural-honesty primitives, not new instances of the existing
+`check_d24` / `check_status_coverage` checkers operating on a
+unified IR. The diagnostic spirit is shared (surface claims must
+match substrate dataflow); the implementation is its own
+package with its own runner.
+
+D11-onnx (shape-coverage on ONNX edges) is deferred to v0.9.1.
+ONNX shape compatibility requires its own design round given
+symbolic dim_params, NumPy broadcasting, axis insertion, and
+dynamic shapes; shipping a one-sentence specification produces
+unbounded false positives.
+
+The additive-only diff covers `graph.input` and `graph.output`
+ValueInfo entries only. `graph.value_info` (intermediate tensors)
+and `graph.initializer` (parameter tensors) are explicitly out
+of scope; including them would create false positives on every
+model retraining.
 
 ## Usage
 
@@ -497,6 +547,33 @@ translator-level limits, in `tests/test_go_translator.py`).
   statement. Pinned as
   `tests/fixtures/go/documented_limits/r3_compile_rejected.go`
   (added in v0.8.1).
+
+### ONNX adapter (current as of v0.9.0)
+
+Each ONNX limit has a fixture in
+`tests/fixtures/onnx/documented_limits/` and a pinning test in
+`tests/test_onnx_correctness.py` or
+`tests/test_onnx_public_surface_additive.py`.
+
+- **D11-onnx (shape-coverage) deferred to v0.9.1.** ONNX shape
+  compatibility requires its own design round given symbolic
+  dim_params, broadcasting, and dynamic shapes. v0.9.0 ships
+  D24-onnx (all-paths-emit) and opset-compliance only. Pinned
+  as `tests/fixtures/onnx/documented_limits/shape_coverage_deferred.py`.
+- **`graph.value_info` and `graph.initializer` not in additive
+  contract.** The additive-only diff (`furqan-lint diff
+  old.onnx new.onnx`) covers `graph.input` and `graph.output`
+  ValueInfo only. Intermediate tensors and initializers are out
+  of scope per Decision 5 of the v0.9.0 prompt; including them
+  would create false positives on every model retraining.
+  Pinned as `tests/fixtures/onnx/documented_limits/intermediates_excluded.py`.
+- **ONNX op-registry pin window `>=1.14,<1.19`.** Op registry
+  version is pinned to prevent silent semantics drift across
+  `onnx` package upgrades (the ONNX op registry retroactively
+  adds operators across releases). Consumers requiring a newer
+  registry must wait for a furqan-lint patch release that bumps
+  the pin. Pinned as
+  `tests/fixtures/onnx/documented_limits/registry_pin_window.py`.
 
 ## License
 

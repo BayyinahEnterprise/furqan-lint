@@ -37,6 +37,16 @@ EXCLUDED_DIRS: frozenset[str] = frozenset(
     }
 )
 
+# Single source of truth for which file extensions the directory
+# walker considers. Future adapters add their extension here, not
+# in scattered string literals. Round-24 finding C2 closure: prior
+# to v0.9.0 the walker had a hardcoded {".py", ".rs", ".go"} set
+# at one site and a "No .py or .rs files found" error message at
+# another (the message bug-stale since v0.8.0 when .go landed),
+# which silently dropped .onnx files when the v0.9.0 adapter was
+# added. The constant + derived error message close that gap.
+_SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".py", ".rs", ".go", ".onnx"})
+
 
 def _parse_error_detail(exc: Exception) -> str:
     """Return a parse-error detail string with no redundant filename.
@@ -115,6 +125,8 @@ def _check_file(path: Path) -> int:
         return _check_rust_file(path)
     if path.suffix == ".go":
         return _check_go_file(path)
+    if path.suffix == ".onnx":
+        return _check_onnx_file(path)
     return _check_python_file(path)
 
 
@@ -326,6 +338,68 @@ def _check_go_file(path: Path) -> int:
     return 1 if marads else 0
 
 
+def _check_onnx_file(path: Path) -> int:
+    """Lint a single .onnx file using the v0.9.0 ONNX adapter.
+
+    Runs the ONNX checker pipeline (D24-onnx all-paths-emit +
+    opset-compliance with the pinned op registry). D11-onnx
+    (shape-coverage) is deferred to v0.9.1 per Decision 3 of
+    the v0.9.0 prompt.
+
+    Typed ``OnnxExtrasNotInstalled`` is raised by parse_model
+    when the [onnx] extra is missing; the CLI catches it and
+    emits the install hint to stderr with exit 1 (NOT a Python
+    traceback). ``OnnxParseError`` maps to exit 2.
+    """
+    try:
+        from furqan_lint.onnx_adapter import (
+            OnnxExtrasNotInstalled,
+            OnnxParseError,
+            parse_model,
+        )
+        from furqan_lint.onnx_adapter.runner import (
+            AllPathsEmitDiagnostic,
+            OpsetComplianceDiagnostic,
+            check_onnx_module,
+        )
+        from furqan_lint.onnx_adapter.translator import to_onnx_module
+    except ImportError:
+        print(
+            "ONNX support not installed. Run: pip install furqan-lint[onnx]",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        model = parse_model(path)
+    except OnnxExtrasNotInstalled as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    except OnnxParseError as e:
+        print(f"PARSE ERROR  {path}")
+        print(f"  {e.detail}")
+        return 2
+
+    module = to_onnx_module(model)
+    diagnostics = check_onnx_module(module)
+
+    if not diagnostics:
+        print(f"PASS  {path}")
+        print(
+            "  2 structural checks ran "
+            "(D24-onnx all-paths-emit, opset-compliance). "
+            "Zero diagnostics."
+        )
+        return 0
+
+    print(f"MARAD  {path}")
+    print(f"  {len(diagnostics)} violation(s):")
+    for name, d in diagnostics:
+        if isinstance(d, AllPathsEmitDiagnostic | OpsetComplianceDiagnostic):
+            print(f"    [{name}] {d.diagnosis}")
+    return 1
+
+
 def _check_additive(old_path: Path, new_path: Path) -> int:
     """Dispatch the additive-only diff to the language-appropriate
     helper based on file suffix.
@@ -360,6 +434,10 @@ def _check_additive(old_path: Path, new_path: Path) -> int:
     # Guard 3: Go diff (added in v0.8.1 commit 2).
     if old_path.suffix == ".go":
         return _check_go_additive(old_path, new_path)
+
+    # Guard 4: ONNX diff (added in v0.9.0).
+    if old_path.suffix == ".onnx":
+        return _check_onnx_additive(old_path, new_path)
 
     # Default: Python diff.
     return _check_python_additive(old_path, new_path)
@@ -533,17 +611,81 @@ def _check_go_additive(old_path: Path, new_path: Path) -> int:
     return 1
 
 
+def _check_onnx_additive(old_path: Path, new_path: Path) -> int:
+    """ONNX additive-only diff via :func:`compare_name_sets` plus
+    :func:`extract_public_names` from each ``.onnx`` file.
+
+    Catches ``OnnxExtrasNotInstalled`` (install hint, exit 1) and
+    ``OnnxParseError`` (exit 2) per the typed-exception pattern
+    shared with the Rust and Go adapters: the user sees a one-line
+    message, not a Python traceback. Public names cover only
+    ``graph.input`` and ``graph.output`` ValueInfo entries with
+    their shapes (Decision 5 of the v0.9.0 prompt); intermediates
+    and initializers are out of scope.
+    """
+    try:
+        from furqan_lint.additive import compare_name_sets
+        from furqan_lint.onnx_adapter import (
+            OnnxExtrasNotInstalled,
+            OnnxParseError,
+            extract_public_names,
+        )
+    except ImportError:
+        print(
+            "ONNX support not installed. Run: pip install furqan-lint[onnx]",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        try:
+            old_names = extract_public_names(old_path)
+        except OnnxParseError as e:
+            print(f"PARSE ERROR  {old_path}  (old side, additive-only)")
+            print(f"  {e.detail}")
+            return 2
+        try:
+            new_names = extract_public_names(new_path)
+        except OnnxParseError as e:
+            print(f"PARSE ERROR  {new_path}  (new side, additive-only)")
+            print(f"  {e.detail}")
+            return 2
+    except OnnxExtrasNotInstalled as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    diagnostics = compare_name_sets(
+        previous_names=old_names,
+        current_names=new_names,
+        filename=str(new_path),
+        language="onnx",
+    )
+
+    if not diagnostics:
+        print(f"PASS  {new_path} (additive-only)")
+        print("  No public names removed.")
+        return 0
+
+    print(f"MARAD  {new_path} (additive-only)")
+    print(f"  {len(diagnostics)} violation(s):")
+    for m in diagnostics:
+        print(f"    [additive_only] {m.diagnosis}")
+        print(f"      fix: {m.minimal_fix}")
+    return 1
+
+
 def _check_directory(directory: Path) -> int:
     exit_code = 0
     files = sorted(
         p
         for p in directory.rglob("*")
         if p.is_file()
-        and p.suffix in {".py", ".rs", ".go"}
+        and p.suffix in _SUPPORTED_EXTENSIONS
         and not any(part in EXCLUDED_DIRS for part in p.parts)
     )
     if not files:
-        print(f"No .py or .rs files found in {directory}")
+        extensions_str = ", ".join(sorted(_SUPPORTED_EXTENSIONS))
+        print(f"No supported files found ({extensions_str}) in {directory}")
         return 0
     for path in files:
         result = _check_file(path)

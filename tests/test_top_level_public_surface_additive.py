@@ -96,6 +96,13 @@ V0_8_4_SURFACE: frozenset[str] = V0_7_0_SURFACE
 # touch the top-level furqan_lint surface. Aliases
 # V0_7_0_SURFACE.
 V0_8_5_SURFACE: frozenset[str] = V0_7_0_SURFACE
+# v0.9.0 ships the ONNX adapter Phase 1 (D24-onnx all-paths-emit
+# + opset-compliance with pinned op registry). The new
+# onnx_adapter subpackage has its own snapshot test in
+# tests/test_onnx_public_surface_additive.py; the top-level
+# furqan_lint surface is unchanged. Aliases V0_7_0_SURFACE per
+# the per-version cadence.
+V0_9_0_SURFACE: frozenset[str] = V0_7_0_SURFACE
 
 
 def _current_surface() -> frozenset[str]:

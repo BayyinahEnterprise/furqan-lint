@@ -19,6 +19,210 @@ introduced this convention.
 
 ---
 
+## [0.9.0] - 2026-05-04
+
+ONNX adapter release. Extends structural-honesty diagnostics to
+ONNX computational graphs as a parallel diagnostic family
+(D24-onnx all-paths-emit + opset-compliance with pinned op
+registry); this is honest divergence from the Python / Rust /
+Go checker pipeline, not an instance of the existing
+``check_d24`` / ``check_status_coverage`` checkers operating
+on a unified IR. Closes 17 valid findings across rounds 24
+and 25 (13 from round-24 prompt audit combining Bilal and
+Grok review; 4 from round-25 corrections audit). See
+round-24 / 25 closure ledger below.
+
+### Fixed
+
+- Round-24 finding C2 (CRITICAL): the directory walker
+  hardcoded ``{".py", ".rs", ".go"}`` as its suffix set at one
+  site and a "No .py or .rs files found" error message at
+  another (the message bug-stale since v0.8.0 when ``.go``
+  landed). The walker silently dropped any future adapter's
+  files. v0.9.0 introduces ``_SUPPORTED_EXTENSIONS`` as the
+  single source of truth in ``cli.py``; the error message
+  derives from the same constant, so future adapters cannot
+  reintroduce drift. Pinned by
+  ``test_onnx_files_walked_in_directory_check``.
+- Round-24 finding M1 (MAJOR): ``onnx.checker.check_model()``
+  conflates parse failure with semantic-validity failure and
+  overlaps with diagnostics that furqan-lint's own checkers
+  ship to detect. Decision 1 of the v0.9.0 prompt drops the
+  ``check_model()`` call from ``parse_model``; furqan-lint's
+  own checkers are the authoritative source for ONNX semantic
+  validity. Documented in
+  ``src/furqan_lint/onnx_adapter/parser.py`` and
+  ``src/furqan_lint/onnx_adapter/__init__.py``.
+- Round-24 finding M2 (MAJOR): opset-compliance had no
+  specified op-registry source or version pin. Decision 4
+  specifies ``onnx.defs`` from the pinned ``onnx>=1.14,<1.19``
+  package; the pin is enforced by
+  ``test_opset_registry_version_pinned``. The pin is documented
+  as a four-place limit at
+  ``tests/fixtures/onnx/documented_limits/registry_pin_window.py``.
+- Round-24 finding m1 (MINOR): the diff-dispatcher Guard
+  ordering was not pinned. Guard 4 (``.onnx``) is now inserted
+  after Guard 3 (``.go``) and before the Python default in
+  ``_check_additive``. Guard ordering is pinned in the helper's
+  docstring.
+- Round-24 finding m5 (MINOR): the containment gate assertion
+  was underspecified. Gate 8c
+  (``test_gate_8c_onnx_containment``) uses an exact AST scan
+  via ``ast.Import`` / ``ast.ImportFrom``, not a naive grep,
+  so prose mentions of ``onnx`` in comments / docstrings do
+  not false-fire.
+- Round-25 HIGH-Fix-1: the round-24 first revision of this
+  prompt attempted to consolidate the CHANGELOG entry into the
+  release commit (single-commit landing). The round-25 audit
+  verified that the CHANGELOG-math gate
+  (``tests/test_changelog_math_gate.py`` lines 54-82) actively
+  requires the placeholder pattern via its ``<TBD>`` /
+  ``<DATE>`` skip logic. Without commit 1's placeholder,
+  commits 2-6 would compare the growing pytest --collect-only
+  count against the v0.8.5 entry's 347 figure and fail on
+  every intermediate commit. The project's existing convention
+  is correct; the deviation was a framework-mechanics error.
+
+### Added
+
+- ONNX adapter at ``src/furqan_lint/onnx_adapter/``: parser
+  (``parse_model``), translator (``OnnxModule`` + companions),
+  runner (``check_all_paths_emit`` + ``check_opset_compliance``
+  + ``check_onnx_module``), public-name extractor
+  (``extract_public_names``), CLI dispatch
+  (``_check_onnx_file`` + ``_check_onnx_additive``).
+  Symmetric with ``rust_adapter`` and ``go_adapter``: the
+  ``onnx`` package is imported lazily; the [onnx] extra gates
+  the import; the typed ``OnnxExtrasNotInstalled`` exception
+  carries the install hint.
+- ``[onnx]`` pip extra pulling ``onnx>=1.14,<1.19`` (Decision 6).
+  Upper bound is load-bearing per Decision 4: the ONNX op
+  registry retroactively adds operators across ``onnx`` package
+  releases, so an unpinned upper bound would silently change
+  what counts as e.g. opset 11.
+- D24-onnx (all-paths-emit, Decision 2): every declared output
+  in ``graph.output`` must be reachable on every dataflow path
+  through If / Where branches. A declared output that no node
+  produces and is not a graph input fires a finding.
+- opset-compliance (Decision 4): every node's ``op_type`` must
+  exist in the declared opset, looked up via
+  ``onnx.defs.get_schema(..., max_inclusive_version=...)``
+  from the pinned ``onnx>=1.14,<1.19`` registry.
+- Additive-only diff on ``graph.input`` / ``graph.output``
+  ValueInfo names + shapes formatted as ``input:NAME:SHAPE``
+  and ``output:NAME:SHAPE`` (Decision 5). Intermediates
+  (``graph.value_info``) and initializers
+  (``graph.initializer``) are explicitly out of scope per
+  round-24 finding m2 closure; the limit is documented at
+  ``tests/fixtures/onnx/documented_limits/intermediates_excluded.py``.
+- Three new gates in the v0.9.0 verification suite (now 17
+  total): Gate 8c (ONNX containment via AST scan), Gate 9c
+  (missing [onnx] extra raises ``OnnxExtrasNotInstalled``),
+  and the CHANGELOG-math gate's v0.9.0 entry coverage.
+- Surface snapshots for the new ``onnx_adapter`` subpackage:
+  ``ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_0`` pins 8 names
+  (``BranchSummary``, ``NodeSummary``, ``OnnxExtrasNotInstalled``,
+  ``OnnxModule``, ``OnnxParseError``, ``ValueInfoSummary``,
+  ``extract_public_names``, ``parse_model``).
+- Three documented-limit fixtures with full four-place
+  documentation (CHANGELOG / fixture / pinning test / README):
+  ``shape_coverage_deferred`` (D11-onnx deferred to v0.9.1 per
+  Decision 3), ``intermediates_excluded`` (additive contract
+  covers graph.input / graph.output only), and
+  ``registry_pin_window`` (op-registry pin >=1.14,<1.19).
+- ``_RENAME_HINT["onnx"]`` entry in
+  ``src/furqan_lint/additive.py`` for the ONNX additive-diff
+  user-visible rename hint prose.
+- README "ONNX support (opt-in)" section and "ONNX adapter
+  (current as of v0.9.0)" entry under Remaining limitations.
+
+### Changed
+
+- ``cli.py`` directory walker: hardcoded ``{".py", ".rs", ".go"}``
+  suffix set + bug-stale "No .py or .rs files found" error
+  message both replaced with derivations from
+  ``_SUPPORTED_EXTENSIONS`` (single source of truth).
+- ``cli.py`` ``_check_file`` dispatcher: ``.onnx`` route added
+  after ``.go`` and before the Python default.
+- ``cli.py`` ``_check_additive`` dispatcher: Guard 4 (``.onnx``)
+  added after Guard 3 (``.go``) per round-24 finding m1.
+- README install section: ``[onnx]`` row added; combined extras
+  example updated to ``[rust,go,onnx]``.
+- Four-place-completeness gate's ``_README_TOPIC_KEYWORDS``
+  extended with three ONNX entries.
+
+### Tests
+
+Test count: 347 (v0.8.5 ship state on origin/main) -> 370
+(v0.9.0). Net delta: +23.
+
+Breakdown:
+
+- Parser tests: +3 (``test_onnx_parser_loads_valid_model``,
+  ``test_onnx_parser_raises_on_invalid_protobuf``,
+  ``test_onnx_parser_raises_on_missing_extras``)
+- Checker tests: +5 (``test_onnx_d24_fires_on_unreachable_output``,
+  ``test_onnx_d24_clean_when_all_outputs_reachable``,
+  ``test_onnx_opset_fires_on_future_op``,
+  ``test_onnx_opset_clean_when_all_ops_in_declared_opset``,
+  ``test_opset_registry_version_pinned``)
+- Diff tests: +4 (``test_onnx_diff_fires_on_removed_output``,
+  ``test_onnx_diff_fires_on_shape_change``,
+  ``test_onnx_diff_clean_when_additive_only``,
+  ``test_onnx_diff_cli_exits_1_on_removal``)
+- CLI integration tests: +3 (``test_onnx_file_detected_by_extension``,
+  ``test_onnx_cross_language_rejection``,
+  ``test_onnx_files_walked_in_directory_check``)
+- Surface snapshots: +3 (``test_v0_9_0_onnx_adapter_surface_snapshot``,
+  ``test_v0_9_0_top_level_surface_snapshot``,
+  ``test_v0_9_0_rust_go_baselines_unchanged``)
+- Gate-level tests: +3 (``test_gate_8c_onnx_containment``,
+  ``test_gate_9c_onnx_missing_extras``,
+  ``test_gate_changelog_math_v0_9_0``)
+- §8 documented-limit pinning tests: +2
+  (``test_onnx_d11_deferred_v0_9_0_passes``,
+  ``test_onnx_diff_intermediates_excluded``; the registry-pin
+  pin is counted in the checker tests above)
+
+### Out of scope (deferred to v0.9.1)
+
+- D11-onnx (shape-coverage on ONNX edges); see Decision 3 and
+  the four-place documented limit
+  ``shape_coverage_deferred.py``.
+- Channel-sum semantic analysis, input-mask consistency,
+  file-size advisory gate, score-validity gate,
+  numpy-vs-ONNX divergence detection. All require their own
+  design rounds given the substrate-specific failure modes
+  they would surface.
+
+### Round-24 / 25 closure ledger
+
+| Finding | Source | Severity | Closure |
+| --- | --- | --- | --- |
+| C1 | Bilal | CRITICAL | Framing note + runner.py docstring (parallel diagnostic family) |
+| C2 | Bilal | CRITICAL | _SUPPORTED_EXTENSIONS + walker fix + ``test_onnx_files_walked_in_directory_check`` |
+| M1 | Bilal | MAJOR | ``onnx.checker.check_model()`` not invoked; parser docstring + Decision 1 |
+| M2 | Bilal | MAJOR | ``onnx.defs`` registry pin >=1.14,<1.19; ``test_opset_registry_version_pinned`` |
+| M3 | Bilal | MAJOR | D11-onnx deferred to v0.9.1 (Decision 3) + four-place fixture ``shape_coverage_deferred`` |
+| M4 | Bilal | MAJOR | §4 test count = 370 enforced by CHANGELOG-math gate |
+| m1 | Bilal | MINOR | Guard 4 ordering pinned in ``_check_additive`` docstring |
+| m2 | Bilal | MINOR | Decision 5 + four-place fixture ``intermediates_excluded`` |
+| m3 | Bilal | MINOR | Decision 8: ONNX runner does not use ``_is_may_fail_producer`` |
+| m4 | Bilal | MINOR | Reversed in round 25; placeholder commit pattern restored |
+| m5 | Bilal | MINOR | Gate 8c uses ``ast.Import`` / ``ast.ImportFrom`` scan |
+| Q1 | Bilal | QUESTION | Strategic rationale: extends structural honesty to non-source-code substrate |
+| Q2 | Bilal | QUESTION | Decision 9: v1.2 papers Zenodo-restricted; v0.9.0 ships; v1.3 tracks v0.9.0 |
+| Q3 | Bilal | QUESTION | ``tests/fixtures/onnx/builders.py``; no .onnx binaries committed |
+| MED | Grok | MEDIUM | Subsumed by C2 closure |
+| LOW1 | Grok | LOW | Verified against framework v3 source; not a defect |
+| LOW2 | Grok | LOW | Declined; cosmetic |
+| HEAD-1 | Grok | INVALID | Round 23 already used (v0.8.5 attribution-corrective) |
+| HEAD-2 | Grok | INVALID | "Phase 2.5" has no substrate |
+| Round-25 HIGH-Fix-1 | Round 25 | HIGH | Placeholder commit restored as commit 1 |
+| Round-25 MEDIUM-Fix-2 | Round 25 | MEDIUM | Test count math reconciled to 370 |
+| Round-25 MEDIUM-Fix-3 | Round 25 | MEDIUM | §9 checklist uses ``tmp_path`` programmatic construction |
+| Round-25 LOW-Fix-4 | Round 25 | LOW | Q2 locked via Decision 9 in §1 |
+
 ## [0.8.5] - 2026-05-03
 
 Documentation-only release. Single finding from the post-v0.8.4
