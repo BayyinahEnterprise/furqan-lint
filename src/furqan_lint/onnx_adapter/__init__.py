@@ -94,6 +94,16 @@ class OnnxRuntimeExtrasNotInstalled(ImportError):
     """
 
 
+from furqan_lint.onnx_adapter.numpy_divergence import (  # noqa: E402
+    NumpyDivergenceDiagnostic,
+    check_numpy_divergence,
+)
+from furqan_lint.onnx_adapter.numpy_reference import (  # noqa: E402
+    discover_numpy_reference,
+)
+from furqan_lint.onnx_adapter.probe_grid import (  # noqa: E402
+    discover_probe_grids,
+)
 from furqan_lint.onnx_adapter.shape_coverage import (  # noqa: E402
     ShapeCoverageDiagnostic,
     check_shape_coverage,
@@ -108,12 +118,17 @@ from furqan_lint.onnx_adapter.translator import (  # noqa: E402
 __all__ = (
     "BranchSummary",
     "NodeSummary",
+    "NumpyDivergenceDiagnostic",
     "OnnxExtrasNotInstalled",
     "OnnxModule",
     "OnnxParseError",
+    "OnnxRuntimeExtrasNotInstalled",
     "ShapeCoverageDiagnostic",
     "ValueInfoSummary",
+    "check_numpy_divergence",
     "check_shape_coverage",
+    "discover_numpy_reference",
+    "discover_probe_grids",
     "extract_public_names",
     "parse_model",
 )
