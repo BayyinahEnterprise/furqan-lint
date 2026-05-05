@@ -175,6 +175,17 @@ module = ["tree_sitter", "tree_sitter_rust"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+# onnxruntime is an optional dependency installed via the
+# [onnx-runtime] extra (v0.9.3 Decision 5). The CI lint job
+# installs only [dev] + [onnx], not [onnx-runtime], so mypy
+# cannot find onnxruntime stubs in that environment. The import
+# is guarded by try/except ImportError per Decision 6 (a). The
+# numpy_divergence checker silent-passes when the extra is not
+# installed.
+module = "onnxruntime"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # tomli is the Python 3.10 fallback for the stdlib tomllib; on a
 # clean install of [dev] without tomli pre-installed (e.g., a fresh
 # venv on Python 3.10), mypy --strict cannot find stubs for it and

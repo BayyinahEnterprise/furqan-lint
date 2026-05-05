@@ -203,7 +203,7 @@ def check_numpy_divergence(  # noqa: PLR0915
     """
     try:
         import numpy as np
-        import onnxruntime as ort  # type: ignore[import-untyped]
+        import onnxruntime as ort
     except ImportError:
         return  # silent-pass per Decision 6 (a)
 
