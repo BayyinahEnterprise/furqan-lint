@@ -19,6 +19,32 @@ introduced this convention.
 
 ---
 
+## [0.9.3.1] - <DATE>
+
+CLI hotfix. Closes round-34 HIGH-1: the CLI's
+``_check_onnx_file`` printer hardcoded an isinstance tuple
+that filtered the new ``NumpyDivergenceDiagnostic`` family
+out, so users saw ``MARAD <path>`` followed by
+``1 violation(s):`` followed by no body. The substrate-side
+``check_numpy_divergence`` correctly emits the diagnostic;
+the CLI surface dropped it.
+
+### Fixed
+
+(populate during release commit 3)
+
+### Known limitations carried to v0.9.4
+
+(populate during release commit 3: ONNX printer's
+``minimal_fix`` field is silently dropped; structural
+fix bundled with v0.9.4 Part 5b per §3.5 of the v0.9.3.1
+prompt)
+
+### Tests
+
+Test count: 412 (v0.9.3 ship state) -> <TBD>
+(v0.9.3.1). Net delta: <TBD>.
+
 ## [0.9.3] - 2026-05-04
 
 numpy-vs-ONNX divergence detection. Closes Gap 4 (HIGH
