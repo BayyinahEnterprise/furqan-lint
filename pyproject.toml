@@ -58,6 +58,18 @@ go = []
 onnx = [
     "onnx>=1.14,<1.19",
 ]
+# Optional ONNX inference extra (v0.9.3: numpy-vs-ONNX divergence
+# detection). Lists onnx>=1.14 directly to avoid the
+# self-referencing "furqan-lint[onnx]" syntax which is PEP 508
+# compliant only since pip 21.2 and breaks on older pip versions
+# and some build tools (round-33 finding MEDIUM closure). Honors
+# the v0.9.0 Decision 1 standing rule by isolating onnxruntime in
+# this dedicated extra rather than adding it to [onnx].
+onnx-runtime = [
+    "onnx>=1.14",
+    "onnxruntime>=1.16",
+    "numpy>=1.20",
+]
 
 [project.scripts]
 furqan-lint = "furqan_lint.cli:main"

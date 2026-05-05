@@ -49,7 +49,17 @@ Score-validity becomes v0.9.4.
 
 ### Added
 
-(populate during release commit 7)
+- ``numpy_divergence_neurogolf_convention`` documented-limit
+  fixture (``tests/fixtures/onnx/documented_limits/``) plus
+  pinning test
+  ``test_numpy_divergence_silent_pass_when_neurogolf_convention_absent``:
+  records that the v0.9.3 numpy-vs-ONNX divergence checker
+  is opt-in by NeuroGolf-convention sidecar presence
+  (``<basename>_build.py`` + ``<basename>.json``) per
+  Decision 9 of the v0.9.3 prompt.
+- ``[onnx-runtime]`` pip extra (Decision 5) bringing in
+  ``onnx>=1.14``, ``onnxruntime>=1.16``, ``numpy>=1.20``.
+
 
 ### Changed
 
