@@ -360,6 +360,9 @@ def _check_onnx_file(path: Path) -> int:
             OnnxParseError,
             parse_model,
         )
+        from furqan_lint.onnx_adapter.numpy_divergence import (
+            NumpyDivergenceDiagnostic,
+        )
         from furqan_lint.onnx_adapter.runner import (
             AllPathsEmitDiagnostic,
             OpsetComplianceDiagnostic,
@@ -405,7 +408,11 @@ def _check_onnx_file(path: Path) -> int:
     print(f"  {len(diagnostics)} violation(s):")
     for name, d in diagnostics:
         if isinstance(
-            d, AllPathsEmitDiagnostic | OpsetComplianceDiagnostic | ShapeCoverageDiagnostic
+            d,
+            AllPathsEmitDiagnostic
+            | OpsetComplianceDiagnostic
+            | ShapeCoverageDiagnostic
+            | NumpyDivergenceDiagnostic,
         ):
             print(f"    [{name}] {d.diagnosis}")
     return 1
