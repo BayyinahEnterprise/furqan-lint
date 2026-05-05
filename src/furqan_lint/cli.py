@@ -368,6 +368,9 @@ def _check_onnx_file(path: Path) -> int:
             OpsetComplianceDiagnostic,
             check_onnx_module,
         )
+        from furqan_lint.onnx_adapter.score_validity import (
+            ScoreValidityDiagnostic,
+        )
         from furqan_lint.onnx_adapter.shape_coverage import (
             ShapeCoverageDiagnostic,
         )
@@ -395,27 +398,62 @@ def _check_onnx_file(path: Path) -> int:
     if not diagnostics:
         print(f"PASS  {path}")
         print(
-            "  4 structural checks ran "
+            "  5 structural checks ran "
             "(D24-onnx all-paths-emit, opset-compliance, "
-            "D11-onnx shape-coverage, numpy_divergence). "
-            "Zero diagnostics. (numpy_divergence silent-passes "
-            "when the [onnx-runtime] extra is missing or no "
-            "NeuroGolf-convention sidecar is present.)"
+            "D11-onnx shape-coverage, numpy_divergence, "
+            "score_validity). Zero diagnostics. "
+            "(numpy_divergence silent-passes when [onnx-runtime] "
+            "is missing or no NeuroGolf-convention sidecar is "
+            "present; score_validity silent-passes when "
+            "[onnx-profile] is missing.)"
         )
         return 0
 
-    print(f"MARAD  {path}")
-    print(f"  {len(diagnostics)} violation(s):")
+    # v0.9.4 split: ADVISORY findings exit 0; MARAD findings exit 1.
+    # ScoreValidityDiagnostic.severity is "ADVISORY" in v0.9.4; the
+    # other four diagnostic families do not carry the field, so
+    # getattr(d, "severity", "MARAD") defaults them to MARAD.
+    advisory = []
+    marad = []
     for name, d in diagnostics:
         if isinstance(
             d,
             AllPathsEmitDiagnostic
             | OpsetComplianceDiagnostic
             | ShapeCoverageDiagnostic
-            | NumpyDivergenceDiagnostic,
+            | NumpyDivergenceDiagnostic
+            | ScoreValidityDiagnostic,
         ):
-            print(f"    [{name}] {d.diagnosis}")
-    return 1
+            severity = getattr(d, "severity", "MARAD")
+            if severity == "ADVISORY":
+                advisory.append((name, d))
+            else:
+                marad.append((name, d))
+
+    if marad and advisory:
+        print(f"MARAD  {path}")
+        print(f"  5 structural checks ran, " f"{len(marad)} MARAD, {len(advisory)} ADVISORY:")
+    elif marad:
+        print(f"MARAD  {path}")
+        print(f"  {len(marad)} violation(s):")
+    else:
+        print(f"ADVISORY  {path}")
+        print(f"  {len(advisory)} advisory finding(s):")
+
+    for name, d in marad:
+        print(f"    [MARAD] [{name}] {d.diagnosis}")
+        # Part 5b(a): print minimal_fix matching Python/Rust/Go pattern.
+        fix = getattr(d, "minimal_fix", None)
+        if fix:
+            print(f"      fix: {fix}")
+    for name, d in advisory:
+        print(f"    [ADVISORY] [{name}] {d.diagnosis}")
+        fix = getattr(d, "minimal_fix", None)
+        if fix:
+            print(f"      fix: {fix}")
+
+    # Decision 3: ADVISORY exits 0; MARAD exits 1.
+    return 1 if marad else 0
 
 
 def _check_additive(old_path: Path, new_path: Path) -> int:
