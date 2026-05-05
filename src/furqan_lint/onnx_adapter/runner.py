@@ -38,10 +38,16 @@ D11-onnx (shape-coverage, v0.9.1):
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from furqan_lint.onnx_adapter.shape_coverage import ShapeCoverageDiagnostic
+    from furqan_lint.onnx_adapter.numpy_divergence import (
+        NumpyDivergenceDiagnostic,
+    )
+    from furqan_lint.onnx_adapter.shape_coverage import (
+        ShapeCoverageDiagnostic,
+    )
 
 from furqan_lint.onnx_adapter.translator import OnnxModule
 
@@ -187,21 +193,32 @@ def check_opset_compliance(module: OnnxModule) -> list[OpsetComplianceDiagnostic
 def check_onnx_module(
     module: OnnxModule,
     model_proto: Any,
+    model_path: Path,
 ) -> list[
     tuple[
         str,
-        AllPathsEmitDiagnostic | OpsetComplianceDiagnostic | ShapeCoverageDiagnostic,
+        AllPathsEmitDiagnostic
+        | OpsetComplianceDiagnostic
+        | ShapeCoverageDiagnostic
+        | NumpyDivergenceDiagnostic,
     ]
 ]:
     """Run every ONNX checker against ``module`` and ``model_proto``.
 
-    ``model_proto`` is a **required positional parameter** per
-    Decision 2 of the v0.9.1 prompt (round-30 finding MED-2
-    closure). The fail-fast discipline favors a ``TypeError`` on
-    a missing argument over silently skipping the
-    ``shape_coverage`` checker. The single existing call site is
-    ``cli._check_onnx_file``, which has ``model_proto`` in scope
-    from ``parse_model(path)``.
+    All three of ``module``, ``model_proto``, and ``model_path``
+    are **required positional** parameters. The fail-fast
+    discipline favors a ``TypeError`` on a missing argument over
+    silently skipping a checker (round-30 MED-2; round-33 HIGH-1).
+    A ``model_path=None`` default was rejected for v0.9.3 because
+    it would reverse the round-30 closure and silently skip
+    ``numpy_divergence`` for any pre-v0.9.3 call site that did
+    not pass the path.
+
+    The single existing call site is ``cli._check_onnx_file``,
+    which has all three values in scope:
+    ``model_proto = parse_model(path)``,
+    ``module = to_onnx_module(model_proto)``,
+    ``model_path = path``.
 
     Returns a list of ``(name, diagnostic)`` pairs where ``name``
     identifies the checker:
@@ -209,14 +226,26 @@ def check_onnx_module(
     * ``"all_paths_emit"`` - D24-onnx (v0.9.0)
     * ``"opset_compliance"`` - opset registry check (v0.9.0)
     * ``"shape_coverage"`` - D11-onnx via strict-mode shape
-      inference (v0.9.1; Decision 1 of v0.9.1 prompt)
+      inference (v0.9.1) plus type-compliance via
+      ``check_type=True`` (v0.9.2)
+    * ``"numpy_divergence"`` - numpy-vs-ONNX divergence
+      detection (v0.9.3); silent-passes when the
+      ``[onnx-runtime]`` extra is missing or when no
+      NeuroGolf-shaped sidecar (``_build.py`` + ``.json``)
+      is discoverable
     """
+    from furqan_lint.onnx_adapter.numpy_divergence import (
+        check_numpy_divergence,
+    )
     from furqan_lint.onnx_adapter.shape_coverage import check_shape_coverage
 
     diagnostics: list[
         tuple[
             str,
-            AllPathsEmitDiagnostic | OpsetComplianceDiagnostic | ShapeCoverageDiagnostic,
+            AllPathsEmitDiagnostic
+            | OpsetComplianceDiagnostic
+            | ShapeCoverageDiagnostic
+            | NumpyDivergenceDiagnostic,
         ]
     ] = []
     for d_apr in check_all_paths_emit(module):
@@ -225,4 +254,6 @@ def check_onnx_module(
         diagnostics.append(("opset_compliance", d_op))
     for d_sc in check_shape_coverage(model_proto):
         diagnostics.append(("shape_coverage", d_sc))
+    for d_nd in check_numpy_divergence(model_proto, model_path):
+        diagnostics.append(("numpy_divergence", d_nd))
     return diagnostics

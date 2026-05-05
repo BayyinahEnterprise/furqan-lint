@@ -33,10 +33,11 @@ This installs the latest release from PyPI. Requires Python 3.10+ and `furqan>=0
 ### Optional adapters
 
 ```bash
-pip install "furqan-lint[rust]"           # tree-sitter Rust adapter
-pip install "furqan-lint[go]"             # Go adapter (requires Go 1.22+ toolchain at install time)
-pip install "furqan-lint[onnx]"           # ONNX adapter (D24-onnx + opset-compliance)
-pip install "furqan-lint[rust,go,onnx]"   # all three adapters
+pip install "furqan-lint[rust]"                  # tree-sitter Rust adapter
+pip install "furqan-lint[go]"                    # Go adapter (requires Go 1.22+ toolchain at install time)
+pip install "furqan-lint[onnx]"                  # ONNX graph-only checks (D24-onnx + opset-compliance + D11-onnx shape/type)
+pip install "furqan-lint[onnx-runtime]"          # ONNX + numpy-vs-ONNX divergence (v0.9.3+; brings in onnxruntime + numpy)
+pip install "furqan-lint[rust,go,onnx-runtime]"  # all adapters with full ONNX inference checks
 ```
 
 ### Install from a specific commit or tag
@@ -549,13 +550,26 @@ translator-level limits, in `tests/test_go_translator.py`).
   `tests/fixtures/go/documented_limits/r3_compile_rejected.go`
   (added in v0.8.1).
 
-### ONNX adapter (current as of v0.9.1)
+### ONNX adapter (current as of v0.9.3)
 
 Each ONNX limit has a fixture in
 `tests/fixtures/onnx/documented_limits/` and a pinning test in
 `tests/test_onnx_correctness.py`,
 `tests/test_onnx_public_surface_additive.py`, or
 `tests/test_onnx_shape_coverage.py`.
+
+- **numpy_divergence requires NeuroGolf-convention sidecars
+  (v0.9.3).** The numpy-vs-ONNX divergence checker is opt-in by
+  reference presence: it only runs when (a) the
+  `[onnx-runtime]` extra is installed, (b) a sibling
+  `<basename>_build.py` exists exporting top-level callable
+  `numpy_reference`, AND (c) a sibling `<basename>.json` exists
+  in ARC-AGI task format with `train[*]['input']`. Generic ONNX
+  users with no NeuroGolf-shaped sidecars see silent-pass on
+  the divergence checker. General-purpose reference-discovery
+  conventions (decorator-based annotation) and probe-grid
+  formats are a v0.9.5+ extension. Pinned as
+  `tests/fixtures/onnx/documented_limits/numpy_divergence_neurogolf_convention.py`.
 
 - **Dynamic shape silent-pass.** Strict-mode shape inference
   silent-passes on `dim_param` (symbolic batch / sequence dims

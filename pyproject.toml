@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "furqan-lint"
-version = "0.9.2"
+version = "0.9.3"
 description = "Structural-honesty checks for Python, powered by Furqan"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -57,6 +57,18 @@ go = []
 # graph structure, not on inference.
 onnx = [
     "onnx>=1.14,<1.19",
+]
+# Optional ONNX inference extra (v0.9.3: numpy-vs-ONNX divergence
+# detection). Lists onnx>=1.14 directly to avoid the
+# self-referencing "furqan-lint[onnx]" syntax which is PEP 508
+# compliant only since pip 21.2 and breaks on older pip versions
+# and some build tools (round-33 finding MEDIUM closure). Honors
+# the v0.9.0 Decision 1 standing rule by isolating onnxruntime in
+# this dedicated extra rather than adding it to [onnx].
+onnx-runtime = [
+    "onnx>=1.14,<1.19",
+    "onnxruntime>=1.16",
+    "numpy>=1.20",
 ]
 
 [project.scripts]
@@ -160,6 +172,17 @@ ignore_missing_imports = true
 # typed surface (parser._get_parser, translator.translate_tree)
 # so the rest of the source remains strictly typed.
 module = ["tree_sitter", "tree_sitter_rust"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# onnxruntime is an optional dependency installed via the
+# [onnx-runtime] extra (v0.9.3 Decision 5). The CI lint job
+# installs only [dev] + [onnx], not [onnx-runtime], so mypy
+# cannot find onnxruntime stubs in that environment. The import
+# is guarded by try/except ImportError per Decision 6 (a). The
+# numpy_divergence checker silent-passes when the extra is not
+# installed.
+module = "onnxruntime"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

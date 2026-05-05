@@ -63,6 +63,21 @@ ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1: frozenset[str] = ONNX_ADAPTER_PUBLIC_SURFACE
 # v0.9.1 baseline per the per-version cadence.
 ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_2: frozenset[str] = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1
 
+# v0.9.3 grows the surface by exactly five names: NumpyDivergenceDiagnostic
+# (the divergence finding dataclass), check_numpy_divergence (the checker
+# entry point), OnnxRuntimeExtrasNotInstalled (the typed-exception for the
+# new [onnx-runtime] extra), discover_numpy_reference + discover_probe_grids
+# (the two discovery helpers used by the divergence checker; exposed for
+# downstream consumers that want to reuse the convention-finding logic).
+# All five land via Decisions 1, 2, 3, 7, 8 of the v0.9.3 prompt.
+ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_3: frozenset[str] = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_2 | {
+    "NumpyDivergenceDiagnostic",
+    "check_numpy_divergence",
+    "OnnxRuntimeExtrasNotInstalled",
+    "discover_numpy_reference",
+    "discover_probe_grids",
+}
+
 
 def test_v0_9_0_onnx_adapter_surface_snapshot() -> None:
     """``furqan_lint.onnx_adapter.__all__`` must include every
@@ -223,4 +238,38 @@ def test_v0_9_2_onnx_adapter_surface_snapshot() -> None:
     assert ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_1 == ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_2, (
         "v0.9.2 must alias v0.9.1; type-compliance added a "
         "dataclass field, not a new __all__ export."
+    )
+
+
+def test_v0_9_3_onnx_adapter_surface_snapshot() -> None:
+    """``furqan_lint.onnx_adapter.__all__`` must include every
+    name from the v0.9.3 baseline (v0.9.2 + 5 new names for
+    the numpy-vs-ONNX divergence checker).
+
+    The five new names are NumpyDivergenceDiagnostic,
+    check_numpy_divergence, OnnxRuntimeExtrasNotInstalled,
+    discover_numpy_reference, and discover_probe_grids.
+    Future versions may extend; removals require a major bump.
+    """
+    pytest.importorskip("onnx")
+    from furqan_lint import onnx_adapter
+
+    current = frozenset(onnx_adapter.__all__)
+    missing = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_3 - current
+    assert not missing, (
+        f"onnx_adapter.__all__ removed names from the v0.9.3 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+    # Strict-superset assertion: v0.9.3 grows by exactly the five new names.
+    delta = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_3 - ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_2
+    expected = {
+        "NumpyDivergenceDiagnostic",
+        "check_numpy_divergence",
+        "OnnxRuntimeExtrasNotInstalled",
+        "discover_numpy_reference",
+        "discover_probe_grids",
+    }
+    assert delta == expected, (
+        f"v0.9.3 baseline delta differs from the five expected new "
+        f"names: got {sorted(delta)}, expected {sorted(expected)}"
     )

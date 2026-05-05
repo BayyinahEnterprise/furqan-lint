@@ -4,7 +4,15 @@ Each entry below has a fixture file in this directory, a CHANGELOG
 entry by exact stem, a top-level README entry by topic keyword,
 and at least one pinning test under `tests/test_*.py`.
 
-## Inventory (current as of v0.9.1)
+## Inventory (current as of v0.9.3)
+
+- `numpy_divergence_neurogolf_convention` (v0.9.3): the
+  numpy-vs-ONNX divergence checker is opt-in by reference
+  presence and uses the NeuroGolf-specific
+  ``<basename>_build.py`` + ``<basename>.json`` convention.
+  Generic ONNX users without these sidecars see silent-pass on
+  the divergence checker. Pinned by
+  `tests/test_onnx_numpy_divergence_documented_limit.py::test_numpy_divergence_silent_pass_when_neurogolf_convention_absent`.
 
 - `dynamic_shape_silent_pass` (v0.9.1): D11-onnx silent-passes on
   dim_param (symbolic) and empty dim_value (dynamic) shapes per

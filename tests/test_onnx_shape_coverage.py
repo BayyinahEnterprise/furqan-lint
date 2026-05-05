@@ -237,7 +237,7 @@ def test_d11_onnx_runner_alongside_d24_and_opset(tmp_path: Path) -> None:
 
     model = make_shape_mismatch_d11_deferred_model()
     module = to_onnx_module(model)
-    diags = check_onnx_module(module, model)
+    diags = check_onnx_module(module, model, Path("/nonexistent.onnx"))
     names = sorted({n for n, _ in diags})
     assert "shape_coverage" in names, f"expected shape_coverage in {names}"
     # And calling with one positional argument should fail-fast

@@ -81,6 +81,7 @@ _README_TOPIC_KEYWORDS: dict[str, tuple[str, ...] | None] = {
     "r3_compile_rejected": ("R3 not-applicable", "R3 not_applicable", "compiler rejects"),
     # ONNX documented_limits (v0.9.0).
     "dynamic_shape_silent_pass": ("dim_param", "dynamic shape", "strict_mode"),
+    "numpy_divergence_neurogolf_convention": ("numpy_divergence", "NeuroGolf", "_build.py"),
     "intermediates_excluded": ("intermediates", "graph.value_info", "intermediate tensor"),
     "registry_pin_window": ("onnx>=1.14", "op registry", "op-registry"),
 }

@@ -19,6 +19,186 @@ introduced this convention.
 
 ---
 
+## [0.9.3] - 2026-05-04
+
+numpy-vs-ONNX divergence detection. Closes Gap 4 (HIGH
+competition lever) per the round-32 NeuroGolf leverage analysis.
+A new optional ``[onnx-runtime]`` extra brings in
+``onnxruntime`` and ``numpy``; a fourth ONNX checker
+(``numpy_divergence``) loads a discoverable numpy reference
+function alongside each ``.onnx`` file, runs both on a probe
+grid extracted from the corresponding ARC-AGI task file, and
+fires when the outputs disagree.
+
+The check is opt-in by reference presence: it silent-passes
+when the ``[onnx-runtime]`` extra is not installed, when no
+``<basename>_build.py`` is discoverable, or when no
+``<basename>.json`` task file is discoverable. Generic ONNX
+users with no NeuroGolf-shaped sidecars see no behavior change.
+
+**Renumbering note.** The original v0.9.x sequence had v0.9.3 =
+score-validity advisory and v0.9.4 = numpy-vs-ONNX divergence.
+The round-32 leverage analysis identified divergence detection
+as substantially higher-leverage; this release renumbers it to
+v0.9.3 to ship the lever sooner. Score-validity becomes v0.9.4.
+
+### Fixed
+
+- ``check_onnx_module`` signature gains a third required-positional
+  parameter ``model_path`` per Decision 1 of the v0.9.3 prompt
+  and round-33 HIGH-1 closure. The fail-fast discipline favors
+  a ``TypeError`` on a missing argument over silently skipping
+  ``numpy_divergence``. A ``model_path=None`` default was
+  considered and rejected: it would reverse the round-30 MED-2
+  closure and silently skip the new checker. The single
+  existing call site (``cli._check_onnx_file``) is updated
+  atomically; ``tests/test_onnx_correctness.py`` and
+  ``tests/test_onnx_shape_coverage.py`` call sites pass a
+  non-existent path so ``numpy_divergence`` silent-passes per
+  Decision 6 conditions (b)/(c).
+- The v0.9.0 Decision 1 standing rule "No ``onnxruntime``
+  dependency at lint time" is amended in v0.9.3 per Decision 7:
+  the rule continues to hold for the ``[onnx]`` extra; v0.9.3
+  introduces a separate ``[onnx-runtime]`` extra for the new
+  inference-based checker. Users running graph-structure checks
+  only (D24-onnx, opset-compliance, D11-onnx shape/type)
+  continue to pay no ``onnxruntime`` install cost.
+
+### Added
+
+- ``src/furqan_lint/onnx_adapter/numpy_reference.py``:
+  ``discover_numpy_reference(model_path)`` looks for
+  ``<basename>_build.py`` containing top-level callable
+  ``numpy_reference``. Loads via
+  ``importlib.util.spec_from_file_location`` with a
+  unique-per-invocation module name so ``sys.modules`` is not
+  polluted across check invocations (round-33 robustness pin).
+  Returns ``None`` (silent-pass) on any load failure; the lint
+  must not blow up because a sidecar is malformed.
+- ``src/furqan_lint/onnx_adapter/probe_grid.py``:
+  ``discover_probe_grids(model_path)`` looks for
+  ``<basename>.json`` in two locations (primary
+  ``<dir>/<basename>.json``, fallback
+  ``<dir>/../tasks/<basename>.json``) in ARC-AGI format with
+  ``train[*]['input']``. Multi-example tasks emit one grid per
+  example in document order.
+- ``src/furqan_lint/onnx_adapter/numpy_divergence.py``:
+  ``NumpyDivergenceDiagnostic`` dataclass (frozen, 9 required
+  fields including ``model_path``, ``reference_path``,
+  ``task_path``, ``probe_index``, ``numpy_output_summary``,
+  ``onnx_output_summary``, ``divergence_summary``,
+  ``diagnosis``, ``minimal_fix``).
+  ``check_numpy_divergence(model_proto, model_path)`` runs
+  both numpy reference and ONNX inference on each probe grid,
+  yields one diagnostic per diverging probe (or per side that
+  raises an exception). Multi-probe robustness: an exception
+  on one probe does not abort the others.
+- Tolerance modes (Decision 4): cell-exact via
+  ``np.array_equal`` if output dtype is integer OR rank >= 4
+  with channel dimension matching a known one-hot width
+  (default ``(10,)`` for ARC-AGI); ``np.allclose(rtol=1e-5,
+  atol=1e-7)`` otherwise.
+- Input-shape adaptation (S2): adds leading axes until the
+  input rank matches the ONNX expected rank. Documented
+  approach for NeuroGolf models that expect ``(1, 1, H, W)``
+  but ARC-AGI grids are stored as ``[[...]]`` rank-2.
+- ``OnnxRuntimeExtrasNotInstalled`` typed-exception (subclass
+  of ``ImportError``). Distinguishes the inference-extra
+  failure from the ``[onnx]`` graph-only extra failure.
+- ``[onnx-runtime]`` pip extra (Decision 5) listing
+  ``onnx>=1.14,<1.19``, ``onnxruntime>=1.16``, ``numpy>=1.20``
+  directly. The duplicated ``onnx>=1.14,<1.19`` across ``[onnx]``
+  and ``[onnx-runtime]`` is intentional (round-33 MEDIUM
+  closure): trades minor duplication for install-tool
+  compatibility across the entire pip version matrix (the
+  self-referencing ``furqan-lint[onnx]`` syntax is PEP 508
+  compliant only since pip 21.2 and breaks on older pip
+  versions and some build tools).
+- ``numpy_divergence_neurogolf_convention`` documented-limit
+  fixture (``tests/fixtures/onnx/documented_limits/``) plus
+  pinning test
+  ``test_numpy_divergence_silent_pass_when_neurogolf_convention_absent``:
+  records that the v0.9.3 numpy-vs-ONNX divergence checker is
+  opt-in by NeuroGolf-convention sidecar presence per
+  Decision 9 of the v0.9.3 prompt. Generic ONNX users with no
+  ``_build.py`` + ``.json`` sidecars see silent-pass on the
+  divergence checker. General-purpose conventions are tracked
+  as a v0.9.5+ extension.
+- Five new public exports in
+  ``furqan_lint.onnx_adapter.__all__``:
+  ``NumpyDivergenceDiagnostic``, ``check_numpy_divergence``,
+  ``OnnxRuntimeExtrasNotInstalled``,
+  ``discover_numpy_reference``, ``discover_probe_grids``.
+- ``ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_3`` baseline pins the new
+  surface; the strict-superset assertion in
+  ``test_v0_9_3_onnx_adapter_surface_snapshot`` catches any
+  future drift.
+
+### Changed
+
+- ``check_onnx_module(module, model_proto, model_path)`` now
+  runs four checkers in order:
+  ``all_paths_emit`` (D24-onnx, v0.9.0),
+  ``opset_compliance`` (v0.9.0),
+  ``shape_coverage`` (v0.9.1 + v0.9.2),
+  ``numpy_divergence`` (v0.9.3).
+- ``cli._check_onnx_file``: passes ``path`` (the directory
+  walker's ``Path``) as the third argument. PASS message
+  updated from "3 structural checks" to "4 structural checks
+  ran" with a parenthetical note that ``numpy_divergence``
+  silent-passes when the ``[onnx-runtime]`` extra is missing
+  or no NeuroGolf-convention sidecar is present.
+- README "ONNX adapter (current as of v0.9.1)" header bumped
+  to v0.9.3; new ``numpy_divergence_neurogolf_convention``
+  limit added as the first entry; install instructions add
+  the ``[onnx-runtime]`` row and update the combined-extras
+  example to ``[rust,go,onnx-runtime]``.
+- Four-place-completeness gate's ``_README_TOPIC_KEYWORDS``
+  gains a ``numpy_divergence_neurogolf_convention`` entry
+  with topic keywords ``("numpy_divergence", "NeuroGolf",
+  "_build.py")``.
+
+### Tests
+
+Test count: 389 (v0.9.2 ship state) -> 412 (v0.9.3). Net
+delta: +23.
+
+Breakdown:
+
+- Reference-discovery tests: +5
+  (finds existing _build.py; returns None when absent;
+  returns None when not callable; returns None on syntax
+  error; does not pollute sys.modules)
+- Probe-grid-discovery tests: +4
+  (finds primary; finds fallback ../tasks/; returns None when
+  no task file; returns multiple grids for multi-example task)
+- Divergence-checker tests: +10
+  (4 firing/clean + 3 silent-pass + 2 runtime-error +
+  1 multi-probe)
+- Runner-integration + fail-fast pin: +2
+  (test_check_onnx_module_runs_all_four_checkers;
+   test_check_onnx_module_fail_fast_typerror_on_two_arg_call)
+- Documented-limit pinning: +1
+  (test_numpy_divergence_silent_pass_when_neurogolf_convention_absent)
+- V0_9_3 surface snapshot: +1
+  (test_v0_9_3_onnx_adapter_surface_snapshot)
+
+Sum: 5 + 4 + 10 + 2 + 1 + 1 = +23 ✓
+
+### Round-33 closure ledger
+
+| Finding | Source | Severity | Closure |
+| --- | --- | --- | --- |
+| Gap 4: numpy-vs-ONNX divergence (HIGH competition lever) | round-32 leverage analysis | HIGH | Closed in v0.9.3 round 33 via Decisions 1-10. Empirically verified: onnxruntime + numpy round-trip on the v0.9.2 substrate; importlib loader does not pollute sys.modules; four firing cases verified; all silent-pass conditions verified. |
+| CRITICAL: v0.9.3 did not exist when previous draft assumed it had shipped | round-33 audit | CRITICAL | Closed by renumbering. This release ships as v0.9.3 (numpy-vs-ONNX divergence). Score-validity (formerly v0.9.3 = Gap 2) becomes v0.9.4. |
+| HIGH-1: signature change breaks existing call sites | round-33 audit | HIGH | Closed via Decision 1 keeping ``model_path`` required-positional. ``model_path=None`` default rejected: would reverse round-30 MED-2 and silently skip ``numpy_divergence``. Existing test call sites updated atomically in commit 4. |
+| HIGH-2: NeuroGolf specificity not documented | round-33 audit | HIGH | Closed via Decision 9 expansion + the new four-place documented limit ``numpy_divergence_neurogolf_convention``. |
+| MEDIUM: self-referencing pip extra fragile | round-33 audit | MEDIUM | Closed via Decision 5 revision: ``[onnx-runtime]`` lists ``onnx>=1.14,<1.19`` directly rather than via ``furqan-lint[onnx]``. Trades minor duplication for install-tool compatibility. The ``<1.19`` upper bound matches ``[onnx]`` per PR #12 cp313 wheel-availability constraint. |
+| LOW: §3 over-specified | round-33 audit | LOW | Closed via §3 trim: the prompt now specifies contracts (function signatures, behavior, silent-pass conditions, dataclass fields); Co-work writes the implementation; the §4 tests are the load-bearing specification. |
+| Round-32 ship target before session 52 | round-32 leverage analysis | HIGH (deadline) | Operationalized in this 6-hour scope. The renumbering ships the lever one release sooner. |
+
+7 closures (1 HIGH closed in v0.9.3 = Gap 4, 1 CRITICAL closed = renumbering, 2 HIGH closed = signature + NeuroGolf documentation, 1 MEDIUM closed = pip extra, 1 LOW closed = §3 trim, 1 HIGH operationalized = ship target).
+
 ## [0.9.2] - 2026-05-04
 
 D11-onnx adds type-compliance via ``check_type=True``. Closes
