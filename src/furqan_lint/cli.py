@@ -387,14 +387,17 @@ def _check_onnx_file(path: Path) -> int:
         return 2
 
     module = to_onnx_module(model)
-    diagnostics = check_onnx_module(module, model)
+    diagnostics = check_onnx_module(module, model, path)
 
     if not diagnostics:
         print(f"PASS  {path}")
         print(
-            "  3 structural checks ran "
+            "  4 structural checks ran "
             "(D24-onnx all-paths-emit, opset-compliance, "
-            "D11-onnx shape-coverage). Zero diagnostics."
+            "D11-onnx shape-coverage, numpy_divergence). "
+            "Zero diagnostics. (numpy_divergence silent-passes "
+            "when the [onnx-runtime] extra is missing or no "
+            "NeuroGolf-convention sidecar is present.)"
         )
         return 0
 

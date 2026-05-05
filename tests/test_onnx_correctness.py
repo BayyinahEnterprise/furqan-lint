@@ -17,6 +17,7 @@ lookup behaviour for two retroactive-addition cases.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -38,7 +39,7 @@ def test_onnx_d24_fires_on_unreachable_output() -> None:
 
     model = make_unreachable_output_model()
     module = to_onnx_module(model)
-    findings = check_onnx_module(module, model)
+    findings = check_onnx_module(module, model, Path("/nonexistent.onnx"))
     names = [n for n, d in findings]
     assert "all_paths_emit" in names, f"expected all_paths_emit; got {names}"
     diag = next(d for n, d in findings if n == "all_paths_emit")
@@ -53,7 +54,7 @@ def test_onnx_d24_clean_when_all_outputs_reachable() -> None:
 
     model = make_two_output_model()
     module = to_onnx_module(model)
-    findings = check_onnx_module(module, model)
+    findings = check_onnx_module(module, model, Path("/nonexistent.onnx"))
     names = [n for n, d in findings]
     assert "all_paths_emit" not in names, f"expected no all_paths_emit findings; got {findings}"
 
@@ -66,7 +67,7 @@ def test_onnx_opset_fires_on_future_op() -> None:
 
     model = make_unknown_op_model()
     module = to_onnx_module(model)
-    findings = check_onnx_module(module, model)
+    findings = check_onnx_module(module, model, Path("/nonexistent.onnx"))
     names = [n for n, d in findings]
     assert "opset_compliance" in names, f"expected opset_compliance; got {names}"
     diag = next(d for n, d in findings if n == "opset_compliance")
@@ -81,7 +82,7 @@ def test_onnx_opset_clean_when_all_ops_in_declared_opset() -> None:
 
     model = make_relu_model(opset_version=14)
     module = to_onnx_module(model)
-    findings = check_onnx_module(module, model)
+    findings = check_onnx_module(module, model, Path("/nonexistent.onnx"))
     names = [n for n, d in findings]
     assert "opset_compliance" not in names, f"expected no opset_compliance findings; got {findings}"
 
