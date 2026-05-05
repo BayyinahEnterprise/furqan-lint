@@ -68,6 +68,21 @@ the CLI; the fix is one line plus an import.
   would create a new inconsistency, and fixing it for all
   four families is structurally adjacent to v0.9.4's gate
   work that prevents the v0.9.3.1 bug class from recurring.
+- **CHANGELOG-math gate skips in lean CI envs** (round-34
+  HIGH-2). The canonical CHANGELOG test count includes the
+  11 onnxruntime-gated tests in
+  ``test_onnx_numpy_divergence.py`` that use
+  ``pytest.importorskip("onnxruntime")``. CI's test jobs
+  install ``[dev,onnx]`` (no onnxruntime), producing an
+  empirical count 11 below the canonical number. Gate now
+  skips with a descriptive message when ``onnxruntime`` is
+  not importable; runs at full strength on developer
+  machines and the bundle-author sandbox. v0.9.4 Part 5b
+  closes this by adding an ``[onnx-runtime]`` job to the
+  CI matrix so the gate runs in CI too. Until then,
+  arithmetic drift in the CHANGELOG ``### Tests`` line is
+  caught locally but not in CI for releases that touch
+  onnxruntime-gated test counts.
 
 ### Tests
 
