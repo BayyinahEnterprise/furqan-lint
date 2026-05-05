@@ -78,6 +78,19 @@ ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_3: frozenset[str] = ONNX_ADAPTER_PUBLIC_SURFACE
     "discover_probe_grids",
 }
 
+# v0.9.4 grows the surface by exactly three names:
+# OnnxProfileExtrasNotInstalled (typed exception for the new
+# [onnx-profile] extra; subclass of ImportError),
+# ScoreValidityDiagnostic (the score-validity ADVISORY
+# diagnostic dataclass), and check_score_validity (the
+# checker entry point). All three land via Decisions 2, 5,
+# and 8 of the v0.9.4 prompt (Part 2 ecosystem).
+ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_4: frozenset[str] = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_3 | {
+    "OnnxProfileExtrasNotInstalled",
+    "ScoreValidityDiagnostic",
+    "check_score_validity",
+}
+
 
 def test_v0_9_0_onnx_adapter_surface_snapshot() -> None:
     """``furqan_lint.onnx_adapter.__all__`` must include every
@@ -271,5 +284,36 @@ def test_v0_9_3_onnx_adapter_surface_snapshot() -> None:
     }
     assert delta == expected, (
         f"v0.9.3 baseline delta differs from the five expected new "
+        f"names: got {sorted(delta)}, expected {sorted(expected)}"
+    )
+
+
+def test_v0_9_4_onnx_adapter_surface_snapshot() -> None:
+    """``furqan_lint.onnx_adapter.__all__`` must include every
+    name from the v0.9.4 baseline (v0.9.3 + 3 new names for
+    the score-validity ADVISORY checker).
+
+    The three new names are OnnxProfileExtrasNotInstalled
+    (typed exception), ScoreValidityDiagnostic (diagnostic
+    dataclass), and check_score_validity (entry point).
+    Future versions may extend; removals require a major bump.
+    """
+    pytest.importorskip("onnx")
+    from furqan_lint import onnx_adapter
+
+    current = frozenset(onnx_adapter.__all__)
+    missing = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_4 - current
+    assert not missing, (
+        f"onnx_adapter.__all__ removed names from the v0.9.4 baseline: "
+        f"{sorted(missing)}. Removals require a major-version bump."
+    )
+    delta = ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_4 - ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_3
+    expected = {
+        "OnnxProfileExtrasNotInstalled",
+        "ScoreValidityDiagnostic",
+        "check_score_validity",
+    }
+    assert delta == expected, (
+        f"v0.9.4 baseline delta differs from the three expected new "
         f"names: got {sorted(delta)}, expected {sorted(expected)}"
     )

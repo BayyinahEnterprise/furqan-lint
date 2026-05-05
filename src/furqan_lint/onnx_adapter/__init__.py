@@ -117,6 +117,10 @@ from furqan_lint.onnx_adapter.numpy_reference import (  # noqa: E402
 from furqan_lint.onnx_adapter.probe_grid import (  # noqa: E402
     discover_probe_grids,
 )
+from furqan_lint.onnx_adapter.score_validity import (  # noqa: E402
+    ScoreValidityDiagnostic,
+    check_score_validity,
+)
 from furqan_lint.onnx_adapter.shape_coverage import (  # noqa: E402
     ShapeCoverageDiagnostic,
     check_shape_coverage,
@@ -135,10 +139,13 @@ __all__ = (
     "OnnxExtrasNotInstalled",
     "OnnxModule",
     "OnnxParseError",
+    "OnnxProfileExtrasNotInstalled",
     "OnnxRuntimeExtrasNotInstalled",
+    "ScoreValidityDiagnostic",
     "ShapeCoverageDiagnostic",
     "ValueInfoSummary",
     "check_numpy_divergence",
+    "check_score_validity",
     "check_shape_coverage",
     "discover_numpy_reference",
     "discover_probe_grids",
