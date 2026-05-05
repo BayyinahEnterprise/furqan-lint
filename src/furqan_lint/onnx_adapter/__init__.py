@@ -94,6 +94,19 @@ class OnnxRuntimeExtrasNotInstalled(ImportError):
     """
 
 
+class OnnxProfileExtrasNotInstalled(ImportError):
+    """Raised when the ``[onnx-profile]`` extra is missing.
+
+    Subclass of ``ImportError``. v0.9.4+: distinguishes the
+    profile-extra failure from the ``[onnx]`` graph-only and
+    ``[onnx-runtime]`` inference extras. The score-validity
+    checker silent-passes when ``import onnx_tool`` raises
+    (Decision 6 (a) of v0.9.4 prompt); the exception type
+    exists for tests that surface install-failure modes
+    explicitly.
+    """
+
+
 from furqan_lint.onnx_adapter.numpy_divergence import (  # noqa: E402
     NumpyDivergenceDiagnostic,
     check_numpy_divergence,

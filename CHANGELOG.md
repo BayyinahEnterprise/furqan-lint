@@ -36,7 +36,15 @@ fragility, CI matrix ``[onnx-runtime]`` gap).
 
 ### Added
 
-(populate during release commit 12)
+- ``score_validity_optin_extra`` documented-limit fixture
+  (``tests/fixtures/onnx/documented_limits/``) plus pinning
+  test ``test_score_validity_silent_pass_when_extra_missing``:
+  records that the v0.9.4 score-validity ADVISORY checker is
+  opt-in via the ``[onnx-profile]`` pip extra per Decision 6
+  (a) of the v0.9.4 prompt.
+- ``[onnx-profile]`` pip extra (Decision 5) bringing in
+  ``onnx>=1.14,<1.19`` and ``onnx-tool>=1.0,<2``.
+
 
 ### Changed
 

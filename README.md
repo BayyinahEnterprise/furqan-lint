@@ -37,7 +37,8 @@ pip install "furqan-lint[rust]"                  # tree-sitter Rust adapter
 pip install "furqan-lint[go]"                    # Go adapter (requires Go 1.22+ toolchain at install time)
 pip install "furqan-lint[onnx]"                  # ONNX graph-only checks (D24-onnx + opset-compliance + D11-onnx shape/type)
 pip install "furqan-lint[onnx-runtime]"          # ONNX + numpy-vs-ONNX divergence (v0.9.3+; brings in onnxruntime + numpy)
-pip install "furqan-lint[rust,go,onnx-runtime]"  # all adapters with full ONNX inference checks
+pip install "furqan-lint[onnx-profile]"          # ONNX + score-validity ADVISORY (v0.9.4+; brings in onnx_tool)
+pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile]"  # all adapters with full ONNX runtime + profile checks
 ```
 
 ### Install from a specific commit or tag
@@ -550,13 +551,23 @@ translator-level limits, in `tests/test_go_translator.py`).
   `tests/fixtures/go/documented_limits/r3_compile_rejected.go`
   (added in v0.8.1).
 
-### ONNX adapter (current as of v0.9.3)
+### ONNX adapter (current as of v0.9.4)
 
 Each ONNX limit has a fixture in
 `tests/fixtures/onnx/documented_limits/` and a pinning test in
 `tests/test_onnx_correctness.py`,
 `tests/test_onnx_public_surface_additive.py`, or
 `tests/test_onnx_shape_coverage.py`.
+
+- **score_validity is opt-in via [onnx-profile] (v0.9.4).**
+  The v0.9.4 score-validity ADVISORY checker wraps
+  `onnx_tool.model_profile()` to surface profiler-coverage
+  gaps (e.g., the cont45 TopK-without-axis crash). It runs only
+  when the `[onnx-profile]` extra is installed (which brings in
+  `onnx_tool`); otherwise it silent-passes. ADVISORY findings
+  exit 0 (the model is structurally valid; the failure is in
+  the deployment-side profiler). Pinned as
+  `tests/fixtures/onnx/documented_limits/score_validity_optin_extra.py`.
 
 - **numpy_divergence requires NeuroGolf-convention sidecars
   (v0.9.3).** The numpy-vs-ONNX divergence checker is opt-in by
