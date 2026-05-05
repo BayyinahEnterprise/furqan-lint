@@ -19,31 +19,71 @@ introduced this convention.
 
 ---
 
-## [0.9.3.1] - <DATE>
+## [0.9.3.1] - 2026-05-04
 
 CLI hotfix. Closes round-34 HIGH-1: the CLI's
 ``_check_onnx_file`` printer hardcoded an isinstance tuple
 that filtered the new ``NumpyDivergenceDiagnostic`` family
-out, so users saw ``MARAD <path>`` followed by
-``1 violation(s):`` followed by no body. The substrate-side
-``check_numpy_divergence`` correctly emits the diagnostic;
-the CLI surface dropped it.
+out, so users running ``furqan-lint check`` on a divergence-
+firing model saw:
+
+    MARAD <path>
+      1 violation(s):
+
+with no body. The substrate-side ``check_numpy_divergence``
+correctly emitted the diagnostic; the CLI surface dropped it.
+The bug rendered the v0.9.3 headline feature unusable from
+the CLI; the fix is one line plus an import.
 
 ### Fixed
 
-(populate during release commit 3)
+- **Round-34 HIGH-1 (HIGH).** ``cli._check_onnx_file``
+  isinstance tuple extended from three diagnostic families
+  (AllPathsEmitDiagnostic, OpsetComplianceDiagnostic,
+  ShapeCoverageDiagnostic) to four. The fourth family,
+  ``NumpyDivergenceDiagnostic`` (added in v0.9.3), now prints
+  its diagnosis body alongside the other three.
+- A regression test
+  (``test_cli_numpy_divergence_body_prints``) runs the CLI
+  end-to-end via subprocess on a divergence-firing fixture,
+  asserts the ``numpy_divergence`` tag and diagnosis prose
+  appear in stdout, and asserts the negative case (stdout
+  does not match the bug shape of an empty body after the
+  violations count). The regression pin is the surface-to-
+  substrate match: a future addition of a fifth diagnostic
+  family (e.g., ``ScoreValidityDiagnostic`` in v0.9.4) will
+  not silent-drop because the test catches the same bug
+  shape.
 
 ### Known limitations carried to v0.9.4
 
-(populate during release commit 3: ONNX printer's
-``minimal_fix`` field is silently dropped; structural
-fix bundled with v0.9.4 Part 5b per §3.5 of the v0.9.3.1
-prompt)
+- **ONNX printer's ``minimal_fix`` field is silently dropped**
+  (consistent across all four diagnostic families). The
+  Python, Rust, and Go marad printers in the same
+  ``cli.py`` follow a different pattern that prints both
+  ``diagnosis`` and ``minimal_fix``; the ONNX path prints
+  ``diagnosis`` only. Bundling this fix to v0.9.4 Part 5b
+  alongside the structural CLI-integration gate per §3.5
+  of the v0.9.3.1 prompt: fixing it in one family only
+  would create a new inconsistency, and fixing it for all
+  four families is structurally adjacent to v0.9.4's gate
+  work that prevents the v0.9.3.1 bug class from recurring.
 
 ### Tests
 
-Test count: 412 (v0.9.3 ship state) -> <TBD>
-(v0.9.3.1). Net delta: <TBD>.
+Test count: 412 (v0.9.3 ship state) -> 413 (v0.9.3.1).
+Net delta: +1.
+
+Breakdown:
+
+- Regression test: +1
+  (``test_cli_numpy_divergence_body_prints``)
+
+### Round-34 closure ledger
+
+| Finding | Source | Severity | Closure |
+| --- | --- | --- | --- |
+| HIGH-1 | round-34 audit (post-v0.9.3-ship) | HIGH | Closed in v0.9.3.1. Decision 1 extends the isinstance tuple; Decision 2 adds the source-module import; Decision 3 lands the regression test. Decision 4 defers the structural CLI-integration gate to v0.9.4 (the bug class, not just the bug instance). The fix is one line; the regression test pins the surface to the substrate. |
 
 ## [0.9.3] - 2026-05-04
 

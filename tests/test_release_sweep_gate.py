@@ -194,9 +194,21 @@ _FORWARD_REF_PATTERN = re.compile(
 
 
 def _current_version_tuple() -> tuple[int, int, int]:
-    """Parse the current version from pyproject.toml as a tuple."""
+    """Parse the current version from pyproject.toml as a tuple.
+
+    Handles both 3-component (``X.Y.Z``) and 4-component
+    (``X.Y.Z.W``) versions; the trailing ``.W`` (hotfix
+    component) is dropped because the forward-reference check
+    is anchored at the ``vN.M[.P]`` granularity, not at the
+    hotfix granularity. v0.9.3.1 hotfix added 4-component
+    handling.
+    """
     pyproject = (REPO_ROOT / "pyproject.toml").read_text()
-    match = re.search(r'^version\s*=\s*"(\d+)\.(\d+)\.(\d+)"', pyproject, re.MULTILINE)
+    match = re.search(
+        r'^version\s*=\s*"(\d+)\.(\d+)\.(\d+)(?:\.\d+)?"',
+        pyproject,
+        re.MULTILINE,
+    )
     if match is None:
         pytest.fail("could not parse version from pyproject.toml")
     return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
