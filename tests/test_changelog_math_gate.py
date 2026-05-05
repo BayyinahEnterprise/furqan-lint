@@ -42,7 +42,13 @@ pytestmark = pytest.mark.unit
 # ``Y`` (backticks). The version tags are not validated; the
 # load-bearing capture groups are X, Y, Z.
 _TESTS_LINE = re.compile(
-    r"Test count:\s*(\d+)\s*\([^)]+\)\s*->\s*" r"(\d+)\s*\([^)]+\)\.\s*Net delta:\s*\+(\d+)",
+    # Round-34 HIGH-2a (Part 5b(b) of v0.9.4): "Net delta:" must
+    # accept arbitrary whitespace including newlines between
+    # "Net" and "delta:". v0.9.3's CHANGELOG happened to wrap as
+    # "Net\ndelta:" and the v0.9.3.1 substrate's literal-space
+    # regex returned None, silently no-opping the gate. Replace
+    # the literal " " with "\s+" so any whitespace works.
+    r"Test count:\s*(\d+)\s*\([^)]+\)\s*->\s*" r"(\d+)\s*\([^)]+\)\.\s*Net\s+delta:\s*\+(\d+)",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -186,3 +192,44 @@ def test_changelog_math_gate_catches_wrong_arithmetic(tmp_path: Path) -> None:
         "200 - 100 = 100 != 50; the gate's arithmetic check "
         "would fire on this input"
     )
+
+
+def test_tests_line_regex_accepts_multiline_net_delta_wrap() -> None:
+    r"""Round-34 HIGH-2a closure (Part 5b(b) of v0.9.4): pin the
+    regex against the v0.9.3 wrap pattern that silently
+    no-opped the gate.
+
+    v0.9.3's CHANGELOG body wrapped "Net\ndelta: +23." (with
+    a newline between "Net" and "delta:"); the v0.9.3.1
+    substrate's literal-space regex required "Net delta:" on
+    one line and returned None on the wrap. The gate then
+    skipped silently because _parse_changelog_math returned
+    None for the regex-no-match case (interpreted as
+    placeholder-form). v0.9.3.1 surfaced the env-dependency
+    on onnxruntime via the CI hotfix; the regex fragility
+    itself was the underlying bug.
+
+    v0.9.4 changes "Net delta:" to "Net\s+delta:" so any
+    whitespace (spaces, newlines, tabs) works between the
+    two tokens. This regression test pins the wrap case
+    against any future regex refactor that re-introduces
+    the literal-space requirement.
+    """
+    # Synthetic CHANGELOG fragment that wraps "Net" -> newline -> "delta:"
+    v093_wrap = "Test count: 389 (v0.9.2) -> 412 (v0.9.3). Net\ndelta: +23."
+    match = _TESTS_LINE.search(v093_wrap)
+    assert match is not None, (
+        "regex must match 'Net\\ndelta:' wrap; pre-fix v0.9.3.1 "
+        "substrate returned None and silently no-opped the gate"
+    )
+    assert match.groups() == (
+        "389",
+        "412",
+        "23",
+    ), f"expected ('389', '412', '23'); got {match.groups()}"
+    # Also verify the single-line form still works (backward
+    # compatibility): the v0.9.3.1 CHANGELOG fits on one line.
+    v0931_oneline = "Test count: 412 (v0.9.3) -> 413 (v0.9.3.1). Net delta: +1."
+    match2 = _TESTS_LINE.search(v0931_oneline)
+    assert match2 is not None
+    assert match2.groups() == ("412", "413", "1")
