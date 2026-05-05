@@ -173,6 +173,60 @@ and `graph.initializer` (parameter tensors) are explicitly out
 of scope; including them would create false positives on every
 model retraining.
 
+
+### ONNX numpy_reference convention for NeuroGolf-shape models
+
+The v0.9.3 numpy-vs-ONNX divergence checker discovers a
+``numpy_reference`` callable from a sibling ``_build.py`` per
+the NeuroGolf-specific four-place documented limit
+``numpy_divergence_neurogolf_convention``. The convention
+assumes ARC-AGI grids encoded as ``(1, 10, H, W)`` one-hot
+tensors (10 channels, one per cell color).
+
+Two canonical patterns satisfy the convention. Both produce
+zero divergence findings on a well-formed model; pick the one
+that matches your build pipeline. Worked examples live at
+``tests/fixtures/onnx/numpy_reference_examples/``.
+
+**Pattern A: pre-one-hot input.** The build pipeline encodes
+the raw ARC-AGI grid into ``(1, 10, H, W)`` before invoking
+both the ONNX model and the ``numpy_reference``. The reference
+function accepts the already-encoded tensor:
+
+```python
+def numpy_reference(grid):
+    import numpy as np
+    # grid is already (1, 10, H, W) one-hot.
+    return np.array(grid, dtype=np.float32)
+```
+
+The companion ``.json`` task file stores probe grids in the
+encoded ``(1, 10, H, W)`` shape under ``train[i]["input"]``.
+
+**Pattern B: raw grid + local encoding.** The build pipeline
+keeps the ARC-AGI grid as a raw rank-2 integer grid; the
+``numpy_reference`` encodes it locally to match the ONNX
+model's expected ``(1, 10, H, W)`` input shape:
+
+```python
+def numpy_reference(grid):
+    import numpy as np
+    arr = np.array(grid, dtype=np.int64)
+    h, w = arr.shape
+    one_hot = np.zeros((1, 10, h, w), dtype=np.float32)
+    for c in range(10):
+        one_hot[0, c, :, :] = (arr == c).astype(np.float32)
+    return one_hot
+```
+
+The companion ``.json`` task file stores probe grids in the
+raw rank-2 form (the standard ARC-AGI format).
+
+Both patterns are validated by tests under
+``tests/test_onnx_neurogolf_adapter_examples.py``; future
+``onnx`` / ``onnxruntime`` / ``numpy`` version changes that
+break the convention surface as test failures rather than
+stale documentation.
 ## Usage
 
 ```bash
