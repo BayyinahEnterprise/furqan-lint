@@ -199,6 +199,17 @@ module = "onnxruntime"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+# onnx_tool is an optional dependency installed via the
+# [onnx-profile] extra (v0.9.4 Part 2). Same env-dependency
+# pattern as onnxruntime above: the lint job installs
+# [dev,onnx] only, not [onnx-profile], so mypy cannot find
+# onnx_tool stubs. The import is guarded by try/except
+# ImportError per Decision 6 (a). The score_validity checker
+# silent-passes when the extra is not installed.
+module = "onnx_tool"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # tomli is the Python 3.10 fallback for the stdlib tomllib; on a
 # clean install of [dev] without tomli pre-installed (e.g., a fresh
 # venv on Python 3.10), mypy --strict cannot find stubs for it and

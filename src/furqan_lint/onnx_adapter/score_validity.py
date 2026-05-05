@@ -103,7 +103,7 @@ def check_score_validity(
     checkers and to anchor a future in-memory API.
     """
     try:
-        import onnx_tool  # type: ignore[import-untyped]
+        import onnx_tool
     except ImportError:
         return  # Decision 6 (a): silent-pass
 
