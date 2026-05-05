@@ -106,8 +106,8 @@ v0.9.3 to ship the lever sooner. Score-validity becomes v0.9.4.
   of ``ImportError``). Distinguishes the inference-extra
   failure from the ``[onnx]`` graph-only extra failure.
 - ``[onnx-runtime]`` pip extra (Decision 5) listing
-  ``onnx>=1.14``, ``onnxruntime>=1.16``, ``numpy>=1.20``
-  directly. The duplicated ``onnx>=1.14`` across ``[onnx]``
+  ``onnx>=1.14,<1.19``, ``onnxruntime>=1.16``, ``numpy>=1.20``
+  directly. The duplicated ``onnx>=1.14,<1.19`` across ``[onnx]``
   and ``[onnx-runtime]`` is intentional (round-33 MEDIUM
   closure): trades minor duplication for install-tool
   compatibility across the entire pip version matrix (the
@@ -193,7 +193,7 @@ Sum: 5 + 4 + 10 + 2 + 1 + 1 = +23 ✓
 | CRITICAL: v0.9.3 did not exist when previous draft assumed it had shipped | round-33 audit | CRITICAL | Closed by renumbering. This release ships as v0.9.3 (numpy-vs-ONNX divergence). Score-validity (formerly v0.9.3 = Gap 2) becomes v0.9.4. |
 | HIGH-1: signature change breaks existing call sites | round-33 audit | HIGH | Closed via Decision 1 keeping ``model_path`` required-positional. ``model_path=None`` default rejected: would reverse round-30 MED-2 and silently skip ``numpy_divergence``. Existing test call sites updated atomically in commit 4. |
 | HIGH-2: NeuroGolf specificity not documented | round-33 audit | HIGH | Closed via Decision 9 expansion + the new four-place documented limit ``numpy_divergence_neurogolf_convention``. |
-| MEDIUM: self-referencing pip extra fragile | round-33 audit | MEDIUM | Closed via Decision 5 revision: ``[onnx-runtime]`` lists ``onnx>=1.14`` directly rather than via ``furqan-lint[onnx]``. Trades minor duplication for install-tool compatibility. |
+| MEDIUM: self-referencing pip extra fragile | round-33 audit | MEDIUM | Closed via Decision 5 revision: ``[onnx-runtime]`` lists ``onnx>=1.14,<1.19`` directly rather than via ``furqan-lint[onnx]``. Trades minor duplication for install-tool compatibility. The ``<1.19`` upper bound matches ``[onnx]`` per PR #12 cp313 wheel-availability constraint. |
 | LOW: §3 over-specified | round-33 audit | LOW | Closed via §3 trim: the prompt now specifies contracts (function signatures, behavior, silent-pass conditions, dataclass fields); Co-work writes the implementation; the §4 tests are the load-bearing specification. |
 | Round-32 ship target before session 52 | round-32 leverage analysis | HIGH (deadline) | Operationalized in this 6-hour scope. The renumbering ships the lever one release sooner. |
 

@@ -66,7 +66,7 @@ onnx = [
 # the v0.9.0 Decision 1 standing rule by isolating onnxruntime in
 # this dedicated extra rather than adding it to [onnx].
 onnx-runtime = [
-    "onnx>=1.14",
+    "onnx>=1.14,<1.19",
     "onnxruntime>=1.16",
     "numpy>=1.20",
 ]
