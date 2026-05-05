@@ -19,6 +19,39 @@ introduced this convention.
 
 ---
 
+## [0.9.4] - <DATE>
+
+Five-part-plus-carry-forward release. Closes Gap 2 (MEDIUM)
+score-validity advisory; closes round-30 META v0.9.0-pinned
+scaffold; closes round-34 MEDIUM-1 (NeuroGolf canonical adapter
+docs), LOW-1 (ruff version-pin friction), and HIGH-1's bug
+class via Part 5's structural CLI-integration gate; closes
+the three v0.9.3.1 carry-forwards via Part 5b
+(ONNX printer minimal_fix consistency, ``_TESTS_LINE`` regex
+fragility, CI matrix ``[onnx-runtime]`` gap).
+
+### Fixed
+
+(populate during release commit 12)
+
+### Added
+
+(populate during release commit 12)
+
+### Changed
+
+(populate during release commit 12)
+
+### Retired
+
+(populate during release commit 12: test_gate_changelog_math_v0_9_0
+v0.9.0-pinned scaffold)
+
+### Tests
+
+Test count: 413 (v0.9.3.1 ship state) -> <TBD>
+(v0.9.4). Net delta: <TBD>.
+
 ## [0.9.3.1] - 2026-05-04
 
 CLI hotfix. Closes round-34 HIGH-1: the CLI's
