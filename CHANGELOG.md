@@ -19,6 +19,227 @@ introduced this convention.
 
 ---
 
+## [0.9.4] - 2026-05-05
+
+Five-part-plus-carry-forward release. Closes Gap 2 (MEDIUM)
+score-validity advisory; closes round-30 META v0.9.0-pinned
+scaffold (in its fifth release cycle); closes round-34
+MEDIUM-1 (NeuroGolf canonical adapter docs), LOW-1 (ruff
+version-pin friction), and HIGH-1's bug class via Part 5's
+structural CLI-integration gate; closes the three v0.9.3.1
+carry-forwards via Part 5b (ONNX printer ``minimal_fix``
+consistency, ``_TESTS_LINE`` regex fragility, CI matrix
+``[onnx-runtime]`` gap).
+
+### Fixed
+
+- **Round-34 HIGH-1 bug class (HIGH).** Part 5 ships a new
+  AST-based gate ``test_gate_cli_diagnostic_printer_includes_all_diagnostic_classes``
+  that asserts the CLI's ``_check_onnx_file`` printer
+  isinstance tuple is the union of every ``*Diagnostic``
+  class defined in ``runner.py`` plus those exported via
+  ``furqan_lint.onnx_adapter.__all__``. The v0.9.3.1 hotfix
+  fixed the bug instance for ``NumpyDivergenceDiagnostic``;
+  v0.9.4's gate prevents recurrence when ``ScoreValidityDiagnostic``
+  joins the family in this same release.
+- **Round-34 v0.9.3.1 carry-forward (Part 5b(a), MEDIUM):**
+  ``AllPathsEmitDiagnostic`` and ``OpsetComplianceDiagnostic``
+  gain required ``minimal_fix`` fields; the v0.9.0 substrate
+  shipped without them, leaving the ONNX printer inconsistent
+  with the Python/Rust/Go marad printers from v0.9.0 through
+  v0.9.3.1. The CLI's ONNX printer extends to print
+  ``minimal_fix`` for every ONNX diagnostic family matching
+  the Python/Rust/Go pattern; Part 5's gate is extended to
+  AST-scan for the ``getattr(d, 'minimal_fix', None)`` block
+  presence so a future refactor cannot reintroduce the
+  inconsistency.
+- **Round-34 HIGH-2a (Part 5b(b), MEDIUM):** the
+  ``_TESTS_LINE`` regex in
+  ``tests/test_changelog_math_gate.py`` required the literal
+  ``"Net delta:"`` on one line. v0.9.3's CHANGELOG body
+  wrapped as ``"Net\\ndelta: +23."`` and the regex returned
+  ``None``, silently no-opping the gate. v0.9.4 changes
+  ``"Net delta:"`` to ``"Net\\s+delta:"`` so any whitespace
+  works; a regression test pins the wrap case.
+- **Round-34 HIGH-2b (Part 5b(c), MEDIUM):** existing CI
+  matrix had no ``[onnx-runtime]`` job, so the
+  CHANGELOG-math gate's onnxruntime-skip workaround (added
+  in v0.9.3.1's CI hotfix) meant the gate never ran at full
+  strength in CI. v0.9.4 adds a ``test-onnx-runtime`` job
+  installing ``[dev,onnx,onnx-runtime,onnx-profile]`` on
+  Python 3.12; the gate runs without the skip in this job.
+- **Round-34 LOW-1 (Part 4, LOW):** ``test_ruff_check`` and
+  ``test_ruff_format_check`` skip with an actionable
+  ``"ruff version mismatch: pyproject pins X, installed is Y;
+  run pip install ruff==X to match"`` message when the
+  contributor's installed ruff differs from the pyproject
+  ``[dev]`` pin.
+- **CLI ADVISORY/MARAD split (Part 2 / Decision 3):** the
+  ONNX printer partitions findings by ``severity`` field and
+  prints with ``[MARAD]`` or ``[ADVISORY]`` prefix. ADVISORY
+  findings exit 0; only MARAD findings exit 1.
+- ``check_onnx_module`` now runs five checkers (was four);
+  ``score_validity`` is the fifth, appended to the diagnostic
+  tag list per Part 2 / Decision 1.
+
+### Added
+
+- **Score-validity ADVISORY checker (Part 2 / Gap 2 closure /
+  MARAD-3 closure from cont45).** New
+  ``src/furqan_lint/onnx_adapter/score_validity.py`` wraps
+  ``onnx_tool.model_profile()`` in
+  ``contextlib.redirect_stdout`` and exception-trapping; on
+  any unhandled exception, yields one
+  ``ScoreValidityDiagnostic`` with ``severity="ADVISORY"``.
+  Op-type extraction heuristic walks the exception traceback
+  for the deepest frame whose ``self.op_type`` is a string;
+  falls back to ``"<unknown>"``. Closes Gap 2 (MEDIUM) per
+  Decision 9 of v0.9.2 and the round-32 NeuroGolf leverage
+  analysis. Empirically verified: cont45 substrate (TopK
+  without axis) fires; clean Relu profiles cleanly.
+- ``ScoreValidityDiagnostic`` dataclass (frozen, 6 required
+  fields: ``op_type``, ``exception_class``,
+  ``exception_message``, ``severity``, ``diagnosis``,
+  ``minimal_fix``). The ``severity`` field is load-bearing
+  for the CLI ADVISORY/MARAD split.
+- ``OnnxProfileExtrasNotInstalled`` typed-exception (subclass
+  of ``ImportError``); mirrors
+  ``OnnxExtrasNotInstalled`` and
+  ``OnnxRuntimeExtrasNotInstalled``. Three-extra architecture
+  symmetry: ``[onnx]`` graph-structure checks,
+  ``[onnx-runtime]`` inference-based divergence,
+  ``[onnx-profile]`` profile-validity advisory.
+- ``[onnx-profile]`` pip extra (Decision 5) listing
+  ``onnx>=1.14,<1.19`` and ``onnx-tool>=1.0,<2``.
+- ``score_validity_optin_extra`` four-place documented limit
+  with full coverage (CHANGELOG / fixture / pinning test /
+  README): the score-validity checker is opt-in via the
+  ``[onnx-profile]`` extra and silent-passes when the extra
+  is missing.
+- **NeuroGolf canonical adapter README section (Part 3 /
+  round-34 MEDIUM-1 closure).** New section "ONNX
+  numpy_reference convention for NeuroGolf-shape models"
+  documents two canonical patterns (Pattern A: pre-one-hot
+  input; Pattern B: raw grid + local encoding) with code
+  blocks and pointers to verified worked-example fixtures
+  at ``tests/fixtures/onnx/numpy_reference_examples/``. The
+  v0.9.3 four-place limit named the convention dependency
+  but did not show the canonical adapter; v0.9.4 closes the
+  adoption gap.
+- **AllPathsEmitDiagnostic.minimal_fix and
+  OpsetComplianceDiagnostic.minimal_fix** required fields
+  (Part 5b(a)). Pre-v0.9.4 these dataclasses had no
+  ``minimal_fix`` field, so the v0.9.0/v0.9.1/v0.9.2/v0.9.3.1
+  ONNX printer had no field to print even if it had been
+  trying to. v0.9.4 closes the inconsistency at both layers.
+- **CI ``test-onnx-runtime`` job (Part 5b(c)).** New job in
+  ``.github/workflows/ci.yml`` installs
+  ``[dev,onnx,onnx-runtime,onnx-profile]`` on Python 3.12
+  and runs the full pytest suite. The CHANGELOG-math gate
+  runs at full strength in this job; gates remain active in
+  the other jobs.
+- **CLI integration AST gate (Part 5).**
+  ``test_gate_cli_diagnostic_printer_includes_all_diagnostic_classes``
+  uses ``ast.parse`` to walk both ``runner.py`` (for
+  ``class *Diagnostic`` definitions) and ``__init__.py``
+  (for ``__all__`` exports) plus ``cli.py`` (for the
+  isinstance tuple inside ``_check_onnx_file``); asserts
+  the printer's tuple is a superset. Plus a self-verifying
+  negative test on a synthetic CLI source missing one
+  family.
+- ``ONNX_ADAPTER_PUBLIC_SURFACE_v0_9_4`` baseline pins the
+  new surface (15 + 3 = 18 names).
+- ``test_tests_line_regex_accepts_multiline_net_delta_wrap``
+  regression test pinning the regex against the v0.9.3 wrap
+  pattern that silently no-opped the gate.
+- Worked-example fixtures
+  ``onehot_input_example_build.py`` and
+  ``raw_grid_input_example_build.py`` documenting the two
+  Pattern A / Pattern B numpy_reference adapters.
+
+### Changed
+
+- ``check_onnx_module(module, model_proto, model_path)`` now
+  runs five checkers (was four).
+- ``cli._check_onnx_file``: imports ``ScoreValidityDiagnostic``
+  from the source module (per the v0.9.3.1 / Part 5
+  AST-gated source-module pattern); isinstance tuple extends
+  from four families to five; ADVISORY/MARAD partition
+  determines headline ("MARAD <path>", "ADVISORY <path>",
+  or mixed-case summary line); each diagnostic line prints
+  ``minimal_fix`` matching the Python/Rust/Go marad pattern.
+- README install section adds the ``[onnx-profile]`` row
+  and updates the combined-extras example to
+  ``[rust,go,onnx-runtime,onnx-profile]``. The "ONNX
+  adapter (current as of v0.9.3)" header bumps to v0.9.4
+  with the ``score_validity_optin_extra`` documented limit
+  added at the top of the inventory.
+- ``tests/fixtures/onnx/documented_limits/README.md``:
+  inventory bumps to v0.9.4 with the
+  ``score_validity_optin_extra`` entry first.
+- ``_TESTS_LINE`` regex: ``Net delta:`` to ``Net\\s+delta:``.
+
+### Retired
+
+- ``tests/test_onnx_gates.py::test_gate_changelog_math_v0_9_0``
+  (Part 1 / round-30 META closure). The v0.9.0-pinned
+  scaffold has been skip-only across v0.9.1, v0.9.2, v0.9.3,
+  v0.9.3.1, and v0.9.4 release cycles; the canonical
+  ``test_changelog_math_matches_pytest_collect`` covers the
+  same arithmetic check version-agnostically. Retiring the
+  scaffold removes 1 test from the collected total. Round-30
+  META was originally an INFORMATIONAL observation; the
+  five-release escalation reflects cumulative cost of dead
+  code in the test suite.
+
+### Tests
+
+Test count: 413 (v0.9.3.1 ship state) -> 441 (v0.9.4). Net
+delta: +28.
+
+Breakdown:
+
+- Part 1 retirement: -1 (test_gate_changelog_math_v0_9_0)
+- Part 2 score-validity (commit 3): +7 (4 firing/clean + 2
+  op-type extraction + 1 stdout-capture)
+- Part 2 CLI ADVISORY + Part 5b(a) minimal_fix (commit 4):
+  +9 (4 ADVISORY/MARAD split + 5 minimal_fix regression
+  tests, one per ONNX diagnostic family)
+- Part 2 silent-pass + four-place + runner integration
+  (commit 5): +3 (silent-pass pin + runner-integration
+  alongside four v0.9.3 checkers + OnnxProfileExtrasNotInstalled
+  exception type check)
+- Part 3 NeuroGolf docs (commit 6): +3 (Pattern A zero-
+  divergence + Pattern B zero-divergence + README section
+  presence)
+- Part 4 ruff friction (commit 7): +2 (helper-skips-on-mismatch
+  + helper-does-not-skip-when-versions-match)
+- Part 5 + Part 5b(a) AST gate (commit 8): +3 (printer
+  isinstance gate + minimal_fix block gate + negative-test
+  parser self-verification)
+- Part 5b(b) regex regression (commit 9): +1
+- Part 5b(c) CI matrix job (commit 10): +0 (CI infrastructure)
+- V0_9_4 surface snapshot (commit 11): +1
+
+Sum: -1 + 7 + 9 + 3 + 3 + 2 + 3 + 1 + 0 + 1 = +28 ✓
+
+### Round-35 closure ledger
+
+| Finding | Source | Severity | Closure |
+| --- | --- | --- | --- |
+| Gap 2 | v0.9.1 NeuroGolf evaluation | MEDIUM | Closed via Decisions 2-9 (Part 2). Score-validity ADVISORY checker via ``onnx_tool.model_profile``; three-extra architecture. |
+| Round-30 META | round-30 audit, surfaced across v0.9.0-v0.9.3.1 | INFORMATIONAL -> MEDIUM | Closed via Part 1 (single-test deletion of v0.9.0-pinned scaffold). Five-release escalation. |
+| MARAD-3 (cont45 TopK profiler-blocker) | round-32 leverage analysis | MEDIUM | Closed via Part 2 (score-validity advisory fires on cont45 fixture). |
+| Round-34 MEDIUM-1: NeuroGolf adapter convention not worked through | round-34 audit | MEDIUM | Closed via Part 3 (README section + worked-example fixtures for Pattern A and Pattern B). |
+| Round-34 LOW-1: ruff version pin friction | round-34 audit | LOW | Closed via Part 4 (skip-on-mismatch with actionable message). |
+| Round-34 HIGH-1 bug class | round-34 audit | HIGH | Closed via Part 5 (AST-based CLI integration gate). v0.9.3.1 fixed the instance; v0.9.4 prevents recurrence. |
+| v0.9.3.1 carry-forward: ONNX printer minimal_fix gap | v0.9.3.1 hotfix audit | MEDIUM | Closed via Part 5b(a). 5 regression tests + gate extension. |
+| Round-34 HIGH-2a: _TESTS_LINE regex literal-space fragility | v0.9.3.1 PR build | MEDIUM | Closed via Part 5b(b). Regex changed to ``Net\\s+delta:``. |
+| Round-34 HIGH-2b: CI matrix has no [onnx-runtime] job | v0.9.3.1 PR build | MEDIUM | Closed via Part 5b(c). New ``test-onnx-runtime`` CI job. |
+| v0.9.0 Decision 1 standing rule operating as three-extra architecture | round-33 architectural finding | INFORMATIONAL | Affirmed. ``[onnx]``, ``[onnx-runtime]``, ``[onnx-profile]`` for three concerns. |
+
+10 closures (1 MEDIUM = Gap 2, 1 MEDIUM = stale scaffold, 1 MEDIUM = MARAD-3, 1 MEDIUM = NeuroGolf docs, 1 LOW = ruff friction, 1 HIGH = bug class, 1 MEDIUM = printer minimal_fix consistency, 1 MEDIUM = regex fragility, 1 MEDIUM = CI matrix gap, 1 INFORMATIONAL = architectural affirmation).
+
 ## [0.9.3.1] - 2026-05-04
 
 CLI hotfix. Closes round-34 HIGH-1: the CLI's

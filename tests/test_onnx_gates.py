@@ -1,4 +1,4 @@
-"""ONNX-specific verification gates (3 of v0.9.0's 17 gates):
+"""ONNX-specific verification gates (post-v0.9.4 inventory):
 
 * ``test_gate_8c_onnx_containment``: static AST scan of
   ``src/furqan_lint/`` confirms ``import onnx`` and
@@ -10,17 +10,17 @@
   ``[onnx]`` extra missing from the install. The CLI raises
   ``OnnxExtrasNotInstalled`` (subclass of ``ImportError``)
   with the install hint as its message.
-* ``test_gate_changelog_math_v0_9_0``: pre-flight check that
-  the v0.9.0 release commit (when it lands) will write a
-  CHANGELOG ``### Tests`` block whose stated total matches the
-  empirical ``pytest --collect-only`` count.
+
+The v0.9.0-pinned ``test_gate_changelog_math_v0_9_0`` scaffold
+was retired in v0.9.4 (Part 1 / round-30 META closure). The
+canonical ``test_changelog_math_matches_pytest_collect`` in
+``tests/test_changelog_math_gate.py`` covers the same
+arithmetic check version-agnostically.
 """
 
 from __future__ import annotations
 
 import ast
-import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -105,68 +105,3 @@ def test_gate_9c_onnx_missing_extras(monkeypatch: pytest.MonkeyPatch) -> None:
         except ImportError:
             monkeypatch.delitem(sys.modules, "onnx", raising=False)
         importlib.reload(parser_mod)
-
-
-def test_gate_changelog_math_v0_9_0() -> None:
-    """Pre-flight check for the v0.9.0 release commit (commit 7).
-
-    Asserts that the CHANGELOG either still carries the
-    placeholder (commits 2-6 in flight) OR that the populated
-    v0.9.0 entry's stated total matches ``pytest --collect-only``.
-    During commits 2-6 the latest entry's header is
-    ``## [0.9.0] - <DATE>`` and the ### Tests block contains
-    ``-> <TBD>`` markers; the gate skips. After commit 7 the
-    placeholder is replaced with empirical values; the gate
-    asserts equality.
-    """
-    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    entry_match = re.search(r"^## \[([^\]]+)\]", changelog, re.MULTILINE)
-    assert entry_match, "CHANGELOG missing a top-level version entry"
-    latest_version = entry_match.group(1)
-    if latest_version != "0.9.0":
-        pytest.skip(f"latest CHANGELOG entry is {latest_version}, not 0.9.0")
-
-    # Find the v0.9.0 entry text.
-    start = entry_match.start()
-    next_entry = re.search(r"^## \[", changelog[start + 1 :], re.MULTILINE)
-    end = (start + 1 + next_entry.start()) if next_entry else len(changelog)
-    block = changelog[start:end]
-
-    # In-flight markers ONLY in the entry header (## [v] - <DATE>)
-    # or the canonical "-> <TBD>" arithmetic. Backtick-quoted prose
-    # references to the literal strings (release bodies that
-    # describe the placeholder mechanism) do NOT count; mirrors
-    # tests/test_changelog_math_gate.py lines 54-82.
-    if re.search(r"^## \[[^\]]+\] - <DATE>", block, re.MULTILINE):
-        pytest.skip("v0.9.0 CHANGELOG entry still has <DATE> in header")
-    if re.search(r"->\s*<TBD>", block):
-        pytest.skip("v0.9.0 CHANGELOG entry still has -> <TBD> in Tests block")
-    if re.search(r"Net delta:\s*<TBD>", block):
-        pytest.skip("v0.9.0 CHANGELOG entry still has Net delta: <TBD>")
-
-    # Populated form: parse the canonical "Test count: X (...) -> Y (...). Net delta: +Z" sentence.
-    m = re.search(
-        r"Test count:\s*(\d+)\s*\([^)]+\)\s*->\s*(\d+)\s*\([^)]+\)\.\s*" r"Net delta:\s*\+(\d+)",
-        block,
-        re.IGNORECASE | re.DOTALL,
-    )
-    assert m, (
-        f"v0.9.0 CHANGELOG entry missing the canonical 'Test count: X -> Y. "
-        f"Net delta: +Z' sentence; block:\n{block}"
-    )
-    stated_y = int(m.group(2))
-
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
-        capture_output=True,
-        text=True,
-        cwd=REPO_ROOT,
-        check=False,
-    )
-    count_match = re.search(r"(\d+)\s+tests?\s+collected", result.stdout)
-    assert count_match, f"could not parse pytest --collect-only output:\n{result.stdout}"
-    empirical = int(count_match.group(1))
-    assert stated_y == empirical, (
-        f"v0.9.0 CHANGELOG states {stated_y} tests; pytest collected "
-        f"{empirical}. Reconcile before tagging."
-    )

@@ -4,7 +4,15 @@ Each entry below has a fixture file in this directory, a CHANGELOG
 entry by exact stem, a top-level README entry by topic keyword,
 and at least one pinning test under `tests/test_*.py`.
 
-## Inventory (current as of v0.9.3)
+## Inventory (current as of v0.9.4)
+
+- `score_validity_optin_extra` (v0.9.4): the score-validity
+  ADVISORY checker is opt-in via the ``[onnx-profile]`` pip
+  extra. When the extra is not installed, the checker
+  silent-passes; ADVISORY findings exit 0 (vs MARAD findings
+  which exit 1) because the model is structurally valid ONNX
+  and the failure is in the deployment-side profiler. Pinned
+  by `tests/test_onnx_score_validity_documented_limit.py::test_score_validity_silent_pass_when_extra_missing`.
 
 - `numpy_divergence_neurogolf_convention` (v0.9.3): the
   numpy-vs-ONNX divergence checker is opt-in by reference

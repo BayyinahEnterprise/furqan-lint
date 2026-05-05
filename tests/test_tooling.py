@@ -22,6 +22,52 @@ from pathlib import Path
 
 import pytest
 
+REPO_ROOT_FOR_RUFF = Path(__file__).resolve().parent.parent
+
+
+def _maybe_skip_on_ruff_version_mismatch() -> None:
+    """Round-34 LOW-1 closure: skip ruff functional tests with a
+    clear actionable message when the installed ruff version
+    differs from the pyproject.toml [dev] pin.
+
+    Contributors running ``pip install -e ".[dev]"`` with a stale
+    cache may end up with a non-pinned ruff. The ruff-format check
+    fails with a cryptic format diff rather than a "version
+    mismatch" message; this helper converts the confusion into a
+    pointed signal so the contributor knows to run
+    ``pip install ruff==<pin>`` to reproduce CI.
+    """
+    import re
+
+    pyproject_text = (REPO_ROOT_FOR_RUFF / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'"ruff==(\d+\.\d+\.\d+)"', pyproject_text)
+    if match is None:
+        return  # No pin found; do not interfere with the original test.
+    pinned = match.group(1)
+    try:
+        result = subprocess.run(
+            ["ruff", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        pytest.skip("ruff binary not on PATH")
+    # ruff --version prints e.g. "ruff 0.8.0" on the first line.
+    out_match = re.search(r"ruff\s+(\d+\.\d+\.\d+)", result.stdout)
+    if out_match is None:
+        return  # Cannot parse; defer to the original assertion.
+    installed = out_match.group(1)
+    if installed != pinned:
+        pytest.skip(
+            f"ruff version mismatch: pyproject pins {pinned}, "
+            f"installed is {installed}; run "
+            f"`pip install ruff=={pinned}` to match. The pinned "
+            f"version's formatting / lint behavior may differ from "
+            f"newer versions; use the pin to reproduce CI."
+        )
+
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:  # pragma: no cover - 3.10 fallback
@@ -86,6 +132,9 @@ def test_pyproject_has_all_pytest_markers() -> None:
 def test_ruff_check_exits_zero_on_repo() -> None:
     """Functional verification that ruff check passes on the repo.
 
+    Round-34 LOW-1: skip with actionable message when the
+    installed ruff differs from the pyproject [dev] pin.
+
     Pairs with the structural test_pyproject_has_ruff_config per
     framework Section 8.6 (structural-vs-functional pairing). Catches
     the v0.5.0 CRITICAL where ruff config existed but ruff check
@@ -97,6 +146,7 @@ def test_ruff_check_exits_zero_on_repo() -> None:
     pre-commit uses. This test means what it says only because of
     that pin.
     """
+    _maybe_skip_on_ruff_version_mismatch()
     result = subprocess.run(
         ["ruff", "check", str(REPO_ROOT)],
         capture_output=True,
@@ -111,8 +161,10 @@ def test_ruff_format_check_exits_zero_on_repo() -> None:
     """Functional verification that ruff format --check passes.
 
     Catches unformatted files before they reach CI. Same version-pin
-    contract as test_ruff_check_exits_zero_on_repo.
+    contract as test_ruff_check_exits_zero_on_repo. Round-34 LOW-1:
+    skip with actionable message on version mismatch.
     """
+    _maybe_skip_on_ruff_version_mismatch()
     result = subprocess.run(
         ["ruff", "format", "--check", str(REPO_ROOT)],
         capture_output=True,

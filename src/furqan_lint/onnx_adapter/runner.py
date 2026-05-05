@@ -45,6 +45,9 @@ if TYPE_CHECKING:
     from furqan_lint.onnx_adapter.numpy_divergence import (
         NumpyDivergenceDiagnostic,
     )
+    from furqan_lint.onnx_adapter.score_validity import (
+        ScoreValidityDiagnostic,
+    )
     from furqan_lint.onnx_adapter.shape_coverage import (
         ShapeCoverageDiagnostic,
     )
@@ -58,11 +61,14 @@ class AllPathsEmitDiagnostic:
 
     ``output_name`` is the ValueInfo name from ``graph.output``;
     ``diagnosis`` is the human-readable description of the
-    structural-honesty violation.
+    structural-honesty violation; ``minimal_fix`` is the user-
+    facing actionable next step (added in v0.9.4 Part 5b(a) for
+    printer consistency with the Python/Rust/Go marad pattern).
     """
 
     output_name: str
     diagnosis: str
+    minimal_fix: str
 
 
 @dataclass(frozen=True)
@@ -72,7 +78,10 @@ class OpsetComplianceDiagnostic:
     ``op_type``, ``node_name``, and ``domain`` identify the offender;
     ``opset_version`` is the model's declared default-domain opset
     version (or the custom-domain version if ``domain`` is set);
-    ``diagnosis`` is the human-readable description.
+    ``diagnosis`` is the human-readable description; ``minimal_fix``
+    is the user-facing actionable next step (added in v0.9.4 Part
+    5b(a) for printer consistency with the Python/Rust/Go marad
+    pattern).
     """
 
     op_type: str
@@ -80,6 +89,7 @@ class OpsetComplianceDiagnostic:
     domain: str
     opset_version: int
     diagnosis: str
+    minimal_fix: str
 
 
 def _producers(module: OnnxModule) -> dict[str, str]:
@@ -140,6 +150,13 @@ def check_all_paths_emit(module: OnnxModule) -> list[AllPathsEmitDiagnostic]:
                     f"by any node and is not a graph input; the "
                     f"dataflow has no path that emits it (D24-onnx)."
                 ),
+                minimal_fix=(
+                    f"Either: (a) add a node that produces "
+                    f"'{out.name}' as an output; (b) re-route an "
+                    f"existing node's output to '{out.name}'; or "
+                    f"(c) remove '{out.name}' from graph.output if "
+                    f"the model is not supposed to declare it."
+                ),
             )
         )
     return findings
@@ -185,6 +202,15 @@ def check_opset_compliance(module: OnnxModule) -> list[OpsetComplianceDiagnostic
                         f"(domain={domain!r}); see "
                         f"onnx>=1.14,<1.19 op registry."
                     ),
+                    minimal_fix=(
+                        f"Either: (a) raise the model's opset_import "
+                        f"to a version where '{node.op_type}' is "
+                        f"defined; (b) replace '{node.op_type}' with "
+                        f"a semantically equivalent op present in "
+                        f"opset {module.opset_version}; or (c) verify "
+                        f"the op name is spelled correctly (case-"
+                        f"sensitive)."
+                    ),
                 )
             )
     return findings
@@ -200,7 +226,8 @@ def check_onnx_module(
         AllPathsEmitDiagnostic
         | OpsetComplianceDiagnostic
         | ShapeCoverageDiagnostic
-        | NumpyDivergenceDiagnostic,
+        | NumpyDivergenceDiagnostic
+        | ScoreValidityDiagnostic,
     ]
 ]:
     """Run every ONNX checker against ``module`` and ``model_proto``.
@@ -233,9 +260,15 @@ def check_onnx_module(
       ``[onnx-runtime]`` extra is missing or when no
       NeuroGolf-shaped sidecar (``_build.py`` + ``.json``)
       is discoverable
+    * ``"score_validity"`` - ADVISORY-severity profiler-
+      coverage check (v0.9.4); silent-passes when the
+      ``[onnx-profile]`` extra is missing
     """
     from furqan_lint.onnx_adapter.numpy_divergence import (
         check_numpy_divergence,
+    )
+    from furqan_lint.onnx_adapter.score_validity import (
+        check_score_validity,
     )
     from furqan_lint.onnx_adapter.shape_coverage import check_shape_coverage
 
@@ -245,7 +278,8 @@ def check_onnx_module(
             AllPathsEmitDiagnostic
             | OpsetComplianceDiagnostic
             | ShapeCoverageDiagnostic
-            | NumpyDivergenceDiagnostic,
+            | NumpyDivergenceDiagnostic
+            | ScoreValidityDiagnostic,
         ]
     ] = []
     for d_apr in check_all_paths_emit(module):
@@ -256,4 +290,6 @@ def check_onnx_module(
         diagnostics.append(("shape_coverage", d_sc))
     for d_nd in check_numpy_divergence(model_proto, model_path):
         diagnostics.append(("numpy_divergence", d_nd))
+    for d_sv in check_score_validity(model_proto, model_path):
+        diagnostics.append(("score_validity", d_sv))
     return diagnostics

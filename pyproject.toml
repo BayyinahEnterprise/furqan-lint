@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "furqan-lint"
-version = "0.9.3.1"
+version = "0.9.4"
 description = "Structural-honesty checks for Python, powered by Furqan"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -69,6 +69,19 @@ onnx-runtime = [
     "onnx>=1.14,<1.19",
     "onnxruntime>=1.16",
     "numpy>=1.20",
+]
+# Optional ONNX profile-validity extra (v0.9.4: score_validity
+# ADVISORY check via onnx_tool.model_profile). Lists onnx>=1.14
+# directly to avoid the self-referencing furqan-lint[onnx]
+# syntax (round-33 finding MEDIUM precedent). Honors the
+# v0.9.0 Decision 1 standing rule's three-extra architecture
+# by isolating onnx_tool in its own extra:
+#   [onnx]         -> graph-structure checks
+#   [onnx-runtime] -> inference-based divergence checks
+#   [onnx-profile] -> profile-validity advisory (this extra)
+onnx-profile = [
+    "onnx>=1.14,<1.19",
+    "onnx-tool>=1.0,<2",
 ]
 
 [project.scripts]
@@ -183,6 +196,17 @@ ignore_missing_imports = true
 # numpy_divergence checker silent-passes when the extra is not
 # installed.
 module = "onnxruntime"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# onnx_tool is an optional dependency installed via the
+# [onnx-profile] extra (v0.9.4 Part 2). Same env-dependency
+# pattern as onnxruntime above: the lint job installs
+# [dev,onnx] only, not [onnx-profile], so mypy cannot find
+# onnx_tool stubs. The import is guarded by try/except
+# ImportError per Decision 6 (a). The score_validity checker
+# silent-passes when the extra is not installed.
+module = "onnx_tool"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

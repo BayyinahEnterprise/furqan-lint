@@ -37,7 +37,8 @@ pip install "furqan-lint[rust]"                  # tree-sitter Rust adapter
 pip install "furqan-lint[go]"                    # Go adapter (requires Go 1.22+ toolchain at install time)
 pip install "furqan-lint[onnx]"                  # ONNX graph-only checks (D24-onnx + opset-compliance + D11-onnx shape/type)
 pip install "furqan-lint[onnx-runtime]"          # ONNX + numpy-vs-ONNX divergence (v0.9.3+; brings in onnxruntime + numpy)
-pip install "furqan-lint[rust,go,onnx-runtime]"  # all adapters with full ONNX inference checks
+pip install "furqan-lint[onnx-profile]"          # ONNX + score-validity ADVISORY (v0.9.4+; brings in onnx_tool)
+pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile]"  # all adapters with full ONNX runtime + profile checks
 ```
 
 ### Install from a specific commit or tag
@@ -172,6 +173,60 @@ and `graph.initializer` (parameter tensors) are explicitly out
 of scope; including them would create false positives on every
 model retraining.
 
+
+### ONNX numpy_reference convention for NeuroGolf-shape models
+
+The v0.9.3 numpy-vs-ONNX divergence checker discovers a
+``numpy_reference`` callable from a sibling ``_build.py`` per
+the NeuroGolf-specific four-place documented limit
+``numpy_divergence_neurogolf_convention``. The convention
+assumes ARC-AGI grids encoded as ``(1, 10, H, W)`` one-hot
+tensors (10 channels, one per cell color).
+
+Two canonical patterns satisfy the convention. Both produce
+zero divergence findings on a well-formed model; pick the one
+that matches your build pipeline. Worked examples live at
+``tests/fixtures/onnx/numpy_reference_examples/``.
+
+**Pattern A: pre-one-hot input.** The build pipeline encodes
+the raw ARC-AGI grid into ``(1, 10, H, W)`` before invoking
+both the ONNX model and the ``numpy_reference``. The reference
+function accepts the already-encoded tensor:
+
+```python
+def numpy_reference(grid):
+    import numpy as np
+    # grid is already (1, 10, H, W) one-hot.
+    return np.array(grid, dtype=np.float32)
+```
+
+The companion ``.json`` task file stores probe grids in the
+encoded ``(1, 10, H, W)`` shape under ``train[i]["input"]``.
+
+**Pattern B: raw grid + local encoding.** The build pipeline
+keeps the ARC-AGI grid as a raw rank-2 integer grid; the
+``numpy_reference`` encodes it locally to match the ONNX
+model's expected ``(1, 10, H, W)`` input shape:
+
+```python
+def numpy_reference(grid):
+    import numpy as np
+    arr = np.array(grid, dtype=np.int64)
+    h, w = arr.shape
+    one_hot = np.zeros((1, 10, h, w), dtype=np.float32)
+    for c in range(10):
+        one_hot[0, c, :, :] = (arr == c).astype(np.float32)
+    return one_hot
+```
+
+The companion ``.json`` task file stores probe grids in the
+raw rank-2 form (the standard ARC-AGI format).
+
+Both patterns are validated by tests under
+``tests/test_onnx_neurogolf_adapter_examples.py``; future
+``onnx`` / ``onnxruntime`` / ``numpy`` version changes that
+break the convention surface as test failures rather than
+stale documentation.
 ## Usage
 
 ```bash
@@ -550,13 +605,23 @@ translator-level limits, in `tests/test_go_translator.py`).
   `tests/fixtures/go/documented_limits/r3_compile_rejected.go`
   (added in v0.8.1).
 
-### ONNX adapter (current as of v0.9.3)
+### ONNX adapter (current as of v0.9.4)
 
 Each ONNX limit has a fixture in
 `tests/fixtures/onnx/documented_limits/` and a pinning test in
 `tests/test_onnx_correctness.py`,
 `tests/test_onnx_public_surface_additive.py`, or
 `tests/test_onnx_shape_coverage.py`.
+
+- **score_validity is opt-in via [onnx-profile] (v0.9.4).**
+  The v0.9.4 score-validity ADVISORY checker wraps
+  `onnx_tool.model_profile()` to surface profiler-coverage
+  gaps (e.g., the cont45 TopK-without-axis crash). It runs only
+  when the `[onnx-profile]` extra is installed (which brings in
+  `onnx_tool`); otherwise it silent-passes. ADVISORY findings
+  exit 0 (the model is structurally valid; the failure is in
+  the deployment-side profiler). Pinned as
+  `tests/fixtures/onnx/documented_limits/score_validity_optin_extra.py`.
 
 - **numpy_divergence requires NeuroGolf-convention sidecars
   (v0.9.3).** The numpy-vs-ONNX divergence checker is opt-in by
