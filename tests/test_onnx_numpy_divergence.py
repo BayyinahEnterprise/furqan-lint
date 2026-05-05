@@ -335,3 +335,90 @@ def test_numpy_divergence_multi_probe_one_finding_per_diverging(
     findings = list(check_numpy_divergence(_load_proto(onnx_path), onnx_path))
     assert len(findings) == 1
     assert findings[0].probe_index == 1
+
+
+def test_cli_numpy_divergence_body_prints(tmp_path: Path) -> None:
+    """Round-34 HIGH-1 regression test: the CLI's
+    ``_check_onnx_file`` printer must include the diagnosis
+    body for ``NumpyDivergenceDiagnostic`` findings.
+
+    Pre-v0.9.3.1 the printer's isinstance tuple filtered the
+    fourth diagnostic family out, producing
+    ``MARAD <path>\n  1 violation(s):\n`` with no body.
+    The substrate-side check_numpy_divergence emits a full
+    diagnostic; the CLI surface dropped it. v0.9.3.1
+    extends the isinstance tuple to include
+    NumpyDivergenceDiagnostic so the body prints.
+
+    The test runs the CLI end-to-end via subprocess on a
+    fixture that triggers a divergence finding, then asserts
+    the diagnosis prose appears in stdout. Per §3.5 of the
+    v0.9.3.1 prompt, the test does NOT assert that
+    ``minimal_fix`` prints (that gap is closed by v0.9.4
+    Part 5b alongside the structural CLI-integration gate).
+    """
+    import re
+    import subprocess
+    import sys
+
+    onnx_path = tmp_path / "dummy.onnx"
+    _save_relu_float_model(onnx_path)
+
+    # Disagreeing reference: returns 2x the input where ONNX Relu
+    # would return max(input, 0). Triggers the tolerance-mode
+    # divergence path.
+    (tmp_path / "dummy_build.py").write_text(
+        "import numpy as np\n"
+        "def numpy_reference(grid):\n"
+        "    return np.array(grid, dtype=np.float32) * 2.0\n",
+        encoding="utf-8",
+    )
+    import json
+
+    (tmp_path / "dummy.json").write_text(
+        json.dumps(
+            {
+                "train": [
+                    {
+                        "input": [[-1.0, 2.0, -3.0, 4.0]],
+                        "output": [[0.0, 2.0, 0.0, 4.0]],
+                    }
+                ],
+                "test": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "furqan_lint.cli", "check", str(onnx_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Exit 1: at least one MARAD fired.
+    assert result.returncode == 1, (
+        f"expected exit 1 (MARAD); got {result.returncode}\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+    # Headline line is present.
+    assert "MARAD" in result.stdout
+    assert "1 violation(s):" in result.stdout
+
+    # The diagnostic family tag and body prose are present.
+    assert (
+        "numpy_divergence" in result.stdout
+    ), f"expected '[numpy_divergence]' tag in stdout; got:\n{result.stdout}"
+    assert (
+        "disagree" in result.stdout or "reference" in result.stdout
+    ), f"expected diagnosis prose in stdout; got:\n{result.stdout}"
+
+    # Negative assertion: the bug shape was an empty body after
+    # the violations count. Confirm we are NOT in that state.
+    bug_shape = re.compile(r"1 violation\(s\):\s*\n\s*$")
+    assert not bug_shape.search(result.stdout), (
+        f"CLI output still matches the round-34 HIGH-1 bug shape "
+        f"(empty body after violations count):\n{result.stdout!r}"
+    )
