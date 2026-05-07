@@ -53,7 +53,8 @@ repos:
     hooks:
       - id: safety-invariants-present
         name: SAFETY_INVARIANTS.md present when Gate 11 substrate changes
-        entry: bash -c 'test -f SAFETY_INVARIANTS.md || { echo "ERROR: SAFETY_INVARIANTS.md is missing. Phase G11.x changes require this normative document at the repository root. See https://github.com/BayyinahEnterprise/furqan-lint for context."; exit 1; }'
+        entry: >-
+          bash -c 'test -f SAFETY_INVARIANTS.md || { echo "ERROR SAFETY_INVARIANTS.md is missing. Phase G11.x changes require this normative document at the repository root. See https://github.com/BayyinahEnterprise/furqan-lint for context."; exit 1; }'
         language: system
         files: ^(src/furqan_lint/gate11/|tests/test_gate11_|tests/fixtures/gate11/)
         pass_filenames: false
