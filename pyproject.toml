@@ -83,6 +83,17 @@ onnx-profile = [
     "onnx>=1.14,<1.19",
     "onnx-tool>=1.0,<2",
 ]
+# Optional Sigstore-CASM Gate 11 extra (v0.10.0 Phase G11.0).
+# Cryptographically enforces the additive-only contract on the
+# public surface of a Python module via Sigstore's OIDC-keyed
+# ephemeral certificates plus Rekor transparency log. Opt-in via
+# `pip install furqan-lint[gate11]`. The base install does not pull
+# sigstore or rfc8785; users without Gate 11 needs continue paying
+# zero install cost.
+gate11 = [
+    "sigstore>=3.0.0,<4",
+    "rfc8785>=0.1.4,<0.2",
+]
 
 [project.scripts]
 furqan-lint = "furqan_lint.cli:main"
