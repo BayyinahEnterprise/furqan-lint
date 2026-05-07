@@ -97,26 +97,34 @@ def test_rejects_wrong_casm_version() -> None:
 
 
 def test_rejects_unsupported_language() -> None:
+    """Phase G11.1 (as-Saffat) extends the language whitelist
+    to ``rust``; this test uses an unknown language to keep the
+    rejection surface pinned. Go ships in G11.2; ONNX in G11.3.
+    """
     bad = _baseline_manifest_dict()
-    bad["module_identity"]["language"] = "rust"
+    bad["module_identity"]["language"] = "klingon"
     with pytest.raises(CasmSchemaError) as exc:
         Manifest.from_dict(bad)
     assert exc.value.code == "CASM-V-001"
-    assert "rust" in str(exc.value).lower() or "python" in str(exc.value).lower()
+    assert "klingon" in str(exc.value).lower() or "python" in str(exc.value).lower()
 
 
-def test_rejects_reserved_kind_alias() -> None:
+def test_rejects_unknown_kind() -> None:
+    """The ``alias`` kind was reserved in Phase G11.0 v0.10.0
+    and is now USED by Phase G11.1 (as-Saffat) for Rust
+    ``pub use`` re-exports. This test pins the rejection
+    surface against a kind that is not in any phase's
+    whitelist.
+    """
     bad = _baseline_manifest_dict()
     bad["public_surface"]["names"].insert(
         0,
         {
-            "name": "AAA_alias",
-            "kind": "alias",
+            "name": "AAA_unknown",
+            "kind": "future_unspecified_kind",
             "signature_fingerprint": "sha256:" + "e" * 64,
         },
     )
-    # Re-sort to satisfy ASCII-sort precondition; the kind check
-    # still fires.
     bad["public_surface"]["names"].sort(key=lambda d: d["name"])
     with pytest.raises(CasmSchemaError) as exc:
         Manifest.from_dict(bad)

@@ -26,6 +26,10 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+
+from furqan_lint.gate11.checker_set_hash import (
+    compute_checker_set_hash as _compute_checker_set_hash,
+)
 import json
 import sys
 from pathlib import Path
@@ -89,14 +93,15 @@ def _build_manifest_dict(
         "linter_substrate_attestation": {
             "linter_name": "furqan-lint",
             "linter_version": linter_version,
-            # NOTE: a real ``checker_set_hash`` derives from the
-            # registered checker set's source. T13 / Shape A
-            # scope statement names this; v1.0 emits a
-            # placeholder hash of the linter version string. The
-            # F4 disclosure in README explains the limit.
-            "checker_set_hash": (
-                "sha256:" + hashlib.sha256(linter_version.encode("utf-8")).hexdigest()
-            ),
+            # Phase G11.1 audit H-6 propagation defense: the
+            # substantive ``checker_set_hash`` is computed over
+            # the pinned checker source files via
+            # :func:`furqan_lint.gate11.checker_set_hash.compute_checker_set_hash`.
+            # The Phase G11.0 v0.10.0 ship used
+            # ``sha256(linter_version)`` (a placeholder dressed
+            # as a commitment); v0.11.0 corrects this for both
+            # Python and Rust pipelines.
+            "checker_set_hash": _compute_checker_set_hash(),
         },
         "trust_root": {
             "trust_root_id": trust_config.trust_root_id,
