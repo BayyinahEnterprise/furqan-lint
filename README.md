@@ -34,6 +34,7 @@ pip install "furqan-lint[onnx]"                  # ONNX graph-only checks (D24-o
 pip install "furqan-lint[onnx-runtime]"          # ONNX + numpy-vs-ONNX divergence (v0.9.3+; brings in onnxruntime + numpy)
 pip install "furqan-lint[onnx-profile]"          # ONNX + score-validity ADVISORY (v0.9.4+; brings in onnx_tool)
 pip install "furqan-lint[gate11]"                # Sigstore-CASM Gate 11 (v0.10.0+; brings in sigstore + rfc8785)
+pip install "furqan-lint[gate11-rust]"           # Sigstore-CASM Gate 11 Rust extension (v0.11.0+; brings in sigstore + rfc8785 + tree-sitter-rust)
 pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile,gate11]"  # all adapters with full ONNX checks plus Gate 11
 ```
 
@@ -393,6 +394,96 @@ deferred by scope) rather than as defects (signaled to be fixed
 this round) because the underlying substrate is the Sigstore
 public infrastructure, not furqan-lint code.
 
+### Sigstore-CASM Gate 11 (Rust extension)
+
+As of v0.11.0, Phase G11.1 (as-Saffat) extends Sigstore-CASM
+Gate 11 to Rust source files. Bundles are produced via the
+existing Python sigstore-python pipeline; FFI to sigstore-rs
+is deferred to v1.5 per Yusuf Horizon discipline.
+
+```bash
+pip install "furqan-lint[gate11-rust]"
+```
+
+The CLI surface dispatches on file extension:
+
+```bash
+furqan-lint manifest init src/lib.rs           # OIDC sign; emit src/lib.rs.furqan.manifest.sigstore
+furqan-lint manifest verify src/lib.rs.furqan.manifest.sigstore \
+    --expected-identity '<pattern>' \
+    --expected-issuer 'https://token.actions.githubusercontent.com'
+furqan-lint manifest update src/lib.rs         # additive-only re-sign; refuses removals
+furqan-lint check --gate11 src/                # walk .rs files; verify any adjacent bundle
+```
+
+The Rust manifest declares ``module_identity.language = "rust"``
+and ``public_surface.extraction_method =
+"tree-sitter.rust-public-surface@v1.0"``. Public-surface
+entries are emitted for top-level ``pub fn``, ``pub struct``,
+``pub enum``, ``pub trait``, ``pub type``, ``pub const``,
+``pub static``, and ``pub use`` re-exports.
+
+#### Identity policy enforcement (audit C-1 + M-6 corrective)
+
+v0.11.0 closes the Phase G11.0 v0.10.0 audit gap where
+``furqan-lint manifest verify`` accepted any valid Sigstore
+signature regardless of OIDC identity. The verifier now
+requires an explicit Identity policy:
+
+- ``--expected-identity <pattern>``: required for production
+  verification. The pattern is matched against the signing
+  certificate's Subject Alternative Name (SAN) extension via
+  sigstore-python's ``Identity`` policy class.
+- ``--expected-issuer <issuer>``: optional OIDC issuer
+  constraint (e.g.,
+  ``https://accounts.google.com``,
+  ``https://token.actions.githubusercontent.com``).
+- ``--allow-any-identity``: explicit opt-in to ``UnsafeNoOp()``
+  policy. Use of this flag in production CI is itself an
+  audit signal (Sulayman-Naml ADVISORY pattern); the
+  refuse-without-policy default is the substrate-side
+  enforcement of Newman 2022 N2 (typosquatting at the publish
+  boundary).
+
+Failure modes:
+
+- ``CASM-V-035`` (no Identity policy supplied): default
+  refuse-without-policy. Pass ``--expected-identity <pattern>``
+  or explicitly ``--allow-any-identity``.
+- ``CASM-V-032`` (identity policy mismatch): the signing
+  certificate's SAN does not match the supplied pattern.
+- ``CASM-V-036`` (identity extraction failure): the signing
+  certificate is malformed or lacks the SAN extension. Replaces
+  the v0.10.0 string sentinel ``"<unknown OIDC identity>"``.
+
+These error codes plus the v0.10.0 codes (CASM-V-001 through
+CASM-V-061) form the universal CASM-V namespace declared in
+SAFETY_INVARIANTS.md Invariant 6. Phase G11.4 (Tasdiq al-Bayan)
+will exercise all codes against bundles produced from at least
+the Python and Rust substrates.
+
+#### Documented limits (v1.0 scope, deferred to v1.5)
+
+- **Method-level signing**: impl-block methods are not part of
+  the v1.0 public-surface fingerprint (consistent with the
+  existing ``furqan_lint.rust_adapter.extract_public_names``
+  documented limit).
+- **Lifetime-aware canonical types**: lifetimes are stripped
+  during fingerprinting so that ``f<'a>(s: &'a str)`` and
+  ``f<'b>(s: &'b str)`` produce identical fingerprints.
+- **Trait-object semantic equivalence**: ``Box<dyn Trait + 'a>``
+  is fingerprinted as ``Box<dyn Trait>`` (lifetime stripped;
+  bounds beyond first identifier elided).
+- **Macro-expansion-aware signing**: macro calls are signed at
+  the source level, NOT after expansion.
+- **Glob re-exports**: ``pub use foo::*`` cannot be statically
+  resolved; the verifier surfaces ``CASM-V-INDETERMINATE``
+  rather than a false pass per Phase G11.A Invariant 6 step 8.
+
+These are documented limits in the Sigstore-CASM substrate;
+improvement is a v1.5 horizon item tracked in
+``PHASE_G11_1_CARRY_FORWARD.md``.
+
 ## Usage
 
 ```bash
@@ -543,6 +634,41 @@ MARAD  example.py
     [return_none_mismatch] Function 'get_name' at line 8
     declares -> str but returns None on at least one path.
 ```
+
+## Closed in v0.11.0
+
+- **Sigstore-CASM Gate 11 Rust extension shipped.** Phase
+  G11.1 (as-Saffat) extends Gate 11 to ``.rs`` source files.
+  ``[gate11-rust]`` extra; ``furqan-lint manifest init|verify|update``
+  dispatches on ``.py`` / ``.rs``; ``check --gate11`` walks
+  Rust modules and verifies adjacent bundles.
+- **Audit C-1 (CRITICAL) closed: identity policy gap.** The
+  verifier now requires ``--expected-identity <pattern>`` or
+  explicit ``--allow-any-identity``; refuse-without-policy
+  default raises ``CASM-V-035``. Backported to the Python
+  pipeline.
+- **Audit H-4 (HIGH) closed: nested-generic stringification.**
+  The Rust signature canonicalizer recurses element-wise on
+  multi-argument generic parameters; ``HashMap<String, Option<V>>``
+  and ``HashMap<String, Result<V, ()>>`` produce different
+  fingerprints, defeating the v0.10.0 Python tuple-
+  stringification failure mode.
+- **Audit H-5 (HIGH) closed: trusted_root threading.** The
+  ``trusted_root`` argument from step4 is now consumed by
+  step6 via ``Verifier(_inner=trusted_root)`` rather than
+  discarded.
+- **Audit H-6 (HIGH) closed: checker_set_hash placeholder
+  dressed as commitment.** ``compute_checker_set_hash()`` now
+  hashes the actual checker source bytes (Form A); Form B
+  is the explicit ``placeholder:sha256:`` prefix accepted by
+  the schema validator for v0.11.x patch releases.
+- **Audit M-6 (MEDIUM) closed: README claim without substrate.**
+  The Newman 2022 N2 (typosquatting) disclosure now names the
+  substrate mechanism (``--expected-identity``) that backs the
+  pinning recommendation.
+- **Audit M-7 (MEDIUM) closed: string sentinels for identity
+  extraction.** ``CASM-V-036`` typed errors replace the
+  v0.10.0 ``"<unknown OIDC identity>"`` string sentinel.
 
 ## Closed in v0.10.0
 

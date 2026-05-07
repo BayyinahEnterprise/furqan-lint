@@ -120,3 +120,24 @@ be reported through the same channel as other security reports.
 Issues in upstream Sigstore (sigstore-python, Fulcio, Rekor)
 should be reported to the Sigstore project; see
 https://github.com/sigstore/sigstore-python#security.
+
+
+## Sigstore-CASM Gate 11 Rust extension (v0.11.0)
+
+The Phase G11.1 Rust extension uses the same Sigstore
+substrate as the Phase G11.0 Python pipeline. The four
+mandatory disclosures (OIDC issuer compromise; typosquatting;
+Rekor privacy; log retention horizon) apply identically to
+Rust manifests.
+
+### Identity policy enforcement
+
+Relying Parties MUST configure ``--expected-identity`` for
+production verification. The default refuse-without-policy
+behaviour (``CASM-V-035``) is a substrate-side enforcement
+of Newman 2022 N2 (typosquatting at the publish boundary).
+Use of ``--allow-any-identity`` in production CI is itself
+an audit signal: it is an explicit opt-in to ``UnsafeNoOp()``
+policy whose presence in CI logs is the substrate-side
+visibility that the Sulayman-Naml ADVISORY pattern (Phase
+G11.A Strategy 7) provides.

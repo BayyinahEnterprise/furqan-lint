@@ -66,7 +66,7 @@ def _parse_error_detail(exc: Exception) -> str:
     return str(exc)
 
 
-def main() -> int:
+def main() -> int:  # noqa: PLR0915
     args = sys.argv[1:]
 
     if not args or args[0] in ("-h", "--help"):

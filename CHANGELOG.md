@@ -19,7 +19,7 @@ introduced this convention.
 
 ---
 
-## [0.11.0] - <DATE>
+## [0.11.0] - 2026-05-07
 
 Phase G11.1 (as-Saffat) ships Sigstore-CASM Gate 11 v1.0 for
 Rust source files. New optional ``[gate11-rust]`` extra brings
@@ -43,8 +43,28 @@ shipping the audit gaps.
 
 ### Tests
 
-Test count: 511 (v0.10.0 ship state) -> <TBD>
-(v0.11.0). Net delta: <TBD>.
+Test count: 511 (v0.10.0 ship state) -> 561
+(v0.11.0). Net delta: +50 (49 new Rust Gate 11 tests
+across test_gate11_rust_*.py modules; minor updates to
+two existing G11.0 tests so the language whitelist and
+kind whitelist accept Rust kinds).
+
+### Rust Sigstore-CASM documented limits (Phase G11.1 T08)
+
+Each fixture below pins a current furqan-lint Rust adapter
+behaviour as a v1.0 documented limit in the Sigstore-CASM
+substrate; improvement is a v1.5 horizon item.
+
+- ``lifetime_stripped_from_signature``: lifetimes are stripped
+  during canonicalization.
+- ``impl_methods_omitted_from_surface``: impl-block methods are
+  not in the v1.0 public-surface fingerprint.
+- ``trait_object_literal_text``: ``Box<dyn Trait>`` is signed
+  as literal text.
+- ``macro_call_signed_pre_expansion``: macros are signed at the
+  source level, not after expansion.
+- ``pub_crate_excluded``: ``pub(crate)`` and ``pub(super)`` items
+  are not part of the external API surface.
 
 ---
 
