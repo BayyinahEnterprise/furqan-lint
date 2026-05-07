@@ -227,6 +227,33 @@ Both patterns are validated by tests under
 ``onnx`` / ``onnxruntime`` / ``numpy`` version changes that
 break the convention surface as test failures rather than
 stale documentation.
+
+### Sigstore-CASM Gate 11 -- normative invariants
+
+Phase G11.A (al-Fatiha) ships `SAFETY_INVARIANTS.md` at the
+repository root as the foundational invariants document for the
+Sigstore-CASM Gate 11 substrate. The file is normative for all
+subsequent Phase G11.x implementations and contains the seven
+canonical cryptographic and protocol invariants, the four
+mandatory disclosures inherited from the Sigstore threat model,
+and the foundation-status disclosure (Section 8) for the
+empirical foundation of Strategy 1 (Canonical-First
+Architecture).
+
+The empirical foundation behind Strategy 1 is currently at
+candidate-finding status pending independent replication; the
+seven canonical invariants are NOT magnitude or prevention
+claims but cryptographic and protocol specifications. Full
+treatment of the strategy mappings lives in `Bayyinah
+at-Tartib v1.0` (second revision May 7 2026); empirical
+methodology lives in `Bayyinah al-Munasabat v1.0` (second
+revision May 7 2026).
+
+Contributors and reviewers preparing Phase G11.0 through Phase
+G11.12 patches MUST read `SAFETY_INVARIANTS.md` before
+submitting changes that touch `src/furqan_lint/gate11/` or any
+Phase G11.x test fixtures.
+
 ## Usage
 
 ```bash

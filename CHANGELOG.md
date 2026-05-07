@@ -19,6 +19,85 @@ introduced this convention.
 
 ---
 
+## [0.10.0] - <DATE>
+
+Phase G11.A (al-Fatiha) ships `SAFETY_INVARIANTS.md` at the
+repository root as the foundational invariants document for
+Sigstore-CASM Gate 11. The file is normative for all
+subsequent Phase G11.x implementations (G11.0 through G11.12).
+
+Subsequent Phase G11.x release commits (G11.0, G11.1, G11.2,
+etc.) populate the v0.10.0 entry with substrate-specific
+detail; this CHANGELOG header lands first via Phase G11.A so
+that the CHANGELOG-math gate skips the placeholder during the
+in-flight Phase G11.x implementation cycle.
+
+### Added
+
+- `SAFETY_INVARIANTS.md` at the repository root containing the
+  seven canonical Sigstore-CASM invariants, the four mandatory
+  disclosures inherited from the Sigstore threat model, the
+  eight at-Tartib strategy cross-references, the foundation-
+  status inheritance disclosure (Section 8), the normative
+  references block (per audit F2), and the auditor's response
+  register documenting the v1.0_corrected /
+  v1.0_second_revision / v1.0_second_revision_amended /
+  v1.0_second_revision_amended_2 evolution.
+- README forward-reference paragraph noting the
+  candidate-finding status of Strategy 1's empirical
+  foundation and pointing to `Bayyinah at-Tartib v1.0` (second
+  revision May 7 2026) and `Bayyinah al-Munasabat v1.0`
+  (second revision May 7 2026) as the methodology papers.
+- CONTRIBUTING.md requirement that contributors read
+  `SAFETY_INVARIANTS.md` before submitting Phase G11.x patches.
+- SECURITY.md cross-reference for the cryptographic substrate
+  identity.
+- `.pre-commit-config.yaml` hook that fails commits touching
+  `src/furqan_lint/gate11/` or Phase G11.x test fixtures when
+  `SAFETY_INVARIANTS.md` is missing. Presence-only check;
+  semantic freshness remains a review responsibility per the
+  T-A4 honesty note in `SAFETY_INVARIANTS.md` and the audit F3
+  finding.
+
+### References
+
+- `Bayyinah at-Tartib v1.0` (second revision May 7 2026):
+  full strategy elaboration, application examples, case-by-
+  case counterfactual mapping, conditional economic case,
+  policy-vs-engineering distinction for public-interest
+  software.
+- `Bayyinah al-Munasabat v1.0` (second revision May 7 2026):
+  empirical methodology, within-quartile shuffle test,
+  orthogonal char-3-gram pipeline, Bonferroni significance.
+- `MUSHAF_TABLE_OF_CONTENTS_v1_0_second_revision.md`: full
+  Phase G11.x roadmap (G11.0 through G11.12).
+
+### Foundation-status disclosure
+
+The seven canonical Sigstore-CASM invariants are NOT magnitude
+claims about the al-Munasabat empirical finding and NOT
+prevention claims about the at-Tartib counterfactual. They are
+cryptographic and protocol specifications grounded in
+production-deployed Sigstore (Newman et al. 2022; deployment
+evidence Schorlemmer et al. 2024 and Kalu et al. 2025) and
+IETF SCITT (RFC-track). The Sigstore-CASM substrate's value is
+to make supply-chain failures cryptographically attributable
+and forensically reconstructable, not to prevent supply-chain
+failures directly. Strategy 1 (Canonical-First Architecture),
+the strategy most directly affected by the al-Munasabat
+empirical magnitude, is at candidate-finding status pending
+independent replication.
+
+### Tests
+
+Test count: 441 (v0.9.4 ship state) -> <TBD>
+(v0.10.0 final, after Phase G11.0 substrate lands). Net delta:
+<TBD>. Phase G11.A itself adds zero source-tree tests; the
+SAFETY_INVARIANTS.md content is verified by the pre-commit
+hook plus reviewer attention rather than by pytest fixtures.
+
+---
+
 ## [0.9.4] - 2026-05-05
 
 Five-part-plus-carry-forward release. Closes Gap 2 (MEDIUM)
