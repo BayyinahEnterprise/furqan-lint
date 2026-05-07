@@ -6,21 +6,16 @@ Structural-honesty checks for Python, powered by [Furqan](https://tryfurqan.com)
 
 `furqan-lint` translates Python source into the Furqan AST and runs the
 subset of Furqan checkers whose semantics carry across language boundaries
-into idiomatic Python. Four checks ship today:
+into idiomatic Python. <!-- FURQAN_LINT_CHECKS_AUTO_BEGIN -->
+Four core Python checks ship today:
 
-- **D24 (all-paths-return)** every control-flow path through a typed
-  function reaches a return statement.
-- **D11 (status-coverage)** when a function returns `Optional[X]`, every
-  caller either propagates the optionality or explicitly handles `None`.
-  A caller that silently collapses `Optional[X]` into a non-optional return
-  type is the structural equivalent of dropping the `Incomplete` arm of
-  Furqan's `Integrity | Incomplete` union.
-- **return_none_mismatch** a function declaring `-> str` (or any
-  non-Optional type) that returns `None` on some path is flagged as a
-  type mismatch. Closes the D24 return-None blind spot.
-- **additive_only** invoked via `furqan-lint diff old.py new.py`,
-  compares two versions of a module's public surface and fires on any
-  removed name. Adding a public name is silent.
+- **D24 (all-paths-return)** every control-flow path through a typed function reaches a return statement.
+- **D11 (status-coverage)** when a function returns ``Optional[X]``, every caller either propagates the optionality or explicitly handles ``None``. A caller that silently collapses ``Optional[X]`` into a non-optional return type is the structural equivalent of dropping the ``Incomplete`` arm of Furqan's ``Integrity | Incomplete`` union.
+- **return_none_mismatch** a function declaring ``-> str`` (or any non-Optional type) that returns ``None`` on some path is flagged as a type mismatch. Closes the D24 return-None blind spot.
+- **additive_only** invoked via ``furqan-lint diff old.py new.py``, compares two versions of a module's public surface and fires on any removed name. Adding a public name is silent.
+
+Adapter-specific checks ship under the optional extras documented below: ``[rust]`` adds R3 + D24 + D11; ``[go]`` adds D24 + D11; ``[onnx]`` adds D24-onnx + opset_compliance + D11-onnx; ``[onnx-runtime]`` adds numpy_divergence; ``[onnx-profile]`` adds score_validity ADVISORY; ``[gate11]`` adds the Sigstore-CASM Gate 11 verifier (v0.10.0+; an additive-only contract on the public surface, cryptographically witnessed via Sigstore Rekor).
+<!-- FURQAN_LINT_CHECKS_AUTO_END -->
 
 ## Install
 
@@ -38,7 +33,8 @@ pip install "furqan-lint[go]"                    # Go adapter (requires Go 1.22+
 pip install "furqan-lint[onnx]"                  # ONNX graph-only checks (D24-onnx + opset-compliance + D11-onnx shape/type)
 pip install "furqan-lint[onnx-runtime]"          # ONNX + numpy-vs-ONNX divergence (v0.9.3+; brings in onnxruntime + numpy)
 pip install "furqan-lint[onnx-profile]"          # ONNX + score-validity ADVISORY (v0.9.4+; brings in onnx_tool)
-pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile]"  # all adapters with full ONNX runtime + profile checks
+pip install "furqan-lint[gate11]"                # Sigstore-CASM Gate 11 (v0.10.0+; brings in sigstore + rfc8785)
+pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile,gate11]"  # all adapters with full ONNX checks plus Gate 11
 ```
 
 ### Install from a specific commit or tag
@@ -253,6 +249,149 @@ Contributors and reviewers preparing Phase G11.0 through Phase
 G11.12 patches MUST read `SAFETY_INVARIANTS.md` before
 submitting changes that touch `src/furqan_lint/gate11/` or any
 Phase G11.x test fixtures.
+### Sigstore-CASM Gate 11 (opt-in)
+
+As of v0.10.0, furqan-lint can sign and verify a
+**Compositional Additive-only Surface Manifest (CASM)** for any
+Python module via Sigstore-keyed transparency. Gate 11 (Kiraman
+Katibin, "the noble scribes" who keep an unforgeable record of
+additive-only public surface) is behind an opt-in extra so the
+default install path is unchanged:
+
+```bash
+pip install "furqan-lint[gate11]"
+```
+
+This pulls in `sigstore>=3.0.0,<4` and `rfc8785>=0.1.4,<0.2`.
+The `[gate11]` extra is independent of `[onnx]` /
+`[onnx-runtime]` / `[onnx-profile]`; it adds no inference
+dependencies.
+
+The CLI grows two opt-in entry points and one flag:
+
+```bash
+furqan-lint manifest init <module.py>     # OIDC sign; emit .furqan.manifest.sigstore
+furqan-lint manifest verify <module.py>   # 9-step CASM-V verification
+furqan-lint manifest update <module.py>   # additive-only re-sign; refuses removals
+furqan-lint check --gate11 <path>         # run normal checks + verify any CASM bundles found
+```
+
+`furqan-lint check` without `--gate11` produces the same
+diagnostics as in v0.9.4. Gate 11 only activates when the user
+opts in via the flag or the `manifest` subcommand.
+
+**Wire format.** Each manifest is a JSON document carrying
+`casm_version: "1.0"`, `language: "python"`,
+`module_root_hash` (BOM-stripped, LF-normalized, UTF-8 SHA-256),
+`public_surface.names` (ASCII-sorted entries of kind
+`function` / `class` / `constant`, each with a canonical
+`signature_fingerprint`), `tooling.linter_version`,
+`tooling.checker_set_hash`, and `chain_pointer.previous_bundle_hash`
+for chain integrity. The whole document is canonicalized via
+RFC 8785 (JSON Canonical Form) before being signed. Bundles
+ship as `<module>.furqan.manifest.sigstore`.
+
+**Verification.** `manifest verify` runs the 9-step flow
+documented under the `CASM-V-NNN` error namespace:
+
+1. Parse bundle (CASM-V-010 on JSON failure).
+2. Check `casm_version == "1.0"` (CASM-V-001).
+3. Check `language == "python"` (CASM-V-001).
+4. Load Sigstore trust root via TUF (CASM-V-020 ADVISORY on
+   refresh failure with cache fallback; CASM-V-021 if no cache).
+5. Re-canonicalize the manifest (RFC 8785).
+6. Verify Sigstore signature against the canonical bytes
+   (CASM-V-030..034 by failure mode).
+7. Compare `module_root_hash` to the on-disk module
+   (CASM-V-040 on mismatch).
+8. Compare `public_surface.names` to the live extraction; if
+   the live module uses dynamic `__all__`, the result is
+   indeterminate (CASM-V-INDETERMINATE) rather than a false pass.
+9. Check `chain_pointer` integrity against the previous bundle
+   when supplied (CASM-V-060 on hard mismatch; CASM-V-061
+   ADVISORY when no previous bundle is locally accessible).
+
+`manifest update` enforces the additive-only contract: any name
+removal between previous and proposed manifest is rejected
+(CASM-V-050); any signature change on a retained name is
+rejected (CASM-V-051). Additions are accepted and re-signed.
+
+#### Gate 11 scope and disclosures
+
+Gate 11 inherits the Sigstore threat model documented in Newman
+et al., *Sigstore: Software Signing for Everybody* (ACM CCS
+2022). The four residual disclosures are recorded here in the
+Shape A documented-limit form so downstream Relying Parties can
+calibrate trust.
+
+- **(N1) Short-window OIDC-identity compromise.** A signature
+  binds to the OIDC identity that requested the Fulcio
+  certificate. If the signing identity's OIDC token is
+  compromised within the certificate validity window
+  (typically 10 minutes), an attacker can produce a CASM bundle
+  that verifies cleanly. Mitigation lives outside furqan-lint
+  (hardware-backed OIDC, short-lived tokens, identity-provider
+  audit logging). Severity: HIGH but out-of-scope for the lint
+  itself; documented per Newman 2022 section 6.
+- **(N2) Typosquatting at the publish boundary.** Sigstore
+  proves "an entity controlling identity X signed bytes Y at
+  time T". It does *not* prove that identity X is the legitimate
+  maintainer of the package the consumer thinks they are
+  installing. Relying Parties must pin both the package name
+  *and* the expected signing identity; furqan-lint surfaces the
+  identity in the verification result so a CI policy can assert
+  it.
+- **(N3) Rekor entry queryability and privacy.** Rekor is a
+  public append-only log. Manifest entries (including the
+  module-root hash and the public-surface name list) are
+  published unencrypted and become enumerable by third parties.
+  Codebases that are themselves confidential or under embargo
+  should not sign their CASM bundles to the public Rekor
+  instance; the staging instance or a private transparency
+  service is the right substrate. This is recorded as Shape A
+  scope statement F7 below.
+- **(N4) Log-retention horizon.** Rekor's public-instance
+  retention policy is operational, not contractual. Verification
+  past a multi-year horizon may require local mirroring of the
+  relevant log entries. furqan-lint does not mirror Rekor on the
+  user's behalf.
+
+#### SCITT vocabulary
+
+Gate 11 uses the IETF SCITT (Supply Chain Integrity,
+Transparency, and Trust) architectural vocabulary throughout the
+verification module and CHANGELOG entries: the **Issuer** is the
+OIDC-identified signer; the **Transparency Service** is Rekor;
+the **Relying Party** is the consumer running `manifest verify`
+(or `check --gate11`); the **Auditor** is any third party who
+replays the chain integrity check. The mapping is documented
+inline in `src/furqan_lint/gate11/verification.py`.
+
+#### Shape A scope statements
+
+Two limits are documented as Shape A (acknowledged residual,
+not patched in v0.10.0) rather than as defects:
+
+- **F4. Linter-substrate trust is recursive.** The
+  `tooling.checker_set_hash` field records the integrity of the
+  checker code that produced the manifest. It does *not* prove
+  that the checker code itself is honest; verifying that
+  requires either signing furqan-lint's own release artifacts
+  with Gate 11 (G11.5 carry-forward) or an independent
+  reproducible build. v0.10.0 ships the field; closing the
+  recursion is a later round.
+- **F7. Rekor entries leak public-surface shape.** Per N3 above,
+  the Rekor log publishes the manifest's hash and the public
+  name list. A confidential codebase MUST NOT sign its CASM
+  bundles to the public Rekor instance. v0.10.0 documents the
+  failure mode; private-transparency-service routing is a later
+  round.
+
+The prompt asked these to surface as findings; v0.10.0 records
+them as Shape A scope statements (acknowledged in design,
+deferred by scope) rather than as defects (signaled to be fixed
+this round) because the underlying substrate is the Sigstore
+public infrastructure, not furqan-lint code.
 
 ## Usage
 
@@ -404,6 +543,27 @@ MARAD  example.py
     [return_none_mismatch] Function 'get_name' at line 8
     declares -> str but returns None on at least one path.
 ```
+
+## Closed in v0.10.0
+
+- **Sigstore-CASM Gate 11 (Kiraman Katibin) shipped.** Per Phase
+  G11.0 v1.0: a Compositional Additive-only Surface Manifest
+  carrying module-root hash + canonicalized public-surface
+  fingerprints + tooling provenance + chain pointer is signed
+  with Sigstore (Fulcio short-lived certs, Rekor transparency
+  log) and verified through a 9-step `CASM-V-NNN` flow. The
+  additive-only contract is enforced at `manifest update`
+  (CASM-V-050 on removal, CASM-V-051 on signature change of a
+  retained name). Behind the opt-in `[gate11]` extra; the
+  default install path is unchanged.
+- **F1 closed: README structural-checks block now auto-derived.**
+  `scripts/regenerate_check_table.py` regenerates the table of
+  shipped checks between `<!-- FURQAN_LINT_CHECKS_AUTO_BEGIN -->`
+  and `<!-- FURQAN_LINT_CHECKS_AUTO_END -->` from the in-repo
+  registry; a pre-commit hook runs `--check` to fail on drift,
+  and a CI gate runs the same check. Prevents the v0.9.x-era
+  failure mode where README counts drifted from substrate after
+  a checker landed.
 
 ## Closed in v0.4.1
 

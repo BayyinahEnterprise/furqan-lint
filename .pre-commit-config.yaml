@@ -69,6 +69,20 @@ repos:
         language: system
         pass_filenames: false
 
+  # F1 closure (Phase G11.0 / T12): the README's structural-checks
+  # block is auto-derived from the checker registry. The hook fires
+  # if a contributor edits the table by hand without running the
+  # generator, or if the generator's output drifts from the README
+  # otherwise.
+  - repo: local
+    hooks:
+      - id: regenerate-check-table
+        name: README structural-checks block in sync (F1)
+        entry: python scripts/regenerate_check_table.py --check
+        language: system
+        pass_filenames: false
+        files: ^(README\.md|scripts/regenerate_check_table\.py)$
+
   # Dogfood: run furqan-lint on its own source. If furqan-lint fires
   # on furqan-lint's own code, we have lost the right to ship the
   # tool that catches drift in other people's code.

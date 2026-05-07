@@ -91,6 +91,36 @@ responsibility of verifying that proposed Gate 11 changes do
 not contradict the invariants in the absence of a paired
 amendment to `SAFETY_INVARIANTS.md`.
 
+## Sigstore-CASM Gate 11 testing
+
+Gate 11 (v0.10.0+) tests live under `tests/test_gate11_*.py`
+and require the `[gate11]` extra installed:
+
+```bash
+pip install -e ".[dev,gate11]"
+python -m pytest -q tests/test_gate11_*.py
+```
+
+Tests that exercise the live Sigstore signing path (interactive
+or ambient OIDC, network-bound) are gated behind the
+`FURQAN_LINT_GATE11_SMOKE_TEST` environment variable so the
+default `pytest -q` run never blocks on credentials or network:
+
+```bash
+FURQAN_LINT_GATE11_SMOKE_TEST=1 python -m pytest -q tests/test_gate11_signing.py
+```
+
+CI runs the full `pytest -q` suite without the smoke flag on
+every push, and runs the smoke-test job separately on
+push-to-main with `id-token: write` so the ambient GitHub
+Actions OIDC identity is available.
+
+When adding a new diagnostic family that should be covered by
+Gate 11, update the `_extract_public_names` /
+`signature_canonicalization` test surface in lockstep with the
+new public symbol; the canonical-fingerprint regression tests
+will fail otherwise.
+
 ## The four-place pattern for documented limits
 
 Every documented limit in the Rust or Go adapter lives in four
