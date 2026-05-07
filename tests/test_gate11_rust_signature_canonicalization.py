@@ -11,6 +11,8 @@ generic parameters fall through to a stringified tuple-node
 representation), these tests will detect it before merge.
 """
 
+# ruff: noqa: E402, SIM115, RUF005
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -29,7 +31,6 @@ from furqan_lint.gate11.rust_surface_extraction import (
     extract_public_surface_rust,
 )
 from furqan_lint.rust_adapter.parser import parse_source
-
 
 FIXTURES = Path(__file__).parent / "fixtures" / "gate11_rust"
 
@@ -130,9 +131,7 @@ def test_h4_scoped_path_preserved():
 
 
 def test_fixture_vec_of_result_pinned():
-    entries = extract_public_surface_rust(
-        FIXTURES / "nested_generic_pinning" / "vec_of_result.rs"
-    )
+    entries = extract_public_surface_rust(FIXTURES / "nested_generic_pinning" / "vec_of_result.rs")
     assert len(entries) == 1
     assert entries[0]["name"] == "f"
     assert entries[0]["kind"] == "function"
@@ -156,9 +155,7 @@ def test_fixture_option_of_slice_lifetime_invariant():
     renamed = src.replace("'a", "'b")
     import tempfile
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".rs", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rs", delete=False) as f:
         f.write(renamed)
         renamed_path = Path(f.name)
     try:
@@ -166,9 +163,7 @@ def test_fixture_option_of_slice_lifetime_invariant():
             FIXTURES / "nested_generic_pinning" / "option_of_slice.rs"
         )
         renamed_extract = extract_public_surface_rust(renamed_path)
-        assert original[0]["signature_fingerprint"] == renamed_extract[0][
-            "signature_fingerprint"
-        ]
+        assert original[0]["signature_fingerprint"] == renamed_extract[0]["signature_fingerprint"]
     finally:
         renamed_path.unlink()
 
@@ -177,28 +172,19 @@ def test_fixture_inner_generic_difference_pinned_via_fingerprint():
     """A and B fingerprints must differ because the H-4 fix
     detects inner-generic differences.
     """
-    a_src = (
-        "pub fn f<V>(x: HashMap<String, Option<V>>) -> () { todo!() }"
-    )
-    b_src = (
-        "pub fn f<V>(x: HashMap<String, Result<V, ()>>) -> () { todo!() }"
-    )
+    a_src = "pub fn f<V>(x: HashMap<String, Option<V>>) -> () { todo!() }"
+    b_src = "pub fn f<V>(x: HashMap<String, Result<V, ()>>) -> () { todo!() }"
     import tempfile
 
     paths = []
     for src in (a_src, b_src):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".rs", delete=False
-        ) as fh:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".rs", delete=False) as fh:
             fh.write(src)
             paths.append(Path(fh.name))
     try:
         a_entries = extract_public_surface_rust(paths[0])
         b_entries = extract_public_surface_rust(paths[1])
-        assert (
-            a_entries[0]["signature_fingerprint"]
-            != b_entries[0]["signature_fingerprint"]
-        )
+        assert a_entries[0]["signature_fingerprint"] != b_entries[0]["signature_fingerprint"]
     finally:
         for p in paths:
             p.unlink()
@@ -228,18 +214,13 @@ def test_struct_private_field_changes_fingerprint():
 
     paths = []
     for src in (src1, src2):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".rs", delete=False
-        ) as fh:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".rs", delete=False) as fh:
             fh.write(src)
             paths.append(Path(fh.name))
     try:
         e1 = extract_public_surface_rust(paths[0])
         e2 = extract_public_surface_rust(paths[1])
-        assert (
-            e1[0]["signature_fingerprint"]
-            != e2[0]["signature_fingerprint"]
-        )
+        assert e1[0]["signature_fingerprint"] != e2[0]["signature_fingerprint"]
     finally:
         for p in paths:
             p.unlink()
@@ -249,9 +230,7 @@ def test_enum_variants_in_signature():
     src = "pub enum Color { Red, Green, Blue }"
     import tempfile
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".rs", delete=False
-    ) as fh:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rs", delete=False) as fh:
         fh.write(src)
         path = Path(fh.name)
     try:

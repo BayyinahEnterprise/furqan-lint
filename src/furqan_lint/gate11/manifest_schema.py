@@ -258,8 +258,7 @@ class Manifest:
         # ship's failure mode) are NOT accepted.
         csh = attest["checker_set_hash"]
         if not isinstance(csh, str) or not (
-            csh.startswith("sha256:")
-            or csh.startswith("placeholder:sha256:")
+            csh.startswith("sha256:") or csh.startswith("placeholder:sha256:")
         ):
             raise CasmSchemaError(
                 "CASM-V-001",

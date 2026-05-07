@@ -54,9 +54,7 @@ if TYPE_CHECKING:
     pass
 
 
-def signature_fingerprint_rust(
-    node: Any, name: str, kind: str, source_bytes: bytes
-) -> str:
+def signature_fingerprint_rust(node: Any, name: str, kind: str, source_bytes: bytes) -> str:
     """Compute the canonical signature fingerprint for a public item.
 
     Returns ``"sha256:<hex64>"``.
@@ -100,9 +98,7 @@ def signature_fingerprint_rust(
 # ---------------------------------------------------------------
 
 
-def _function_signature_dict(
-    node: Any, name: str, src: bytes
-) -> dict[str, Any]:
+def _function_signature_dict(node: Any, name: str, src: bytes) -> dict[str, Any]:
     parameters: list[dict[str, str]] = []
     return_type: str | None = None
     is_unsafe = False
@@ -163,18 +159,14 @@ def _extract_function_parameters(
         if not param_name:
             for sub in child.children:
                 if sub.type == "identifier":
-                    param_name = sub.text.decode(
-                        "utf-8", errors="replace"
-                    )
+                    param_name = sub.text.decode("utf-8", errors="replace")
                     break
         if not param_type:
             text = child.text.decode("utf-8", errors="replace")
             if ":" in text:
                 _, _, after = text.partition(":")
                 param_type = _canonical_type_string_from_text(after)
-        result.append(
-            {"name": param_name, "type": param_type}
-        )
+        result.append({"name": param_name, "type": param_type})
     return result
 
 
@@ -192,18 +184,14 @@ def _canonical_return_type(return_type_node: Any) -> str | None:
         if canonical:
             return canonical
     # Fallback: parse from raw text.
-    text = return_type_node.text.decode(
-        "utf-8", errors="replace"
-    )
+    text = return_type_node.text.decode("utf-8", errors="replace")
     if "->" in text:
         _, _, after = text.partition("->")
         return _canonical_type_string_from_text(after)
     return None
 
 
-def _struct_signature_dict(
-    node: Any, name: str, src: bytes
-) -> dict[str, Any]:
+def _struct_signature_dict(node: Any, name: str, src: bytes) -> dict[str, Any]:
     fields: list[dict[str, Any]] = []
     for child in node.children:
         if child.type == "field_declaration_list":
@@ -264,9 +252,7 @@ def _has_unrestricted_pub_inline(node: Any) -> bool:
     return False
 
 
-def _enum_signature_dict(
-    node: Any, name: str, src: bytes
-) -> dict[str, Any]:
+def _enum_signature_dict(node: Any, name: str, src: bytes) -> dict[str, Any]:
     variants: list[str] = []
     for child in node.children:
         if child.type == "enum_variant_list":
@@ -277,11 +263,7 @@ def _enum_signature_dict(
                             "identifier",
                             "type_identifier",
                         ):
-                            variants.append(
-                                sub.text.decode(
-                                    "utf-8", errors="replace"
-                                )
-                            )
+                            variants.append(sub.text.decode("utf-8", errors="replace"))
                             break
     return {
         "name": name,
@@ -290,21 +272,15 @@ def _enum_signature_dict(
     }
 
 
-def _trait_signature_dict(
-    node: Any, name: str, src: bytes
-) -> dict[str, Any]:
+def _trait_signature_dict(node: Any, name: str, src: bytes) -> dict[str, Any]:
     method_names: list[str] = []
     for child in node.children:
         if child.type == "declaration_list":
             for d in child.children:
-                if d.type == "function_signature_item" or d.type == "function_item":
+                if d.type in ("function_signature_item", "function_item"):
                     for sub in d.children:
                         if sub.type == "identifier":
-                            method_names.append(
-                                sub.text.decode(
-                                    "utf-8", errors="replace"
-                                )
-                            )
+                            method_names.append(sub.text.decode("utf-8", errors="replace"))
                             break
     method_names.sort()
     return {
@@ -314,9 +290,7 @@ def _trait_signature_dict(
     }
 
 
-def _type_alias_signature_dict(
-    node: Any, name: str, src: bytes
-) -> dict[str, Any]:
+def _type_alias_signature_dict(node: Any, name: str, src: bytes) -> dict[str, Any]:
     target_type = ""
     seen_eq = False
     for child in node.children:
@@ -334,9 +308,7 @@ def _type_alias_signature_dict(
     }
 
 
-def _constant_signature_dict(
-    node: Any, name: str, src: bytes
-) -> dict[str, Any]:
+def _constant_signature_dict(node: Any, name: str, src: bytes) -> dict[str, Any]:
     is_static = node.type == "static_item"
     type_str = ""
     seen_colon = False
@@ -356,9 +328,7 @@ def _constant_signature_dict(
     }
 
 
-def _alias_signature_dict(
-    node: Any, name: str, src: bytes
-) -> dict[str, Any]:
+def _alias_signature_dict(node: Any, name: str, src: bytes) -> dict[str, Any]:
     text = node.text.decode("utf-8", errors="replace")
     # Strip "pub use " prefix and trailing ";"
     text = text.strip().removeprefix("pub use ").rstrip(";").strip()
@@ -376,7 +346,7 @@ def _alias_signature_dict(
 # ---------------------------------------------------------------
 
 
-def _canonical_type_from_node(node: Any) -> str:
+def _canonical_type_from_node(node: Any) -> str:  # noqa: PLR0915
     """Build the canonical type string from a tree-sitter type node.
 
     This is the H-4 propagation defense: we walk the AST and
@@ -388,15 +358,11 @@ def _canonical_type_from_node(node: Any) -> str:
 
     # Primitive / leaf types
     if nt in ("primitive_type", "type_identifier", "identifier"):
-        return _strip_whitespace(
-            node.text.decode("utf-8", errors="replace")
-        )
+        return _strip_whitespace(node.text.decode("utf-8", errors="replace"))
 
-    if nt == "scoped_type_identifier" or nt == "scoped_identifier":
+    if nt in ("scoped_type_identifier", "scoped_identifier"):
         # e.g. std::io::Error
-        return _strip_whitespace(
-            node.text.decode("utf-8", errors="replace")
-        )
+        return _strip_whitespace(node.text.decode("utf-8", errors="replace"))
 
     if nt == "unit_type":
         return "()"
@@ -409,7 +375,7 @@ def _canonical_type_from_node(node: Any) -> str:
             inner.append(_canonical_type_from_node(child))
         return "(" + ", ".join(inner) + ")"
 
-    if nt == "array_type" or nt == "slice_type":
+    if nt in ("array_type", "slice_type"):
         # [T] or [T; N]
         inner_parts: list[str] = []
         for child in node.children:
@@ -470,9 +436,7 @@ def _canonical_type_from_node(node: Any) -> str:
         for child in node.children:
             ct = child.type
             if ct in ("type_identifier", "scoped_type_identifier"):
-                outer_name = _strip_whitespace(
-                    child.text.decode("utf-8", errors="replace")
-                )
+                outer_name = _strip_whitespace(child.text.decode("utf-8", errors="replace"))
             elif ct == "type_arguments":
                 # H-4 rule 7: iterate arguments as nodes.
                 for arg in child.children:
@@ -485,9 +449,7 @@ def _canonical_type_from_node(node: Any) -> str:
                         # generic argument.
                         continue
                     # H-4 rule 6: recurse into each argument.
-                    inner_args.append(
-                        _canonical_type_from_node(arg)
-                    )
+                    inner_args.append(_canonical_type_from_node(arg))
         return f"{outer_name}<{', '.join(inner_args)}>"
 
     if nt == "dynamic_type":

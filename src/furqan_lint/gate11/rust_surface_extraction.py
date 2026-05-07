@@ -83,9 +83,7 @@ _KIND_MAP: dict[str, str] = {
 }
 
 # Name-node types in tree-sitter-rust grammar.
-_NAME_NODE_TYPES: frozenset[str] = frozenset(
-    {"identifier", "type_identifier"}
-)
+_NAME_NODE_TYPES: frozenset[str] = frozenset({"identifier", "type_identifier"})
 
 
 def extract_public_surface_rust(path: Path | str) -> list[dict[str, str]]:
@@ -107,8 +105,7 @@ def extract_public_surface_rust(path: Path | str) -> list[dict[str, str]]:
         import tree_sitter_rust  # noqa: F401
     except ImportError as e:
         raise RustGate11ExtrasNotInstalled(
-            "Rust Gate 11 support not installed. Run: "
-            "pip install furqan-lint[gate11-rust]"
+            "Rust Gate 11 support not installed. Run: " "pip install furqan-lint[gate11-rust]"
         ) from e
 
     from furqan_lint.gate11.rust_signature_canonicalization import (
@@ -130,9 +127,7 @@ def extract_public_surface_rust(path: Path | str) -> list[dict[str, str]]:
             continue
         kind = _KIND_MAP[child.type]
         for name in _extract_names(child, kind, source_bytes):
-            fingerprint = signature_fingerprint_rust(
-                child, name, kind, source_bytes
-            )
+            fingerprint = signature_fingerprint_rust(child, name, kind, source_bytes)
             entries.append(
                 {
                     "name": name,
@@ -155,9 +150,7 @@ def _has_unrestricted_pub(node: Any) -> bool:
     return False
 
 
-def _extract_names(
-    node: Any, kind: str, source_bytes: bytes
-) -> list[str]:
+def _extract_names(node: Any, kind: str, source_bytes: bytes) -> list[str]:
     """Return the declared name(s) for an item node.
 
     Most item kinds have a single name. ``use_declaration``
@@ -172,9 +165,7 @@ def _extract_names(
     return []
 
 
-def _extract_use_names(
-    node: Any, source_bytes: bytes
-) -> list[str]:
+def _extract_use_names(node: Any, source_bytes: bytes) -> list[str]:
     """Extract the names exposed by a ``pub use`` re-export.
 
     Glob re-exports (``pub use foo::*``) cannot be statically

@@ -40,11 +40,11 @@ _DEFAULT_TRUST_ROOT = {
 
 def build_manifest_rust(
     path: Path | str,
-    previous_manifest: "Manifest | None" = None,
+    previous_manifest: Manifest | None = None,
     *,
-    trust_root: dict | None = None,
+    trust_root: dict[str, str] | None = None,
     use_placeholder_checker_hash: bool = False,
-) -> "Manifest":
+) -> Manifest:
     """Build a CASM v1.0 manifest for a Rust source file.
 
     Args:
@@ -82,9 +82,7 @@ def build_manifest_rust(
     root_hash = module_root_hash(source_path)
 
     if use_placeholder_checker_hash:
-        checker_hash = compute_checker_set_hash_placeholder(
-            linter_version
-        )
+        checker_hash = compute_checker_set_hash_placeholder(linter_version)
     else:
         checker_hash = compute_checker_set_hash()
 
@@ -93,12 +91,8 @@ def build_manifest_rust(
         chain_position = 1
     else:
         prev_canonical = previous_manifest.to_canonical_bytes()
-        previous_manifest_hash = (
-            "sha256:" + hashlib.sha256(prev_canonical).hexdigest()
-        )
-        chain_position = (
-            int(previous_manifest.chain.get("chain_position", 0)) + 1
-        )
+        previous_manifest_hash = "sha256:" + hashlib.sha256(prev_canonical).hexdigest()
+        chain_position = int(previous_manifest.chain.get("chain_position", 0)) + 1
 
     issued_at = (
         datetime.datetime.now(datetime.timezone.utc)
@@ -117,9 +111,7 @@ def build_manifest_rust(
         "public_surface": {
             "names": public_names,
             "extraction_method": "tree-sitter.rust-public-surface@v1.0",
-            "extraction_substrate": (
-                f"furqan-lint v{linter_version}"
-            ),
+            "extraction_substrate": (f"furqan-lint v{linter_version}"),
         },
         "chain": {
             "previous_manifest_hash": previous_manifest_hash,

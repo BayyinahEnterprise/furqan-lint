@@ -5,6 +5,8 @@ Pins the documented limits (impl-block methods omitted,
 excluded) per amended_4 T02.
 """
 
+# ruff: noqa: E402, SIM115, RUF005
+
 from __future__ import annotations
 
 import tempfile
@@ -23,9 +25,7 @@ from furqan_lint.gate11.rust_surface_extraction import (
 
 
 def _write_rust(src: str) -> Path:
-    fh = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".rs", delete=False
-    )
+    fh = tempfile.NamedTemporaryFile(mode="w", suffix=".rs", delete=False)
     fh.write(src)
     fh.close()
     return Path(fh.name)
@@ -69,9 +69,7 @@ def test_pub_trait_extracted():
     in v0.8.2; G11.1 includes it because traits are part of the
     crate's externally-visible API surface).
     """
-    p = _write_rust(
-        "pub trait Shape { fn area(&self) -> f64; }"
-    )
+    p = _write_rust("pub trait Shape { fn area(&self) -> f64; }")
     try:
         entries = extract_public_surface_rust(p)
         assert len(entries) == 1

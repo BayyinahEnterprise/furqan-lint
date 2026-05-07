@@ -84,7 +84,18 @@ def main() -> int:
         # verification on bundles in the path. The flag is
         # parsed out before resolving the path argument.
         gate11_enabled = False
-        gate11_opts: dict[str, object] = {"trust_config_path": None, "force_refresh": False}
+        # Phase G11.1 audit C-1 + H-5 + H-6 corrective: include
+        # the new identity-policy and force-refresh keys so the
+        # dir-walker through cmd_check_gate11 can route them
+        # through verify_bundle.
+        gate11_opts: dict[str, object] = {
+            "trust_config_path": None,
+            "force_refresh": False,
+            "expected_identity": None,
+            "expected_issuer": None,
+            "allow_any_identity": False,
+            "use_placeholder_checker_hash": False,
+        }
         check_args: list[str] = []
         i = 1
         while i < len(args):
@@ -101,6 +112,30 @@ def main() -> int:
                     return 2
                 gate11_opts["trust_config_path"] = Path(args[i + 1])
                 i += 2
+            elif a == "--force-refresh":
+                gate11_opts["force_refresh"] = True
+                i += 1
+            elif a == "--expected-identity":
+                if i + 1 >= len(args):
+                    print(
+                        "--expected-identity requires a pattern argument",
+                        file=sys.stderr,
+                    )
+                    return 2
+                gate11_opts["expected_identity"] = args[i + 1]
+                i += 2
+            elif a == "--expected-issuer":
+                if i + 1 >= len(args):
+                    print(
+                        "--expected-issuer requires an issuer URL argument",
+                        file=sys.stderr,
+                    )
+                    return 2
+                gate11_opts["expected_issuer"] = args[i + 1]
+                i += 2
+            elif a == "--allow-any-identity":
+                gate11_opts["allow_any_identity"] = True
+                i += 1
             else:
                 check_args.append(a)
                 i += 1

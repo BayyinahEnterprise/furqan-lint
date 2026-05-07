@@ -7,6 +7,8 @@ The Phase G11.0 v0.10.0 ``sha256(linter_version)`` form is NOT
 permitted; the schema validator rejects it.
 """
 
+# ruff: noqa: E402, SIM115, RUF005
+
 from __future__ import annotations
 
 import tempfile
@@ -20,7 +22,6 @@ pytest.importorskip("rfc8785")
 
 from furqan_lint.gate11.checker_set_hash import (
     compute_checker_set_hash,
-    compute_checker_set_hash_placeholder,
 )
 from furqan_lint.gate11.manifest_schema import (
     CasmSchemaError,
@@ -30,9 +31,7 @@ from furqan_lint.gate11.rust_manifest import build_manifest_rust
 
 
 def _write_rust(src: str) -> Path:
-    fh = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".rs", delete=False
-    )
+    fh = tempfile.NamedTemporaryFile(mode="w", suffix=".rs", delete=False)
     fh.write(src)
     fh.close()
     return Path(fh.name)
@@ -44,9 +43,7 @@ def test_manifest_built_for_rust_source():
         m = build_manifest_rust(p)
         assert m.casm_version == "1.0"
         assert m.module_identity["language"] == "rust"
-        assert m.public_surface["extraction_method"] == (
-            "tree-sitter.rust-public-surface@v1.0"
-        )
+        assert m.public_surface["extraction_method"] == ("tree-sitter.rust-public-surface@v1.0")
         assert m.chain["previous_manifest_hash"] is None
         assert m.chain["chain_position"] == 1
     finally:
@@ -137,9 +134,7 @@ def test_h6_schema_rejects_bare_placeholder_form():
     test pins that the prefix is preserved through round-trip
     and that arbitrary non-prefixed strings are rejected.
     """
-    fh = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".rs", delete=False
-    )
+    fh = tempfile.NamedTemporaryFile(mode="w", suffix=".rs", delete=False)
     fh.write("pub fn f() {}")
     fh.close()
     rs_path = Path(fh.name)
@@ -147,7 +142,6 @@ def test_h6_schema_rejects_bare_placeholder_form():
         m = build_manifest_rust(rs_path)
         # Tamper with the manifest dict to inject a bad
         # checker_set_hash form.
-        import dataclasses
 
         tampered = Manifest(
             casm_version=m.casm_version,
@@ -186,9 +180,7 @@ def test_h6_hash_changes_when_pinned_source_changes():
     # at a temp file with custom contents.
     import tempfile
 
-    fh = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
-    )
+    fh = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False)
     fh.write("# synthetic checker source")
     fh.close()
     extra = Path(fh.name)
