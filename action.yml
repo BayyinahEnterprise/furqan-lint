@@ -14,6 +14,10 @@ inputs:
     description: "Python version to use"
     required: false
     default: "3.12"
+  gate11:
+    description: "Enable Sigstore-CASM Gate 11 verification on bundles in <path>"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -27,8 +31,17 @@ runs:
       shell: bash
       run: |
         pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
-        pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@${{ github.action_ref }}"
+        if [ "${{ inputs.gate11 }}" = "true" ]; then
+          pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@${{ github.action_ref }}#egg=furqan-lint[gate11]"
+        else
+          pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@${{ github.action_ref }}"
+        fi
 
     - name: Run furqan-lint
       shell: bash
-      run: furqan-lint check ${{ inputs.path }}
+      run: |
+        if [ "${{ inputs.gate11 }}" = "true" ]; then
+          furqan-lint check --gate11 ${{ inputs.path }}
+        else
+          furqan-lint check ${{ inputs.path }}
+        fi
