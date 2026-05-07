@@ -121,6 +121,34 @@ Gate 11, update the `_extract_public_names` /
 new public symbol; the canonical-fingerprint regression tests
 will fail otherwise.
 
+## Sigstore-CASM Gate 11 Rust extension testing
+
+Phase G11.1 (as-Saffat) Rust pipeline tests live under
+``tests/test_gate11_rust_*.py`` and require the
+``[gate11-rust]`` extra:
+
+```bash
+pip install -e ".[dev,gate11-rust,rust]"
+python -m pytest -q tests/test_gate11_rust_*.py
+```
+
+The audit-corrective tests (C-1 refuse-without-policy, H-4
+nested-generic recursion, H-5 trusted_root threading, H-6
+checker_set_hash forms, M-7 typed identity-extraction errors)
+do NOT require network or live OIDC; they exercise the
+synthesizable parts of the contract. The end-to-end
+sign-then-verify smoke test against ambient GitHub OIDC is
+gated behind ``FURQAN_LINT_GATE11_SMOKE_TEST=1`` and the new
+``gate11-rust-smoke-test`` CI job (push to main only).
+
+When adding new Rust public-surface kinds or extending the
+canonicalization rules, update the H-4 nested-generic pinning
+fixtures under
+``tests/fixtures/gate11_rust/nested_generic_pinning/`` in
+lockstep so the substrate-side defense against the
+v0.10.0 Python tuple-stringification failure mode stays
+exercised.
+
 ## The four-place pattern for documented limits
 
 Every documented limit in the Rust or Go adapter lives in four

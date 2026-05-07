@@ -19,6 +19,55 @@ introduced this convention.
 
 ---
 
+## [0.11.0] - 2026-05-07
+
+Phase G11.1 (as-Saffat) ships Sigstore-CASM Gate 11 v1.0 for
+Rust source files. New optional ``[gate11-rust]`` extra brings
+in ``sigstore`` plus ``rfc8785`` plus ``tree-sitter-rust``;
+``furqan-lint manifest <action>`` and ``check --gate11`` now
+dispatch on file extension (.py vs .rs). The CASM v1.0 schema
+is extended to accept ``language: "rust"`` and Rust kinds
+(struct, enum, trait, type_alias, alias).
+
+This release also closes Round-N+1 audit findings against the
+Phase G11.0 v0.10.0 ship (CRITICAL C-1 identity policy gap;
+HIGH H-4 nested-generic stringification; HIGH H-5 trusted_root
+threading; HIGH H-6 checker_set_hash placeholder dressed as
+commitment; MEDIUM M-6 README claim without substrate; MEDIUM
+M-7 string sentinels for identity extraction). Corrections are
+applied prospectively to the Rust pipeline AND backported to
+the Python pipeline so the Python verifier is no longer
+shipping the audit gaps.
+
+(populate during release commit)
+
+### Tests
+
+Test count: 511 (v0.10.0 ship state) -> 561
+(v0.11.0). Net delta: +50 (49 new Rust Gate 11 tests
+across test_gate11_rust_*.py modules; minor updates to
+two existing G11.0 tests so the language whitelist and
+kind whitelist accept Rust kinds).
+
+### Rust Sigstore-CASM documented limits (Phase G11.1 T08)
+
+Each fixture below pins a current furqan-lint Rust adapter
+behaviour as a v1.0 documented limit in the Sigstore-CASM
+substrate; improvement is a v1.5 horizon item.
+
+- ``lifetime_stripped_from_signature``: lifetimes are stripped
+  during canonicalization.
+- ``impl_methods_omitted_from_surface``: impl-block methods are
+  not in the v1.0 public-surface fingerprint.
+- ``trait_object_literal_text``: ``Box<dyn Trait>`` is signed
+  as literal text.
+- ``macro_call_signed_pre_expansion``: macros are signed at the
+  source level, not after expansion.
+- ``pub_crate_excluded``: ``pub(crate)`` and ``pub(super)`` items
+  are not part of the external API surface.
+
+---
+
 ## [0.10.0] - 2026-05-07
 
 Phase G11.A (al-Fatiha) ships `SAFETY_INVARIANTS.md` at the

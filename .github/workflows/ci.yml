@@ -27,7 +27,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
-          pip install -e ".[dev,onnx,gate11]"
+          pip install -e ".[dev,onnx,gate11,gate11-rust]"
 
       - name: Ruff lint
         run: ruff check .
@@ -207,7 +207,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
-          pip install -e ".[dev,onnx,onnx-runtime,onnx-profile,gate11]"
+          pip install -e ".[dev,onnx,onnx-runtime,onnx-profile,gate11,gate11-rust]"
 
       - name: Run tests
         run: python -m pytest -q
@@ -260,4 +260,64 @@ jobs:
                              capture_output=True, text=True, check=True)
           assert 'manifest' in r.stdout, r.stdout
           print('CLI help includes manifest subcommand')
+          "
+
+  gate11-rust-smoke-test:
+    # Phase G11.1 / T06: end-to-end Sigstore sign + verify smoke
+    # test for the Rust pipeline. Same gating as
+    # gate11-smoke-test (push to main only; id-token: write).
+    # The Rust pipeline reuses sigstore-python (no FFI to
+    # sigstore-rs in v1; v1.5 horizon item per Yusuf Horizon
+    # discipline), so the install matrix is the existing
+    # [gate11-rust] extra plus the [rust] extra for the legacy
+    # tree-sitter-rust adapter.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
+          pip install -e ".[dev,gate11-rust,rust]"
+
+      - name: Sign and verify a fixture .rs module via ambient OIDC
+        env:
+          FURQAN_LINT_GATE11_SMOKE_TEST: "1"
+        run: |
+          # Build a minimal .rs fixture, sign it via the manifest
+          # init pipeline, then verify the resulting bundle.
+          # Identity policy is asserted via --expected-identity
+          # against the GitHub Actions OIDC SAN pattern.
+          python -c "
+          import os, subprocess, sys, tempfile, re
+          from pathlib import Path
+          tmp = Path(tempfile.mkdtemp())
+          rs = tmp / 'lib.rs'
+          rs.write_text('pub fn smoke(a: i32, b: i32) -> i32 { a + b }')
+          # Sign:
+          subprocess.run([sys.executable, '-m', 'furqan_lint.cli',
+                          'manifest', 'init', str(rs)], check=True)
+          bundle = rs.parent / (rs.name + '.furqan.manifest.sigstore')
+          assert bundle.exists(), 'bundle not written'
+          # Verify with the GitHub Actions OIDC SAN pattern:
+          repo = os.environ['GITHUB_REPOSITORY']
+          ref = os.environ['GITHUB_REF']
+          pattern = f'https://github.com/{repo}/.github/workflows/.*@{ref}'
+          subprocess.run([sys.executable, '-m', 'furqan_lint.cli',
+                          'manifest', 'verify', str(bundle),
+                          '--expected-identity', pattern,
+                          '--expected-issuer',
+                          'https://token.actions.githubusercontent.com'],
+                         check=True)
+          print('Rust manifest signed + verified end to end via ambient OIDC')
           "

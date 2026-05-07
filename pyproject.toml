@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "furqan-lint"
-version = "0.10.0"
+version = "0.11.0"
 description = "Structural-honesty checks for Python, powered by Furqan"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -93,6 +93,19 @@ onnx-profile = [
 gate11 = [
     "sigstore>=3.0.0,<4",
     "rfc8785>=0.1.4,<0.2",
+]
+# Optional Sigstore-CASM Gate 11 Rust extension (v0.11.0 Phase
+# G11.1, as-Saffat). Extends Gate 11 to .rs source files.
+# Reuses sigstore-python (no FFI to sigstore-rs in v1; deferred
+# to v1.5 per Yusuf Horizon discipline). Includes the [gate11]
+# Sigstore substrate plus the existing [rust] tree-sitter-rust
+# adapter so a single `pip install furqan-lint[gate11-rust]` is
+# sufficient for Rust manifest signing + verification.
+gate11-rust = [
+    "sigstore>=3.0.0,<4",
+    "rfc8785>=0.1.4,<0.2",
+    "tree-sitter>=0.23,<1",
+    "tree-sitter-rust>=0.23,<1",
 ]
 
 [project.scripts]

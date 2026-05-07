@@ -62,7 +62,22 @@ class CasmSchemaError(ValueError):
         super().__init__(f"{code}: {message}")
 
 
-_VALID_KINDS = frozenset({"function", "class", "constant"})
+# Phase G11.1 (as-Saffat) extends the kind whitelist with Rust
+# kinds. Python kinds remain unchanged: function / class / constant.
+# Rust adds: struct, enum, trait, type_alias, alias.
+# Go (Phase G11.2) and ONNX (Phase G11.3) will extend further.
+_VALID_KINDS = frozenset(
+    {
+        "function",
+        "class",
+        "constant",
+        "struct",
+        "enum",
+        "trait",
+        "type_alias",
+        "alias",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -165,11 +180,15 @@ class Manifest:
                     f"module_identity missing field {k!r}",
                 )
         language = module_identity["language"]
-        if language != "python":
+        # Phase G11.1 (as-Saffat) extends accepted languages
+        # to include "rust"; Phase G11.2 will add "go"; Phase
+        # G11.3 (salim-onnx) will add "onnx".
+        if language not in ("python", "rust"):
             raise CasmSchemaError(
                 "CASM-V-001",
-                f"v1.0 supports only language='python'; got {language!r}. "
-                f"Rust ships in Phase G11.1; Go in G11.2; ONNX via salim-onnx.",
+                f"v1.0 supports only language in (python, rust); "
+                f"got {language!r}. Go ships in Phase G11.2; "
+                f"ONNX via Phase G11.3 (salim-onnx).",
             )
         module_root_hash = module_identity["module_root_hash"]
         if not isinstance(module_root_hash, str) or not module_root_hash.startswith("sha256:"):
@@ -228,6 +247,27 @@ class Manifest:
                     "CASM-V-001",
                     f"linter_substrate_attestation missing field {k!r}",
                 )
+        # Phase G11.1 audit H-6 propagation defense:
+        # checker_set_hash MUST be either "sha256:<hex64>"
+        # (Form A, substantive hash over actual checker source)
+        # OR "placeholder:sha256:<hex64>" (Form B, explicit
+        # placeholder for v0.11.x patch releases pending the
+        # Phase G11.0.1 corrective release that closes the H-6
+        # finding in the Python verifier). Bare-string
+        # placeholders dressed as real hashes (the v0.10.0
+        # ship's failure mode) are NOT accepted.
+        csh = attest["checker_set_hash"]
+        if not isinstance(csh, str) or not (
+            csh.startswith("sha256:") or csh.startswith("placeholder:sha256:")
+        ):
+            raise CasmSchemaError(
+                "CASM-V-001",
+                "linter_substrate_attestation.checker_set_hash must "
+                "be 'sha256:<hex64>' (Form A, substantive) or "
+                "'placeholder:sha256:<hex64>' (Form B, explicit "
+                "placeholder); got "
+                f"{csh!r}",
+            )
         trust_root = data["trust_root"]
         if not isinstance(trust_root, dict):
             raise CasmSchemaError("CASM-V-001", "trust_root must be a dict")

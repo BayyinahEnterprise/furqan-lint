@@ -32,6 +32,9 @@ from pathlib import Path
 
 from furqan_lint.gate11 import CASM_VERSION, GATE11_BUNDLE_SUFFIX
 from furqan_lint.gate11.bundle import Bundle, BundleParseError
+from furqan_lint.gate11.checker_set_hash import (
+    compute_checker_set_hash as _compute_checker_set_hash,
+)
 from furqan_lint.gate11.manifest_schema import CasmSchemaError, Manifest
 from furqan_lint.gate11.module_canonicalization import (
     ModuleCanonicalizationError,
@@ -52,9 +55,16 @@ from furqan_lint.gate11.verification import (
 def _bundle_path_for(module_path: Path) -> Path:
     """Return the canonical bundle path for ``module_path``.
 
-    For ``foo/bar.py`` the bundle is ``foo/bar.furqan.manifest.sigstore``.
+    Phase G11.1 amended_4 T05.1: bundle naming preserves the
+    full module filename (including its language extension) plus
+    the ``.furqan.manifest.sigstore`` suffix so that
+    ``foo.py`` -> ``foo.py.furqan.manifest.sigstore`` and
+    ``foo.rs`` -> ``foo.rs.furqan.manifest.sigstore``. The
+    extension is preserved in the bundle name so the verifier
+    can route on the .py / .rs / .go / .onnx hint when the
+    user invokes ``furqan-lint manifest verify <bundle>``.
     """
-    return module_path.with_suffix(GATE11_BUNDLE_SUFFIX)
+    return module_path.parent / (module_path.name + GATE11_BUNDLE_SUFFIX)
 
 
 def _build_manifest_dict(
@@ -89,14 +99,15 @@ def _build_manifest_dict(
         "linter_substrate_attestation": {
             "linter_name": "furqan-lint",
             "linter_version": linter_version,
-            # NOTE: a real ``checker_set_hash`` derives from the
-            # registered checker set's source. T13 / Shape A
-            # scope statement names this; v1.0 emits a
-            # placeholder hash of the linter version string. The
-            # F4 disclosure in README explains the limit.
-            "checker_set_hash": (
-                "sha256:" + hashlib.sha256(linter_version.encode("utf-8")).hexdigest()
-            ),
+            # Phase G11.1 audit H-6 propagation defense: the
+            # substantive ``checker_set_hash`` is computed over
+            # the pinned checker source files via
+            # :func:`furqan_lint.gate11.checker_set_hash.compute_checker_set_hash`.
+            # The Phase G11.0 v0.10.0 ship used
+            # ``sha256(linter_version)`` (a placeholder dressed
+            # as a commitment); v0.11.0 corrects this for both
+            # Python and Rust pipelines.
+            "checker_set_hash": _compute_checker_set_hash(),
         },
         "trust_root": {
             "trust_root_id": trust_config.trust_root_id,
@@ -119,7 +130,14 @@ def _parse_options(args: list[str]) -> tuple[list[str], dict[str, object]]:
     ``trust_config_path`` (Path or None).
     """
     positional: list[str] = []
-    opts: dict[str, object] = {"trust_config_path": None, "force_refresh": False}
+    opts: dict[str, object] = {
+        "trust_config_path": None,
+        "force_refresh": False,
+        "expected_identity": None,
+        "expected_issuer": None,
+        "allow_any_identity": False,
+        "use_placeholder_checker_hash": False,
+    }
     i = 0
     while i < len(args):
         a = args[i]
@@ -131,6 +149,35 @@ def _parse_options(args: list[str]) -> tuple[list[str], dict[str, object]]:
             i += 2
         elif a == "--force-refresh":
             opts["force_refresh"] = True
+            i += 1
+        elif a == "--expected-identity":
+            # Phase G11.1 audit C-1 corrective: identity policy.
+            if i + 1 >= len(args):
+                print(
+                    "--expected-identity requires a pattern argument",
+                    file=sys.stderr,
+                )
+                raise SystemExit(2)
+            opts["expected_identity"] = args[i + 1]
+            i += 2
+        elif a == "--expected-issuer":
+            if i + 1 >= len(args):
+                print(
+                    "--expected-issuer requires an issuer URL argument",
+                    file=sys.stderr,
+                )
+                raise SystemExit(2)
+            opts["expected_issuer"] = args[i + 1]
+            i += 2
+        elif a == "--allow-any-identity":
+            # Explicit opt-in to UnsafeNoOp(); presence in CI logs
+            # is itself an audit signal (Sulayman-Naml ADVISORY).
+            opts["allow_any_identity"] = True
+            i += 1
+        elif a == "--placeholder-checker-hash":
+            # Phase G11.1 audit H-6 Form B: opt into placeholder
+            # prefix for v0.11.x patch releases.
+            opts["use_placeholder_checker_hash"] = True
             i += 1
         else:
             positional.append(a)
@@ -175,22 +222,45 @@ def cmd_manifest_init(args: list[str]) -> int:
 
     from furqan_lint import __version__
 
+    # Phase G11.1 dispatch: .rs goes to the Rust manifest builder;
+    # .py keeps the existing Python pipeline.
     try:
-        manifest_dict = _build_manifest_dict(
-            module_path,
-            chain_position=1,
-            previous_manifest_hash=None,
-            trust_config=trust_config,
-            linter_version=__version__,
-        )
+        if module_path.suffix == ".rs":
+            from furqan_lint.gate11.rust_manifest import (
+                build_manifest_rust,
+            )
+            from furqan_lint.gate11.rust_surface_extraction import (
+                DynamicRustSurfaceError,
+            )
+
+            try:
+                manifest = build_manifest_rust(
+                    module_path,
+                    trust_root={
+                        "trust_root_id": trust_config.trust_root_id,
+                        "fulcio_url": trust_config.fulcio_url,
+                        "rekor_url": trust_config.rekor_url,
+                    },
+                    use_placeholder_checker_hash=bool(opts["use_placeholder_checker_hash"]),
+                )
+            except DynamicRustSurfaceError as e:
+                print(f"INDETERMINATE: {e}", file=sys.stderr)
+                return 2
+        else:
+            manifest_dict = _build_manifest_dict(
+                module_path,
+                chain_position=1,
+                previous_manifest_hash=None,
+                trust_config=trust_config,
+                linter_version=__version__,
+            )
+            manifest = Manifest.from_dict(manifest_dict)
     except DynamicAllError as e:
         print(f"INDETERMINATE: {e}", file=sys.stderr)
         return 2
     except (ModuleCanonicalizationError, CasmSchemaError) as e:
         print(f"{e.code}: {e}", file=sys.stderr)
         return 1
-
-    manifest = Manifest.from_dict(manifest_dict)
 
     try:
         from furqan_lint.gate11.signing import sign_manifest
@@ -234,8 +304,11 @@ def cmd_manifest_verify(args: list[str]) -> int:
     # Module path: resolved by stripping the GATE11_BUNDLE_SUFFIX
     # and trying both .py and the parent directory.
     if bundle_path.name.endswith(GATE11_BUNDLE_SUFFIX):
-        module_stem = bundle_path.name[: -len(GATE11_BUNDLE_SUFFIX)]
-        module_path = bundle_path.parent / f"{module_stem}.py"
+        # Phase G11.1: bundle name is "<module_filename>.furqan.manifest.sigstore"
+        # so stripping the suffix yields the original module
+        # filename (extension included).
+        module_filename = bundle_path.name[: -len(GATE11_BUNDLE_SUFFIX)]
+        module_path = bundle_path.parent / module_filename
     else:
         print(
             f"bundle filename does not end with {GATE11_BUNDLE_SUFFIX!r}",
@@ -263,6 +336,9 @@ def cmd_manifest_verify(args: list[str]) -> int:
             bundle_path,
             module_path,
             force_refresh=bool(opts["force_refresh"]),
+            expected_identity=opts["expected_identity"],  # type: ignore[arg-type]
+            expected_issuer=opts["expected_issuer"],  # type: ignore[arg-type]
+            allow_any_identity=bool(opts["allow_any_identity"]),
         )
     except CasmIndeterminateError as e:
         print(f"INDETERMINATE: {e}", file=sys.stderr)
@@ -397,7 +473,13 @@ def cmd_check_gate11(directory: Path, opts: dict[str, object]) -> int:
             print(f"GATE11-SKIP  {bp}  module not found", file=sys.stderr)
             continue
         try:
-            result = verifier.verify_bundle(bp, module_path)
+            result = verifier.verify_bundle(
+                bp,
+                module_path,
+                expected_identity=opts["expected_identity"],  # type: ignore[arg-type]
+                expected_issuer=opts["expected_issuer"],  # type: ignore[arg-type]
+                allow_any_identity=bool(opts["allow_any_identity"]),
+            )
         except CasmIndeterminateError as e:
             print(f"INDETERMINATE  {bp}  {e}", file=sys.stderr)
             overall = max(overall, 2)
