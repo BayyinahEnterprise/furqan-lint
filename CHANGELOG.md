@@ -19,7 +19,7 @@ introduced this convention.
 
 ---
 
-## [0.10.0] - <DATE>
+## [0.10.0] - 2026-05-07
 
 Phase G11.A (al-Fatiha) ships `SAFETY_INVARIANTS.md` at the
 repository root as the foundational invariants document for
@@ -58,6 +58,63 @@ in-flight Phase G11.x implementation cycle.
   semantic freshness remains a review responsibility per the
   T-A4 honesty note in `SAFETY_INVARIANTS.md` and the audit F3
   finding.
+- ``[gate11]`` optional extra (``sigstore>=3.0.0,<4`` and
+  ``rfc8785>=0.1.4,<0.2``). Independent of ``[onnx]`` /
+  ``[onnx-runtime]`` / ``[onnx-profile]``; adds no inference
+  dependencies.
+- New ``furqan_lint.gate11`` package: ``manifest_schema``
+  (frozen ``Manifest`` + ``PublicName`` dataclasses, RFC 8785
+  canonical serialization), ``module_canonicalization``
+  (BOM-strip + UTF-8 decode + LF-normalize + SHA-256),
+  ``signature_canonicalization`` (canonical type-string
+  collapse for ``Optional[X]`` / ``Union[X, None]`` / ``X | None``
+  to alphabetized ``X | None``), ``surface_extraction``
+  (reuses ``furqan_lint.additive._extract_public_names``),
+  ``signing`` (Sigstore production / staging / GitHub-OIDC),
+  ``bundle`` (``<module>.furqan.manifest.sigstore`` wire
+  format), ``verification`` (9-step CASM-V flow), ``cli``
+  (manifest subcommand dispatch).
+- ``furqan-lint manifest init / verify / update <module.py>``
+  CLI subcommand.
+- ``furqan-lint check --gate11 <path>`` flag that runs the
+  normal check pipeline plus CASM-V verification on any
+  sibling ``.furqan.manifest.sigstore`` bundle.
+- ``CASM-V-NNN`` error namespace covering parse (010), version
+  / language (001..002), TUF (020 / 021), Sigstore (030..034),
+  module-hash (040), additive-only contract (050 / 051),
+  chain (060 / 061).
+- ``CASM-V-INDETERMINATE`` result on dynamic ``__all__``
+  modules (rather than a false pass).
+- ``scripts/regenerate_check_table.py`` plus pre-commit hook
+  plus ``tests/test_regenerate_check_table.py`` close
+  finding F1 (README structural-checks block now auto-derived
+  between sentinel comments).
+- ``.github/workflows/ci.yml`` ``gate11-smoke-test`` job
+  (push-to-main only; ``id-token: write``;
+  ``FURQAN_LINT_GATE11_SMOKE_TEST=1``).
+- ``action.yml`` composite-action ``gate11`` input (default
+  ``false``).
+- README ``Sigstore-CASM Gate 11 (opt-in)`` section,
+  ``Closed in v0.10.0`` block, the four Newman 2022 disclosures
+  (N1 short-window OIDC compromise, N2 typosquatting, N3 Rekor
+  privacy, N4 retention horizon), the SCITT vocabulary
+  citation, and Shape A scope statements F4 (recursive linter
+  trust) and F7 (Rekor public-surface leakage).
+- ``SECURITY.md`` Gate 11 disclosures section; supported-versions
+  table refreshed (0.10.x supported, 0.8.x EOL).
+- ``CONTRIBUTING.md`` Gate 11 testing section.
+
+### Changed
+
+- The CLI dispatcher now recognises ``args[0] == "manifest"``
+  and routes to ``furqan_lint.gate11.cli.dispatch_manifest``;
+  the ``check`` subcommand parses out an optional ``--gate11``
+  flag before invoking the existing primary-check pipeline.
+
+### Fixed
+
+- F1 (README count drift): closed structurally via the
+  pre-commit / CI ``regenerate_check_table.py --check`` gate.
 
 ### References
 
@@ -90,11 +147,9 @@ independent replication.
 
 ### Tests
 
-Test count: 441 (v0.9.4 ship state) -> <TBD>
-(v0.10.0 final, after Phase G11.0 substrate lands). Net delta:
-<TBD>. Phase G11.A itself adds zero source-tree tests; the
-SAFETY_INVARIANTS.md content is verified by the pre-commit
-hook plus reviewer attention rather than by pytest fixtures.
+Test count: 441 (v0.9.4 ship state) -> 511 (v0.10.0).
+Net delta: +70 (67 across the eight ``test_gate11_*.py``
+modules; 3 in ``test_regenerate_check_table.py``).
 
 ---
 
