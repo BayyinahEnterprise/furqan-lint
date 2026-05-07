@@ -77,6 +77,20 @@ CI runs the same gates across a 14-job matrix
 (test-python-only / test-rust / test-go / test-full across
 Python 3.10-3.13 plus a single full-extras job).
 
+## Sigstore-CASM Gate 11 -- normative invariants
+
+Before submitting a patch that touches `src/furqan_lint/gate11/`
+or any Phase G11.x test fixtures, contributors MUST read
+`SAFETY_INVARIANTS.md` at the repository root. That file is
+normative: every Phase G11.x implementation must satisfy every
+invariant declared there. A pre-commit hook verifies that
+`SAFETY_INVARIANTS.md` is present in the repository when a
+commit touches Gate 11 substrate; the hook guards presence
+only, not semantic freshness, so reviewers carry the
+responsibility of verifying that proposed Gate 11 changes do
+not contradict the invariants in the absence of a paired
+amendment to `SAFETY_INVARIANTS.md`.
+
 ## The four-place pattern for documented limits
 
 Every documented limit in the Rust or Go adapter lives in four

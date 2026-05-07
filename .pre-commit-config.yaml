@@ -40,13 +40,32 @@ repos:
         additional_dependencies:
           - "furqan @ git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
 
+  # Phase G11.A: SAFETY_INVARIANTS.md presence guard.
+  #
+  # Honesty note (per audit F3 in
+  # SAFETY_INVARIANTS.md): this hook guards only the PRESENCE of
+  # SAFETY_INVARIANTS.md when a commit touches Gate 11 substrate;
+  # it does NOT verify that the file's content stays semantically
+  # in sync with the substrate. Content drift remains a review
+  # responsibility until a v1.5 invariant-diff hook lands. The
+  # presence-only check is the v1 baseline.
+  - repo: local
+    hooks:
+      - id: safety-invariants-present
+        name: SAFETY_INVARIANTS.md present when Gate 11 substrate changes
+        entry: >-
+          bash -c 'test -f SAFETY_INVARIANTS.md || { echo "ERROR SAFETY_INVARIANTS.md is missing. Phase G11.x changes require this normative document at the repository root. See https://github.com/BayyinahEnterprise/furqan-lint for context."; exit 1; }'
+        language: system
+        files: ^(src/furqan_lint/gate11/|tests/test_gate11_|tests/fixtures/gate11/)
+        pass_filenames: false
+
   # Em-dash guard: mirrors the CI step so the violation is caught
   # locally before push. Same rule, two layers.
   - repo: local
     hooks:
       - id: no-em-dashes
         name: no em-dashes in src/, tests/, README.md
-        entry: bash -c 'LC_ALL=C.UTF-8 grep -rPn "[\x{2013}\x{2014}]" src/ tests/ README.md && exit 1 || exit 0'
+        entry: bash -c 'LC_ALL=C.UTF-8 grep -rPn "[\x{2013}\x{2014}]" src/ tests/ README.md SAFETY_INVARIANTS.md && exit 1 || exit 0'
         language: system
         pass_filenames: false
 

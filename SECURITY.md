@@ -56,3 +56,19 @@ Coordinated disclosure preferred. We will:
 If a fix is not feasible within the agreed window, we will
 discuss alternatives (workaround documentation, version
 deprecation) before any public disclosure.
+
+
+## Sigstore-CASM Gate 11 -- cryptographic substrate identity
+
+The cryptographic substrate identity of the Sigstore-CASM Gate
+11 family of phases (G11.0 through G11.12) is normatively
+specified in `SAFETY_INVARIANTS.md` at the repository root.
+Reporters of vulnerabilities affecting the Gate 11 substrate
+should reference the relevant invariant section (1 through 7)
+or disclosure (1 through 4) plus the corresponding `CASM-V-NNN`
+error code where applicable.
+
+Vulnerabilities in the upstream Sigstore stack (sigstore-python,
+sigstore-rs, sigstore-go, Fulcio, Rekor, TUF) should be
+reported to the Sigstore project via its own coordinated
+disclosure channel; see https://github.com/sigstore/sigstore/security.
