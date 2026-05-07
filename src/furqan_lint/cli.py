@@ -79,19 +79,62 @@ def main() -> int:
         print(f"furqan-lint {__version__}")
         return 0
 
-    if args[0] == "check" and len(args) >= 2:
-        target = Path(args[1])
-        if target.is_file():
-            return _check_file(target)
-        if target.is_dir():
-            return _check_directory(target)
-        print(f"Not found: {target}", file=sys.stderr)
-        return 1
+    if args[0] == "check":
+        # Phase G11.0 / T09: --gate11 flag enables CASM Gate 11
+        # verification on bundles in the path. The flag is
+        # parsed out before resolving the path argument.
+        gate11_enabled = False
+        gate11_opts: dict[str, object] = {"trust_config_path": None, "force_refresh": False}
+        check_args: list[str] = []
+        i = 1
+        while i < len(args):
+            a = args[i]
+            if a == "--gate11":
+                gate11_enabled = True
+                i += 1
+            elif a == "--trust-config":
+                if i + 1 >= len(args):
+                    print(
+                        "--trust-config requires a path argument",
+                        file=sys.stderr,
+                    )
+                    return 2
+                gate11_opts["trust_config_path"] = Path(args[i + 1])
+                i += 2
+            else:
+                check_args.append(a)
+                i += 1
+        if not check_args:
+            _print_usage(file=sys.stderr)
+            return 1
+        target = Path(check_args[0])
+        if not target.exists():
+            print(f"Not found: {target}", file=sys.stderr)
+            return 1
+        primary_exit = _check_file(target) if target.is_file() else _check_directory(target)
+        if not gate11_enabled:
+            return primary_exit
+        # When --gate11 is set, also run gate11 verification on
+        # any bundles in the directory tree. Use max(exit) so a
+        # gate11 failure escalates the overall exit code.
+        from furqan_lint.gate11.cli import cmd_check_gate11
+
+        directory = target if target.is_dir() else target.parent
+        gate11_exit = cmd_check_gate11(directory, gate11_opts)
+        return max(primary_exit, gate11_exit)
 
     if args[0] == "diff" and len(args) >= 3:
         old_path = Path(args[1])
         new_path = Path(args[2])
         return _check_additive(old_path, new_path)
+
+    if args[0] == "manifest":
+        # Phase G11.0 / T09: Sigstore-CASM Gate 11 manifest
+        # subcommand. Dispatched into furqan_lint.gate11.cli so
+        # the [gate11] extra deps stay lazy on import.
+        from furqan_lint.gate11.cli import dispatch_manifest
+
+        return dispatch_manifest(args[1:])
 
     print(f"Unknown command: {args[0]}", file=sys.stderr)
     _print_usage(file=sys.stderr)
@@ -105,7 +148,14 @@ def _print_usage(file: TextIO | None = None) -> None:
     print("Usage:", file=out)
     print("  furqan-lint check <file.py>", file=out)
     print("  furqan-lint check <directory/>", file=out)
+    print("  furqan-lint check --gate11 <path>", file=out)
     print("  furqan-lint diff <old.py> <new.py>", file=out)
+    print("  furqan-lint manifest init <module.py> [--trust-config PATH]", file=out)
+    print(
+        "  furqan-lint manifest verify <bundle.sigstore> [--trust-config PATH] [--force-refresh]",
+        file=out,
+    )
+    print("  furqan-lint manifest update <module.py> [--trust-config PATH]", file=out)
     print("  furqan-lint version", file=out)
 
 
