@@ -104,8 +104,8 @@ gate11 = [
 gate11-rust = [
     "sigstore>=3.0.0,<4",
     "rfc8785>=0.1.4,<0.2",
-    "tree-sitter>=0.21,<0.25",
-    "tree-sitter-rust>=0.21,<0.25",
+    "tree-sitter>=0.23,<1",
+    "tree-sitter-rust>=0.23,<1",
 ]
 
 [project.scripts]
