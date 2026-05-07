@@ -27,7 +27,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
-          pip install -e ".[dev,onnx]"
+          pip install -e ".[dev,onnx,gate11]"
 
       - name: Ruff lint
         run: ruff check .
@@ -207,7 +207,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1"
-          pip install -e ".[dev,onnx,onnx-runtime,onnx-profile]"
+          pip install -e ".[dev,onnx,onnx-runtime,onnx-profile,gate11]"
 
       - name: Run tests
         run: python -m pytest -q
