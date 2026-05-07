@@ -79,7 +79,17 @@ jobs:
     environment: pypi
     permissions:
       id-token: write
+      contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -88,3 +98,51 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Verify PyPI publication
+        # Phase G10.5 (al-Mubin) T01: closes F7 by verifying that
+        # the just-published version is reachable through PyPI's
+        # index. Twelve polls at ten-second intervals (120s total)
+        # per the S5 calibration. PyPI CDN propagation is typically
+        # 1-15 seconds; tail observations of 90-180 seconds exist;
+        # the 60-second window we considered earlier risks false-
+        # failure on a successful publish.
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "Verifying furqan-lint==${VERSION} is installable from PyPI..."
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if pip index versions furqan-lint 2>/dev/null | grep -q "Available versions:.*${VERSION}"; then
+              echo "furqan-lint ${VERSION} is now installable."
+              exit 0
+            fi
+            echo "Attempt ${i}/12: not yet visible, sleeping 10s..."
+            sleep 10
+          done
+          echo "ERROR: furqan-lint ${VERSION} did not become visible on PyPI within 120 seconds."
+          exit 1
+
+      - name: Create GitHub Release
+        # Phase G10.5 (al-Mubin) T02: closes F8 going forward by
+        # automatically creating a Release object with notes
+        # extracted from CHANGELOG.md whenever a v* tag is pushed.
+        # Notes are extracted by scripts/extract_changelog_section.py
+        # which slices between the version's ## [X.Y.Z] header and
+        # the next ## [ header. --verify-tag asserts the tag exists
+        # at the workflow's GITHUB_SHA, defending against re-runs
+        # that point at a different SHA.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          NOTES_FILE="$(mktemp)"
+          python scripts/extract_changelog_section.py "${VERSION}" > "${NOTES_FILE}"
+          if [ ! -s "${NOTES_FILE}" ]; then
+            echo "ERROR: No CHANGELOG section found for v${VERSION}."
+            exit 1
+          fi
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file "${NOTES_FILE}" \
+            --verify-tag
