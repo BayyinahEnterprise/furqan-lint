@@ -4,13 +4,16 @@
 
 | Version | Status                |
 |---------|-----------------------|
-| 0.8.x   | Supported             |
+| 0.10.x  | Supported             |
+| 0.9.x   | Supported             |
+| 0.8.x   | End-of-life           |
 | 0.7.x   | End-of-life           |
 | <= 0.6  | End-of-life           |
 
-Only the latest 0.8.x release receives security fixes. Earlier
-0.7.x releases are end-of-life and will not be patched; upgrade
-to the latest 0.8.x release to receive security updates.
+Only the latest 0.9.x and 0.10.x releases receive security
+fixes. Earlier 0.7.x and 0.8.x releases are end-of-life and
+will not be patched; upgrade to the latest 0.10.x release to
+receive security updates.
 
 ## Reporting a vulnerability
 
@@ -72,3 +75,48 @@ Vulnerabilities in the upstream Sigstore stack (sigstore-python,
 sigstore-rs, sigstore-go, Fulcio, Rekor, TUF) should be
 reported to the Sigstore project via its own coordinated
 disclosure channel; see https://github.com/sigstore/sigstore/security.
+
+## Sigstore-CASM Gate 11 disclosures
+
+Gate 11 ships as the opt-in `[gate11]` extra (v0.10.0+) and
+inherits the Sigstore threat model documented in Newman et al.,
+*Sigstore: Software Signing for Everybody* (ACM CCS 2022). Four
+residual disclosures apply to any consumer running
+`furqan-lint manifest verify` or `furqan-lint check --gate11`:
+
+1. **Short-window OIDC-identity compromise.** A compromised
+   OIDC token within the Fulcio certificate validity window
+   (typically 10 minutes) can produce a CASM bundle that
+   verifies cleanly. Mitigation lives in the identity provider,
+   not in the lint.
+2. **Typosquatting at the publish boundary.** Sigstore proves
+   "identity X signed bytes Y at time T", not "identity X is
+   the legitimate maintainer". Relying Parties must pin both
+   the package name and the expected signing identity.
+3. **Rekor entry queryability and privacy.** The public Rekor
+   log publishes manifest hashes and public-surface name lists
+   unencrypted. Confidential codebases should sign to the
+   staging instance or a private transparency service rather
+   than the public Rekor.
+4. **Log-retention horizon.** Rekor retention is operational,
+   not contractual. Long-horizon verification may need local
+   mirroring of relevant entries.
+
+Two Shape A scope statements are open against v0.10.0:
+
+- **F4. Linter-substrate trust is recursive.** The
+  `tooling.checker_set_hash` field records the checker code's
+  integrity but does not prove the checker code itself is
+  honest. Closing the recursion (signing furqan-lint releases
+  with Gate 11) is a later round.
+- **F7. Rekor entries leak public-surface shape.** Confidential
+  codebases MUST NOT sign their CASM bundles to the public
+  Rekor instance. Private-transparency-service routing is a
+  later round.
+
+Vulnerabilities in the Gate 11 verification flow itself
+(misverification, signature bypass, namespace confusion) should
+be reported through the same channel as other security reports.
+Issues in upstream Sigstore (sigstore-python, Fulcio, Rekor)
+should be reported to the Sigstore project; see
+https://github.com/sigstore/sigstore-python#security.
