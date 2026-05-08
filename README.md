@@ -41,10 +41,10 @@ pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile,gate11]"  # all adapt
 ### Install from a specific commit or tag
 
 ```bash
-pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v0.8.4"
+pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v0.11.1"
 ```
 
-Replace `v0.8.4` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
+Replace `v0.11.1` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
 
 ### Furqan dependency
 
@@ -511,7 +511,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: BayyinahEnterprise/furqan-lint@v0.4.0
+      - uses: BayyinahEnterprise/furqan-lint@v0.11.1
         with:
           path: src/
 ```
@@ -531,7 +531,7 @@ Python files:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v0.4.0
+    rev: v0.11.1
     hooks:
       - id: furqan-lint
 ```
@@ -566,7 +566,7 @@ repos:
       - id: mypy
 
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v0.5.0
+    rev: v0.11.1
     hooks:
       - id: furqan-lint
 ```
@@ -635,150 +635,17 @@ MARAD  example.py
     declares -> str but returns None on at least one path.
 ```
 
-## Closed in v0.11.0
+## Closure history
 
-- **Sigstore-CASM Gate 11 Rust extension shipped.** Phase
-  G11.1 (as-Saffat) extends Gate 11 to ``.rs`` source files.
-  ``[gate11-rust]`` extra; ``furqan-lint manifest init|verify|update``
-  dispatches on ``.py`` / ``.rs``; ``check --gate11`` walks
-  Rust modules and verifies adjacent bundles.
-- **Audit C-1 (CRITICAL) closed: identity policy gap.** The
-  verifier now requires ``--expected-identity <pattern>`` or
-  explicit ``--allow-any-identity``; refuse-without-policy
-  default raises ``CASM-V-035``. Backported to the Python
-  pipeline.
-- **Audit H-4 (HIGH) closed: nested-generic stringification.**
-  The Rust signature canonicalizer recurses element-wise on
-  multi-argument generic parameters; ``HashMap<String, Option<V>>``
-  and ``HashMap<String, Result<V, ()>>`` produce different
-  fingerprints, defeating the v0.10.0 Python tuple-
-  stringification failure mode.
-- **Audit H-5 (HIGH) closed: trusted_root threading.** The
-  ``trusted_root`` argument from step4 is now consumed by
-  step6 via ``Verifier(_inner=trusted_root)`` rather than
-  discarded.
-- **Audit H-6 (HIGH) closed: checker_set_hash placeholder
-  dressed as commitment.** ``compute_checker_set_hash()`` now
-  hashes the actual checker source bytes (Form A); Form B
-  is the explicit ``placeholder:sha256:`` prefix accepted by
-  the schema validator for v0.11.x patch releases.
-- **Audit M-6 (MEDIUM) closed: README claim without substrate.**
-  The Newman 2022 N2 (typosquatting) disclosure now names the
-  substrate mechanism (``--expected-identity``) that backs the
-  pinning recommendation.
-- **Audit M-7 (MEDIUM) closed: string sentinels for identity
-  extraction.** ``CASM-V-036`` typed errors replace the
-  v0.10.0 ``"<unknown OIDC identity>"`` string sentinel.
-
-## Closed in v0.10.0
-
-- **Sigstore-CASM Gate 11 (Kiraman Katibin) shipped.** Per Phase
-  G11.0 v1.0: a Compositional Additive-only Surface Manifest
-  carrying module-root hash + canonicalized public-surface
-  fingerprints + tooling provenance + chain pointer is signed
-  with Sigstore (Fulcio short-lived certs, Rekor transparency
-  log) and verified through a 9-step `CASM-V-NNN` flow. The
-  additive-only contract is enforced at `manifest update`
-  (CASM-V-050 on removal, CASM-V-051 on signature change of a
-  retained name). Behind the opt-in `[gate11]` extra; the
-  default install path is unchanged.
-- **F1 closed: README structural-checks block now auto-derived.**
-  `scripts/regenerate_check_table.py` regenerates the table of
-  shipped checks between `<!-- FURQAN_LINT_CHECKS_AUTO_BEGIN -->`
-  and `<!-- FURQAN_LINT_CHECKS_AUTO_END -->` from the in-repo
-  registry; a pre-commit hook runs `--check` to fail on drift,
-  and a CI gate runs the same check. Prevents the v0.9.x-era
-  failure mode where README counts drifted from substrate after
-  a checker landed.
-
-## Closed in v0.4.1
-
-- **D11 monkey-patch retired.** The producer-predicate hack went
-  through three lifecycle stages: a stopgap monkey-patch in v0.1.0
-  on `status_coverage._is_integrity_incomplete_union`, a scoped
-  context manager in v0.3.0, and a `threading.Lock` for safety in
-  v0.3.0. v0.4.1 retires the patch entirely by passing the
-  Python-Optional predicate via the upstream `producer_predicate=`
-  keyword on `check_status_coverage`, available since
-  `furqan>=0.11.0`. Closes the full lifecycle of a round-1 audit
-  finding.
-- **Pre-commit hook installability.** The hook now declares
-  `furqan` as an `additional_dependency` via git URL, so
-  `pre-commit install` can resolve the dependency that PyPI does
-  not yet host.
-
-## Closed in v0.3.5
-
-Two corrective fixes promoting documented limitations to fixes:
-
-- **Exception-driven fall-through.** `try`/`except` bodies are now
-  modelled as maybe-runs (the success path = `try.body + orelse`
-  becomes the body of a synthetic `IfStmt`; handlers chain into the
-  `else_body`). D24 now correctly flags the false-negative case
-  where a function's only return path is inside a `try` block whose
-  except handler falls through (the canonical mypy "Missing return
-  statement" shape). Documented as a known limit since v0.3.1.
-- **PEP 604 `None | None`.** Now translates to bare
-  `TypePath("None")`, the same shape `Optional[None]` (v0.3.4) and
-  `Union[None]` (v0.3.3) produce. All three optional-spelling paths
-  are now structurally identical for the all-None case. Documented
-  as a v0.4.0 candidate in v0.3.4.
-
-## Closed in v0.3.2
-
-Three findings from a round-5 review of v0.3.1, all reproduced
-empirically and fixed:
-
-- **`Union[X, None]` recognition.** `Union[X, None]`,
-  `Union[None, X]`, `Union[X, Y, None]`, and the `typing.Union` /
-  `t.Union` aliased forms are now treated as Optional. Older
-  codebases (pre-PEP 604) routinely use `Union[X, None]` and were
-  producing false-positive `return_none_mismatch` diagnostics.
-- **String forward-reference annotations.** PEP 484 string
-  annotations like `-> "Optional[User]"` (the canonical
-  `TYPE_CHECKING` idiom for breaking circular imports) are now
-  parsed and recursed into. Pre-v0.3.2 the literal string was
-  treated as a bare type name.
-- **Nested class methods.** Methods of `Outer.Inner.method`,
-  `Outer.Mid.Inner.method`, etc. are now collected via recursive
-  descent through nested `ClassDef` bodies. Pre-v0.3.2 the descent
-  stopped at one level and inner-class methods were silently
-  dropped, producing false-negative D24 and `return_none_mismatch`
-  on a common Python idiom.
-
-## Closed in v0.3.0
-
-Six findings from a three-round review of v0.2.0, all reproduced
-empirically and fixed:
-
-- **Compound-statement blind spot.** `for`, `while`, `with`, `try`,
-  and `match` bodies are now translated, so `return None` inside
-  any of them is caught by `return_none_mismatch`. Loop and
-  `except` bodies wrap as maybe-runs ifs so D24 doesn't
-  over-claim coverage.
-- **Additive surface gaps.** `MAX_RETRIES: int = 5` and `A, B = 1, 2`
-  are now visible to the additive checker. Annotated `__all__`
-  declarations are also read.
-- **Dynamic `__all__` cascade.** A non-static `__all__` now raises
-  `DynamicAllError` and the CLI exits 2 with an `INDETERMINATE`
-  result, rather than silently treating the surface as empty.
-- **D11 thread-safety.** A `threading.Lock` serialises concurrent
-  entry to the monkey-patched-predicate context manager.
-- **`Optional` over-match.** `weird.lib.Optional[X]` is no longer
-  treated as `typing.Optional[X]`.
-- **`int | str` rendering.** Diagnostic prose for non-Optional
-  unions no longer says `Optional[Unknown]`.
-
-## Closed in v0.2.0
-
-- **D24 return-None blind spot.** A function declaring a non-Optional
-  return type that returns `None` is now caught by the
-  `return_none_mismatch` checker.
-- **Nested-function call attribution.** Calls inside closures, inner
-  functions, and methods of inner classes are no longer attributed to
-  the enclosing function.
-- **Decorator call attribution.** Decorators are no longer collected
-  as calls inside the decorated function's body.
+Per-version closure ledgers are in
+[CHANGELOG.md](CHANGELOG.md). This README previously
+mirrored closures from v0.2.0 through v0.11.0; that mirror
+was retired in v0.11.1 (Phase G10.5 al-Mubin) because
+CHANGELOG.md is the canonical closure ledger and the
+README mirror was repeatedly drifting out of sync. The
+framework section 10.2 retirement procedure was followed:
+the existing prose was deleted and a single pointer
+section took its place.
 
 ## Remaining limitations
 

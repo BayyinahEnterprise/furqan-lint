@@ -19,6 +19,111 @@ introduced this convention.
 
 ---
 
+## [0.11.1] - 2026-05-08
+
+### Tooling (al-Mubin / G10.5)
+
+Release tooling tightening per the Round 24/25/26/27 audit
+chain findings. Closes 7 findings; retires 4 from prior rounds
+via Round 27 empirical correction; defers 5 with explicit
+rationale. No new analyzers, no new substrate, no checker
+semantics changes.
+
+#### Closures
+
+- F1 closure via T01 + T02 (release.yml extension) + T03
+  (12-version backfill via scripts/backfill_github_releases.py)
+- F2 closure via T04a (README install-pin sweep:
+  v0.4.0/v0.5.0/v0.8.4 -> v0.11.0 across pip-install,
+  GitHub-Action use, and pre-commit rev examples)
+- F3 closure via T04b (README "Closed in v" sections retired
+  per framework section 10.2; 145 lines deleted; single
+  Closure-history pointer takes their place)
+- F7 closure via T01 (PyPI verification step in release.yml:
+  12 polls at 10-second intervals, 120-second window per
+  S5 calibration)
+- F8 closure via T01 + T02 (release.yml workflow scope; the
+  gh release create step is wired alongside the PyPI
+  verification step)
+- F9 closure via T04d (scripts/release_sweep.py: stdlib-only
+  release-time gate sweeping README install pins, GitHub
+  Action use pins, pre-commit rev pins, and SAFETY_INVARIANTS.md
+  presence)
+- F15 closure via T04c (README Sigstore-CASM section + Gate
+  11 install rows + SAFETY_INVARIANTS.md pointer; the
+  substrate that shipped in v0.10.0 + v0.11.0 is now
+  visible in the README, not only in SECURITY.md and
+  CHANGELOG.md)
+
+#### Round-27 retirements (corrections from prior rounds)
+
+- F6 retired: the "no closure between rounds" pattern was an
+  artifact of audit-substrate inspection-scope gap (Round 25
+  + 26 looked at README + CHANGELOG + Releases UI but not
+  pyproject.toml + SECURITY.md); Phase G11.A + G11.0 + G11.1
+  shipped between Round 24 and Round 27 but were invisible
+  to the narrower inspection scope.
+- F11 retired: pyproject.toml's `[tool.pytest.ini_options].markers`
+  declares 5 markers (network, slow, unit, integration, mock);
+  Round 27 inspection of pyproject.toml confirmed the
+  declaration.
+- F13 retired: substrate-divergence question RESOLVED via
+  cross-substrate empirical corroboration in Round 27.
+- F14 retired: three-round closure stall pattern dissolved
+  with proper substrate inspection.
+
+#### Deferrals
+
+- F4 ONNX empty-graph: Phase G11.3 scope.
+- F5 Release-vs-tag QUESTION: routes to QUESTIONS.md.
+- F10 SBOM: Phase G11.4 (Tasdiq al-Bayan) or v1.5.
+- F12 furqan PyPI dep: declined Shape C; out of scope.
+- F16 CHANGELOG terminus interpretation: closes by execution
+  if this entry appears past the existing visible terminus.
+- F17 framework section 4 amendment: framework-side; not a
+  release scope item.
+
+### Added
+
+- `.github/workflows/release.yml` "Verify PyPI publication"
+  step (T01).
+- `.github/workflows/release.yml` "Create GitHub Release"
+  step (T02) with `contents: write` permission added to the
+  publish job alongside the existing `id-token: write`.
+- `scripts/extract_changelog_section.py`: stdlib-only helper
+  used by T02 to derive Release notes from a single
+  CHANGELOG `## [X.Y.Z]` section.
+- `scripts/backfill_github_releases.py`: one-time backfill
+  tool for the 12-version historical gap (v0.8.2 through
+  v0.11.0; runs manually from local clone).
+- `scripts/release_sweep.py`: pre-release sweep gate.
+- `docs/release-checklist.md`: codifies the manual gates
+  alongside the automated workflow steps.
+
+### Changed
+
+- README: install-pin sweep (T04a); closure-sections
+  retired (T04b); Sigstore-CASM substrate documented (T04c
+  via the Phase G11.0 + G11.1 sections already present).
+
+### Tests
+
+Test count: 561 (v0.11.0 ship state) -> 576 (v0.11.1).
+Net delta: +15 (4 in test_extract_changelog_section.py;
+2 in test_readme_closure_sections_retired.py; 4 in
+test_readme_gate11_section_present.py; 5 in
+test_release_sweep_extension.py).
+
+### Round-27 closure ledger
+
+| Disposition | Count | Findings |
+|-------------|-------|----------|
+| Closure     | 7     | F1, F2, F3, F7, F8, F9, F15 |
+| Retirement  | 4     | F6, F11, F13, F14 |
+| Deferral    | 6     | F4, F5, F10, F12, F16, F17 |
+
+---
+
 ## [0.11.0] - 2026-05-07
 
 Phase G11.1 (as-Saffat) ships Sigstore-CASM Gate 11 v1.0 for
