@@ -73,8 +73,37 @@ def _canonical_type_string(node: ast.AST | None) -> str:
         if sub_value in {"Union", "typing.Union"}:
             union_members: list[ast.AST] = _flatten_tuple(node.slice)
             inner_strings = [_canonical_type_string(m) for m in union_members]
-            return _format_union(inner_strings)
-        # Generic subscript like List[int] -- normalize to "List[<canonical>]"
+            # Phase G11.0.1 T03: flatten inner unions so
+            # Union[Optional[T], List[U]] (== Union[T | None, List[U]])
+            # canonicalizes with None positioned consistently per
+            # _format_union's None-at-end convention. Without this,
+            # the pre-v0.11.2 implementation produced
+            # "List[U] | T | None" (alphabetical of two members,
+            # "T | None" treated as a single opaque string) where
+            # the canonical form should be "List[U] | T | None"
+            # (alphabetical of three members; None at end).
+            flattened: list[str] = []
+            for s in inner_strings:
+                if " | " in s:
+                    flattened.extend(part.strip() for part in s.split(" | "))
+                else:
+                    flattened.append(s)
+            return _format_union(flattened)
+        # Generic subscript like List[int] or Dict[K, V] --
+        # normalize to "List[<canonical>]" or "Dict[<canonical>, <canonical>]".
+        # Phase G11.0.1 (at-Tawbah) T03 / audit H-4 propagation
+        # defense: a multi-argument generic's slice is an
+        # ast.Tuple whose elements MUST recurse element-wise.
+        # The pre-v0.11.2 implementation fell through to
+        # ast.unparse(node.slice) for tuple slices, producing
+        # "Dict[(str, int)]" instead of "Dict[str, int]" -- the
+        # exact tuple-stringification failure mode that the
+        # Rust verifier's amended_4 T03 rules 6 + 7 already
+        # defend against. Cross-language symmetry is restored
+        # in v0.11.2 by handling the Tuple slice case here.
+        if isinstance(node.slice, ast.Tuple):
+            inner_parts = [_canonical_type_string(elem) for elem in node.slice.elts]
+            return f"{sub_value}[{', '.join(inner_parts)}]"
         slice_str = _canonical_type_string(node.slice)
         return f"{sub_value}[{slice_str}]"
     # X | Y union via PEP 604

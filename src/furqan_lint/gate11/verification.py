@@ -179,6 +179,15 @@ class Verifier:
 
     # Step 5
     def step5_canonicalize_manifest(self, manifest: Manifest) -> bytes:
+        """Re-canonicalize the manifest via RFC 8785 (JCS).
+
+        Schema enforcement is in :meth:`Manifest.from_dict`; this
+        step assumes a valid Manifest instance and dispatches
+        canonicalization. M-5 corrective (Phase G11.0.1
+        at-Tawbah): the canonical enforcement site for the
+        manifest schema is ``Manifest.from_dict``; step 5 does
+        not re-validate.
+        """
         return manifest.to_canonical_bytes()
 
     # Step 6

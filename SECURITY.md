@@ -91,8 +91,14 @@ residual disclosures apply to any consumer running
    not in the lint.
 2. **Typosquatting at the publish boundary.** Sigstore proves
    "identity X signed bytes Y at time T", not "identity X is
-   the legitimate maintainer". Relying Parties must pin both
-   the package name and the expected signing identity.
+   the legitimate maintainer". Relying Parties MUST configure
+   `--expected-identity <pattern>` for both the Python
+   verifier (v0.11.2+) and the Rust verifier (v0.11.0+); the
+   default `CASM-V-035` refuse-without-policy ensures
+   verification fails closed when no policy is configured.
+   Use of `--allow-any-identity` is the explicit opt-in to
+   `UnsafeNoOp` policy; presence in CI logs is itself a
+   Sulayman-Naml ADVISORY signal per Phase G11.A Strategy 7.
 3. **Rekor entry queryability and privacy.** The public Rekor
    log publishes manifest hashes and public-surface name lists
    unencrypted. Confidential codebases should sign to the

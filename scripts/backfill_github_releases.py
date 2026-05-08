@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
-"""Phase G10.5 (al-Mubin) T03: one-time backfill of GitHub Release
-objects for v0.8.2 through v0.11.0.
+"""Phase G10.5 (al-Mubin) T03 + Phase G11.0.1 (at-Tawbah) T08:
+one-time backfill of GitHub Release objects for v0.8.2 through v0.11.0.
 
 Run manually after Phase G10.5 T01 + T02 land. After this script
 runs against the upstream repository, finding F1 (12 historical
 versions tagged on origin but absent from the GitHub Releases UI)
 closes.
+
+Phase G11.0.1 (at-Tawbah) T08 / F18 closure: this script REQUIRES
+an explicit ``--dry-run`` (preview only, no API mutation) or
+``--apply`` (real ``gh release create`` calls) flag. The default
+no-flag invocation now exits 1 with usage text rather than silently
+mutating live GitHub state. The Round 28 audit observed the
+runbook's ``--dry-run`` invocation creating 12 Release objects
+because the pre-v0.11.2 script silently no-op'd ``--dry-run``;
+v0.11.2 closes that structural-honesty gap loudly.
+
+Phase G11.0.1 T08 / F19 incidental closure: the version filter
+now excludes v0.11.1 and later because release.yml's T02 step
+(added in Phase G10.5 al-Mubin) creates Release objects on tag
+push. Backfilling them would race the workflow.
 
 The script:
 
@@ -37,6 +51,7 @@ Usage::
 
 from __future__ import annotations
 
+import argparse
 import re
 import subprocess
 import sys
@@ -55,6 +70,11 @@ _ALREADY_HAS_RELEASE_OBJECT = frozenset({"0.1.0"})
 # release.yml + Trusted-Publishing era and are not eligible
 # for retroactive Release-object backfill via this tool.
 _BACKFILL_FLOOR = (0, 8, 2)
+# Phase G11.0.1 T08 / F19 incidental closure: workflow-managed
+# release boundary. v0.11.1 was the first release whose Release
+# object was created by release.yml T02 (Phase G10.5 al-Mubin
+# ship); backfilling at v0.11.1+ would race the workflow.
+_WORKFLOW_MANAGED_FLOOR = (0, 11, 1)
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
@@ -78,6 +98,14 @@ def _extract_versions_from_changelog(
         if v in _PRE_CHANGELOG_FORMAT_VERSIONS:
             continue
         if _version_tuple(v)[:3] < _BACKFILL_FLOOR:
+            continue
+        # Phase G11.0.1 T08 / F19 incidental closure:
+        # workflow-managed releases (v0.11.1+) are intentionally
+        # excluded from backfill scope. The release.yml T02 step
+        # (added in Phase G10.5 al-Mubin) creates GitHub Release
+        # objects on tag push for these versions; backfilling
+        # them here would race with the workflow.
+        if _version_tuple(v)[:3] >= _WORKFLOW_MANAGED_FLOOR:
             continue
         versions.append(v)
     return versions
@@ -133,9 +161,52 @@ def _create_release(tag: str, notes: str) -> tuple[bool, str, str | None]:
     return False, "blocked", result.stderr.strip()
 
 
-def main() -> int:
+def _build_arg_parser() -> argparse.ArgumentParser:
+    """Phase G11.0.1 T08 / F18 closure: argparse with required
+    mutually-exclusive --dry-run / --apply group.
+
+    No-flag invocation exits 1 with usage rather than silently
+    no-op'ing the documented --dry-run flag and mutating live
+    GitHub state.
+    """
+    p = argparse.ArgumentParser(
+        prog="backfill_github_releases.py",
+        description=(
+            "One-time backfill of GitHub Release objects for "
+            "historical tags. REQUIRES explicit --dry-run or --apply."
+        ),
+        epilog=(
+            "REQUIRED: --dry-run for preview OR --apply to execute. "
+            "No silent-execute; the substrate's surface claim must "
+            "match its behavior."
+        ),
+    )
+    mode = p.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the backfill scope without API mutation.",
+    )
+    mode.add_argument(
+        "--apply",
+        action="store_true",
+        help="Execute the backfill (creates real GitHub Release objects).",
+    )
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_arg_parser()
+    args = parser.parse_args(argv)
     versions = _extract_versions_from_changelog()
-    print(f"Backfilling {len(versions)} versions: {versions}")
+    if args.dry_run:
+        print(f"DRY-RUN: would backfill {len(versions)} versions:")
+        for v in versions:
+            print(f"  v{v}")
+        print("\nNo API calls executed. Pass --apply to execute.")
+        return 0
+    # args.apply is True (mutually exclusive with --dry-run guarantees this).
+    print(f"APPLYING: backfilling {len(versions)} versions: {versions}")
     blocked: list[tuple[str, str]] = []
     created: list[str] = []
     skipped: list[str] = []

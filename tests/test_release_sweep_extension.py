@@ -35,7 +35,7 @@ def test_positive_current_repo_sweeps_clean(tmp_path: Path) -> None:
     and all README pins refreshed must sweep clean.
     """
     findings = sweep(REPO_ROOT)
-    # The repo is at v0.11.1 with the T04a sweep applied; no
+    # The repo is at v0.11.2 with the T04a sweep applied; no
     # stale pins should remain.
     assert findings == [], f"current repo expected to sweep clean but got: {findings}"
 
@@ -45,7 +45,7 @@ def test_negative_stale_install_pin_fires(tmp_path: Path) -> None:
     readme = repo / "README.md"
     text = readme.read_text(encoding="utf-8")
     text = text.replace(
-        'pip install "git+https://github.com/BayyinahEnterprise/' 'furqan-lint.git@v0.11.1"',
+        'pip install "git+https://github.com/BayyinahEnterprise/' 'furqan-lint.git@v0.11.2"',
         'pip install "git+https://github.com/BayyinahEnterprise/' 'furqan-lint.git@v0.4.0"',
     )
     readme.write_text(text, encoding="utf-8")
@@ -58,7 +58,7 @@ def test_negative_stale_github_action_fires(tmp_path: Path) -> None:
     readme = repo / "README.md"
     text = readme.read_text(encoding="utf-8")
     text = text.replace(
-        "uses: BayyinahEnterprise/furqan-lint@v0.11.1",
+        "uses: BayyinahEnterprise/furqan-lint@v0.11.2",
         "uses: BayyinahEnterprise/furqan-lint@v0.4.0",
     )
     readme.write_text(text, encoding="utf-8")
@@ -70,10 +70,10 @@ def test_negative_stale_precommit_rev_fires(tmp_path: Path) -> None:
     repo = _build_repo_clone(tmp_path)
     readme = repo / "README.md"
     text = readme.read_text(encoding="utf-8")
-    # First refresh case: substitute one of the v0.11.1 rev examples
+    # First refresh case: substitute one of the v0.11.2 rev examples
     # back to a stale v0.5.0 to exercise the regex.
     text = text.replace(
-        "    rev: v0.11.1\n    hooks:\n      - id: furqan-lint",
+        "    rev: v0.11.2\n    hooks:\n      - id: furqan-lint",
         "    rev: v0.5.0\n    hooks:\n      - id: furqan-lint",
         1,
     )

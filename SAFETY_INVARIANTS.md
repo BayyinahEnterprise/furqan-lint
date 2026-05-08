@@ -282,7 +282,13 @@ The nine steps:
    no cache exists)
 5. Re-canonicalize the manifest (RFC 8785; Invariant 3)
 6. Verify Sigstore signature against the canonical bytes
-   (`CASM-V-030..034` by failure mode)
+   (`CASM-V-030..034` by failure mode); enforce the
+   configured Identity policy (`CASM-V-032` on identity
+   mismatch; `CASM-V-035` if no `--expected-identity` and
+   no explicit `--allow-any-identity` -- the default refuse-
+   without-policy state); on failed identity extraction from
+   the signing certificate raise `CASM-V-036` rather than
+   returning a string sentinel
 7. Compare `module_root_hash` to the on-disk module
    (`CASM-V-040` on mismatch)
 8. Compare `public_surface.names` to the live extraction;
