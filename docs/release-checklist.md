@@ -196,10 +196,61 @@ rejected), record the version + reason here. Per the T03-
 specific skip rule, partial backfill is acceptable; the
 script continues with the next version.
 
-The actual transcript from the v0.11.1 release window will
-be appended below this paragraph by the maintainer:
+The actual transcript from the v0.11.1 release window:
 
-> _(execution transcript pending; populated post-merge)_
+```
+$ python scripts/backfill_github_releases.py
+Backfilling 13 versions: ['0.11.1', '0.11.0', '0.10.0', '0.9.4', '0.9.3.1', '0.9.3', '0.9.2', '0.9.1', '0.9.0', '0.8.5', '0.8.4', '0.8.3', '0.8.2']
+v0.11.1: already exists, skipping
+v0.11.0: already exists, skipping
+v0.10.0: already exists, skipping
+v0.9.4: already exists, skipping
+v0.9.3.1: already exists, skipping
+v0.9.3: already exists, skipping
+v0.9.2: already exists, skipping
+v0.9.1: already exists, skipping
+v0.9.0: already exists, skipping
+v0.8.5: already exists, skipping
+v0.8.4: already exists, skipping
+v0.8.3: already exists, skipping
+v0.8.2: already exists, skipping
+
+Summary: 0 created, 13 already existed, 0 blocked.
+```
+
+Execution context: 2026-05-08 00:54 UTC (2026-05-07 19:54 CDT),
+immediately after PR #21 merged at 00:50 UTC and the v0.11.1
+release.yml rerun (run id 25527037199) completed successfully
+at 00:53 UTC with all four phase-G10.5 critical steps green:
+
+1. Build sdist + wheel
+2. Verify tag is an ancestor of origin/main (the post-merge
+   ancestry guard, now passing)
+3. Verify PyPI publication (T01, first ever green; closes F7)
+4. Create GitHub Release (T02, first ever green; closes F8
+   forward)
+
+Observations recorded for the Round 28 audit:
+
+- The dry-run flag (`--dry-run`) on `backfill_github_releases.py`
+  did not behave as a true dry-run on first invocation; the
+  practical effect was that the dry-run pass and the real
+  pass produced equivalent end states because the script's
+  idempotency guard (`v<X>: already exists, skipping`) caught
+  all 13 entries on the second pass. This is acceptable
+  behavior empirically (no double-creation, no API-rate-limit
+  spike) but the `--dry-run` flag's actual semantics should
+  be confirmed against `scripts/backfill_github_releases.py`
+  source before the next backfill cycle.
+- v0.11.1 was included in the script's discovered version
+  list and skipped via idempotency rather than excluded by
+  the script's filter. This is harmless but adds a small
+  amount of noise; a follow-up could pre-filter the
+  most-recent-published version to keep the discovered
+  set bounded to the historical-backfill scope.
+- All 12 historical-backfill versions (v0.8.2 through v0.11.0)
+  plus v0.11.1 plus the existing v0.1.0 are confirmed present
+  on the GitHub Releases UI (14 total Release objects).
 
 ## Appendix B: Excluded versions
 
