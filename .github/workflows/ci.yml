@@ -312,7 +312,7 @@ jobs:
           # Verify with the GitHub Actions OIDC SAN pattern:
           repo = os.environ['GITHUB_REPOSITORY']
           ref = os.environ['GITHUB_REF']
-          pattern = f'https://github.com/{repo}/.github/workflows/.*@{ref}'
+          pattern = f'https://github.com/{repo}/.github/workflows/ci.yml@{ref}'
           subprocess.run([sys.executable, '-m', 'furqan_lint.cli',
                           'manifest', 'verify', str(bundle),
                           '--expected-identity', pattern,
