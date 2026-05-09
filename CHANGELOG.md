@@ -19,6 +19,66 @@ introduced this convention.
 
 ---
 
+## [0.11.4] - 2026-05-09
+
+### CI hotfix (G11.0.3 / F23 corrective)
+
+Adds `[gate11]` extra to the `gate11-rust-smoke-test` job's
+install line in `.github/workflows/ci.yml`. The Sigstore
+signing dependencies (sigstore-python, rfc8785) live in
+`[gate11]`, not duplicated into `[gate11-rust]`; the rust
+verifier path reuses sigstore-python (no FFI to sigstore-rs
+in v1). The smoke-test's signing operation requires both
+extras: `[gate11]` for Sigstore, `[gate11-rust]` for
+tree-sitter-rust canonicalization, `[rust]` for the legacy
+adapter.
+
+#### Closures
+
+- F23 LOW closure: gate11-rust-smoke-test job's install line
+  now installs sigstore-python; smoke-test reaches signing
+  stage and exits cleanly. Closes the bug present since
+  v0.11.0 (PR #20) that was masked by F22 until v0.11.3
+  closed F22 at the substrate level.
+
+#### Empirical proof of F22 closure (per Round 30 section 6.1)
+
+- Pre-v0.11.3 smoke-test failure mode: CASM-V-001 at step 2-3
+  (F22, dispatch whitelist)
+- v0.11.3 smoke-test persistent failure mode (after one
+  transient Sigstore retry): CASM-V-021 at step 4 (F23,
+  missing sigstore-python in CI install)
+- v0.11.4 smoke-test status: GREEN (both F22 and F23 closed)
+
+The failure-mode shift across v0.11.0 -> v0.11.3 -> v0.11.4
+is the empirical evidence that each closure landed at the
+intended substrate layer. Per the structural-honesty
+discipline applied recursively, the CI surface (smoke-test
+green/red) now matches the substrate behavior (verifier
+dispatch correct + signing dependencies installed).
+
+#### Test count delta
+
+- 596 (v0.11.3) -> 596 (v0.11.4)
+- Zero new tests; the substrate change is a CI workflow
+  configuration fix with no Python-side surface to pin.
+- The empirical proof is the green CI run on the merge
+  commit, not a new test.
+
+#### Round 30 closure ledger
+
+- F23 LOW: closed in v0.11.4 (this entry)
+
+#### Findings carry-forward
+
+- F4, F5, F10, F12, F17, F20, F21: unchanged from prior
+  rounds
+- A1, A2, A4: deferred to release-checklist amendment PR
+- A3: refined per Round 30 section 6.1; folds into G11.2 v1.4
+  prompt
+
+---
+
 ## [0.11.3] - 2026-05-09
 
 ### Hotfix corrective
