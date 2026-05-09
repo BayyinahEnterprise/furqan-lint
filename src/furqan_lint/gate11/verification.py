@@ -175,7 +175,16 @@ class Verifier:
         it and adapts the error namespace.
         """
         try:
-            from sigstore.trust import TrustedRoot  # type: ignore[import-not-found]
+            # sigstore-python 3.x: TrustedRoot lives at
+            # _internal.trust (no public re-export at
+            # sigstore.trust in 3.6.x; Round 31 audit F24
+            # confirmed empirically). If sigstore 4.x adds a
+            # public path at sigstore.trust, this try/except
+            # prefers the public path forward-compatibly.
+            try:
+                from sigstore.trust import TrustedRoot  # type: ignore[import-not-found]
+            except ImportError:
+                from sigstore._internal.trust import TrustedRoot
         except ImportError as e:
             raise CasmVerificationError(
                 "CASM-V-021",
