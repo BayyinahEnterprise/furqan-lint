@@ -19,6 +19,73 @@ introduced this convention.
 
 ---
 
+## [0.11.3] - 2026-05-09
+
+### Hotfix corrective
+
+Closes Round 29 audit F22 (MEDIUM): the `gate11-rust-smoke-test`
+CI job has been red since v0.11.0 (PR #20) because
+`verification.step2_3_check_version_and_language` strictly
+rejected `language != "python"` even though
+`Manifest.from_dict` accepted both `("python", "rust")` from
+v0.11.0 onwards. The dispatch surface contradicted the
+documented schema surface.
+
+The root cause was the structural-honesty thesis applied to
+the project itself: the documented surface (schema accepts
+rust) did not match the substrate behavior (dispatch rejects
+rust). v0.11.0 shipped the rust schema acceptance but not the
+matching dispatch acceptance.
+
+#### Closure
+
+- F22 MEDIUM: `verification.step2_3_check_version_and_language`
+  now accepts `language in ("python", "rust")`, matching the
+  schema validator. After this corrective the
+  `gate11-rust-smoke-test` CI job goes green for the first
+  time since v0.11.0; this is the empirical proof of F22
+  closure.
+
+#### Scope deliberately tight
+
+This is a single-purpose patch release. Out of scope:
+
+- Go verifier (Phase G11.2 al-Mursalat); accepting `language="go"`
+  at the dispatch site is deferred until the Go verifier
+  itself ships in v0.12.0. Until then a Go manifest
+  fails-closed at step 2_3 with a clear `CASM-V-001` error
+  naming the future phase.
+- ONNX verifier (Phase G11.3 an-Naziat); same structure.
+- Cross-substrate verification corpus (Phase G11.4 Tasdiq
+  al-Bayan); requires Phase G11.2 + G11.3 to ship first.
+- v1.0 self-attestation; requires the canonical chain through
+  G11.4 to complete.
+
+#### Tests
+
+Test count: 589 (v0.11.2 ship state) -> 596 (v0.11.3).
+Net delta: +7 (in `tests/test_gate11_dispatch_f22_corrective.py`):
+two regression-guard tests for the schema's existing
+python/rust acceptance plus a go-rejection pin; the F22
+closure pin (rust manifest accepted at step 2_3); a python
+acceptance pin; an unknown-language fail-closed pin; a
+go-fail-closed pin.
+
+#### What this release does NOT do
+
+- Does NOT modify the schema validator (`Manifest.from_dict`
+  whitelist unchanged from v0.11.2)
+- Does NOT add new CASM-V error codes
+- Does NOT change checker semantics
+- Does NOT advance Phase G11.x roadmap; it closes the audit
+  register entry for F22 and nothing more
+- Does NOT extend the README or SECURITY.md beyond what
+  v0.11.2 already documented (the documented surface was
+  always cross-language; this release fixes the substrate to
+  match)
+
+---
+
 ## [0.11.2] - 2026-05-09
 
 ### Substrate corrective (at-Tawbah / G11.0.1)

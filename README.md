@@ -41,20 +41,20 @@ pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile,gate11]"  # all adapt
 ### Install from a specific commit or tag
 
 ```bash
-pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v0.11.2"
+pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v0.11.3"
 ```
 
-Replace `v0.11.2` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
+Replace `v0.11.3` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
 
 ### Furqan dependency
 
-furqan-lint requires `furqan>=0.11.0`, the Furqan programming-language tooling. As of 2026-05-03 the PyPI release of `furqan` is at v0.10.1; install v0.11.2 directly from GitHub:
+furqan-lint requires `furqan>=0.11.0`, the Furqan programming-language tooling. As of 2026-05-03 the PyPI release of `furqan` is at v0.10.1; install v0.11.3 directly from GitHub:
 
 ```bash
-pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.2"
+pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.3"
 ```
 
-This GitHub-pin step will not be necessary once `furqan` v0.11.2 is published to PyPI.
+This GitHub-pin step will not be necessary once `furqan` v0.11.3 is published to PyPI.
 
 ### Rust support (opt-in)
 
@@ -511,7 +511,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: BayyinahEnterprise/furqan-lint@v0.11.2
+      - uses: BayyinahEnterprise/furqan-lint@v0.11.3
         with:
           path: src/
 ```
@@ -531,7 +531,7 @@ Python files:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v0.11.2
+    rev: v0.11.3
     hooks:
       - id: furqan-lint
 ```
@@ -566,7 +566,7 @@ repos:
       - id: mypy
 
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v0.11.2
+    rev: v0.11.3
     hooks:
       - id: furqan-lint
 ```
@@ -640,7 +640,7 @@ MARAD  example.py
 Per-version closure ledgers are in
 [CHANGELOG.md](CHANGELOG.md). This README previously
 mirrored closures from v0.2.0 through v0.11.0; that mirror
-was retired in v0.11.2 (Phase G10.5 al-Mubin) because
+was retired in v0.11.3 (Phase G10.5 al-Mubin) because
 CHANGELOG.md is the canonical closure ledger and the
 README mirror was repeatedly drifting out of sync. The
 framework section 10.2 retirement procedure was followed:
