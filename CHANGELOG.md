@@ -19,6 +19,87 @@ introduced this convention.
 
 ---
 
+## [0.11.5] - 2026-05-09
+
+### Substrate corrective (G11.0.4 al-Bayyina / F24 corrective)
+
+Closes Round 31 audit F24 LOW-MEDIUM: sigstore-python API
+path drift in `step4_load_trust_root`. v0.11.4 closed F23
+(CI install gap) but the smoke-test remained red because
+`step4_load_trust_root` imported `TrustedRoot` from
+`sigstore.trust`, which has no public re-export in
+sigstore-python 3.6.x. v0.11.5 wraps the import in a
+public-first then private-fallback pattern, restoring
+forward-compat with sigstore 4.x while handling 3.x
+correctly today.
+
+#### Closures
+
+- F24 LOW-MEDIUM closure: `step4_load_trust_root` import
+  path uses Option A pattern (per Round 31 audit section 3);
+  public path (`sigstore.trust`) attempted first for
+  sigstore 4.x forward-compat, private path
+  (`sigstore._internal.trust`) used as fallback for sigstore
+  3.x current state. The outer except preserves the existing
+  `CasmVerificationError("CASM-V-021", ...)` semantics for
+  cases where neither import path resolves (genuine
+  sigstore-not-installed).
+
+#### Empirical proof of F22 + F23 + F24 chain closure
+
+The failure-mode chronology now reads cleanly:
+
+- v0.11.0 .. v0.11.2: smoke-test failed at step 2-3 with
+  CASM-V-001 (F22, dispatch whitelist)
+- v0.11.3: smoke-test failed at step 4 with CASM-V-021
+  (F23, missing sigstore-python in CI install)
+- v0.11.4: smoke-test failed at step 4 with CASM-V-021
+  (F24, sigstore-python API path drift; same error code as
+  F23 by diagnostic conflation)
+- v0.11.5: smoke-test status: GREEN (F22 + F23 + F24 all
+  closed)
+
+Each closure landed at its intended substrate layer; each
+next closure surfaced via failure-mode shift; the chain of
+clear evidence is now visible per the al-Bayyina codename.
+
+#### Test count delta
+
+- 596 (v0.11.4) -> 597 (v0.11.5)
+- One new test:
+  `tests/test_gate11_step4_import_resolves.py` pinning the
+  TrustedRoot import path against future sigstore-python
+  drifts. The test runs on every PR (not just push-to-main
+  like the smoke-test); future drifts catch at PR review
+  time rather than at post-merge smoke-test time.
+
+#### Deferred items (per Round 31 audit section 3)
+
+- Option C (CASM-V-021 split into CASM-V-021 + CASM-V-022):
+  deferred to separate chartered scope per section 17
+  incremental-velocity discipline. The diagnostic
+  conflation is real but not blocking; either v0.11.6 or
+  fold into G11.2 al-Mursalat's SAFETY_INVARIANTS.md
+  error-code table extension.
+- Option B (sigstore version pin tightening): DECLINED per
+  audit reasoning ("brittle; would block legitimate
+  security fixes").
+
+#### Round 31 closure ledger
+
+- F24 LOW-MEDIUM: closed in v0.11.5 (this entry)
+
+#### Findings carry-forward
+
+- F4, F5, F10, F12, F17, F20, F21: unchanged from prior
+  rounds
+- A1, A2, A4: deferred to release-checklist amendment PR
+- Diagnostic-conflation finding (CASM-V-021 split): tracked
+  as candidate for v0.11.6 or G11.2 SAFETY_INVARIANTS.md
+  table extension
+
+---
+
 ## [0.11.4] - 2026-05-09
 
 ### CI hotfix (G11.0.3 / F23 corrective)

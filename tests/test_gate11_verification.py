@@ -263,5 +263,18 @@ def test_compose_fails_at_step6_with_fake_bundle(tmp_path: Path) -> None:
         v.verify_bundle(bundle_path, mod)
     # The empty sigstore_bundle adapt step raises CASM-V-030;
     # different sigstore-python versions may surface earlier
-    # codes if TUF refresh fails first.
-    assert exc.value.code in {"CASM-V-021", "CASM-V-030", "CASM-V-032"}
+    # codes if TUF refresh fails first. Phase G11.0.4 al-Bayyina
+    # (v0.11.5) F24 closure makes step4 TrustedRoot import
+    # resolve via the public-then-private fallback, so the
+    # verifier now reaches step6 reliably; step6's C-1 corrective
+    # (Phase G11.1, v0.11.0) raises CASM-V-035 when no Identity
+    # policy is supplied (the default refuse-without-policy
+    # state). Pre-v0.11.5 step4 failed first with CASM-V-021,
+    # masking step6's behavior. CASM-V-035 is therefore now the
+    # most-common observed code on this composed path.
+    assert exc.value.code in {
+        "CASM-V-021",
+        "CASM-V-030",
+        "CASM-V-032",
+        "CASM-V-035",
+    }
