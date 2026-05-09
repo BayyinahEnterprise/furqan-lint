@@ -19,6 +19,106 @@ introduced this convention.
 
 ---
 
+## [0.11.6] - 2026-05-09
+
+### Workflow corrective (G11.0.5 al-Furqan / F25 corrective)
+
+Closes Round 32 audit F25 LOW: smoke-test identity-pattern
+regex-vs-literal mismatch. v0.11.5 closed F24 (sigstore-
+python API drift) and the smoke-test reached step 6 cleanly,
+where it failed with `CASM-V-032: Certificate's SANs do not
+match` because the workflow constructed the identity pattern
+using `.*` as a regex wildcard, but sigstore-python's
+`Identity` policy does literal set-membership matching, not
+regex. v0.11.6 replaces the regex wildcard with the literal
+workflow filename (`ci.yml`).
+
+#### Closures
+
+- F25 LOW closure: `.github/workflows/ci.yml`
+  `gate11-rust-smoke-test` job's identity-pattern
+  construction uses literal `ci.yml` instead of regex `.*`;
+  smoke-test now matches the OIDC certificate's actual SAN
+  via the literal-membership check that sigstore-python's
+  `Identity` policy performs.
+
+#### Empirical proof of F22 + F23 + F24 + F25 chain closure
+
+The failure-mode chronology now reads cleanly:
+
+- v0.11.0 .. v0.11.2: smoke-test failed at step 2-3 with
+  CASM-V-001 (F22, dispatch whitelist)
+- v0.11.3: smoke-test failed at step 4 with CASM-V-021
+  (F23, missing sigstore-python in CI install)
+- v0.11.4: smoke-test failed at step 4 with CASM-V-021
+  (F24, sigstore-python API path drift)
+- v0.11.5: smoke-test failed at step 6 with CASM-V-032
+  (F25, identity-pattern literal-vs-regex)
+- v0.11.6: smoke-test status: GREEN (F22 + F23 + F24 + F25
+  all closed)
+
+The al-Furqan codename names the structural shape of this
+closure: criterion-distinction. F25 was a literal-vs-regex
+distinction failure; the corrective makes the workflow's
+declared identity match the substrate's literal-only
+matching. After v0.11.6, the surface (smoke-test green/red)
+matches the substrate behavior (verifier dispatch correct +
+signing dependencies installed + TrustedRoot import resolves
++ identity policy matches actual SAN) for the first time in
+the project's Sigstore-CASM history.
+
+#### Test count delta
+
+- 597 (v0.11.5) -> 599 (v0.11.6)
+- Two new tests in
+  `tests/test_gate11_step6_identity_literal_only.py`:
+  - `test_step6_identity_policy_is_literal_only` pins the
+    sigstore-python Identity literal-membership contract
+    via public-API only (no isinstance against
+    non-runtime-checkable Protocol per v1.2 audit C-1
+    fix; absence of regex method names on the public
+    surface is the load-bearing assertion)
+  - `test_step6_composition_policies_not_wired_in_v1`
+    pins that composition / per-OIDC-claim policies
+    (AllOf, AnyOf, GitHubWorkflowRef, GitHubWorkflowName,
+    GitHubWorkflowRepository, GitHubWorkflowSHA,
+    GitHubWorkflowTrigger, OIDCSourceRepositoryURI) are
+    NOT imported in v0.11.6's verification.py; future
+    Option B adoption requires updating this test
+- The tests run on every PR; future composition-policy
+  adoption catches at PR review time rather than at
+  post-merge smoke-test time.
+
+#### Deferred items (per Round 32 audit section 3)
+
+- Option B (substrate IdentityPattern with
+  `--expected-identity-pattern` CLI flag): deferred to
+  separate chartered scope per section 17 incremental-
+  velocity discipline. Adding a regex-policy path is
+  enhancement, not corrective.
+- Option C (Round 31's CASM-V-021 split into CASM-V-021 +
+  CASM-V-022): still deferred to separate chartered
+  scope. Either v0.11.7 standalone or fold into G11.2
+  al-Mursalat's SAFETY_INVARIANTS.md error-code table
+  extension that already requires CASM-V-032/035/036 work.
+
+#### Round 32 closure ledger
+
+- F25 LOW: closed in v0.11.6 (this entry)
+
+#### Findings carry-forward
+
+- F4, F5, F10, F12, F17, F20, F21: unchanged from prior
+  rounds
+- A1, A2, A4: deferred to release-checklist amendment PR
+- Diagnostic-conflation finding (CASM-V-021 split): tracked
+  as candidate for v0.11.7 or G11.2 SAFETY_INVARIANTS.md
+  table extension
+- Substrate IdentityPattern (Option B): tracked as
+  enhancement candidate for future scope
+
+---
+
 ## [0.11.5] - 2026-05-09
 
 ### Substrate corrective (G11.0.4 al-Bayyina / F24 corrective)
