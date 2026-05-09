@@ -139,10 +139,27 @@ class Verifier:
                 f"unsupported casm_version {manifest.casm_version!r}",
             )
         language = manifest.module_identity.get("language")
-        if language != "python":
+        # Phase G11.0.2 (v0.11.3) F22 corrective: align this
+        # dispatch whitelist with Manifest.from_dict's whitelist.
+        # Pre-v0.11.3 the schema accepted ('python', 'rust') but
+        # the verifier dispatch site rejected anything other than
+        # 'python', so a rust manifest reaching this step raised
+        # CASM-V-001 -- the dispatch surface contradicted the
+        # documented schema surface. The gate11-rust-smoke-test
+        # CI job had been red since v0.11.0 (PR #20) for this
+        # reason. v0.11.3 closes the gap by accepting rust here
+        # too. Future Go (Phase G11.2) and ONNX (Phase G11.3)
+        # additions will extend this whitelist when their
+        # verifiers ship; until then, manifests with those
+        # languages still fail-closed at this step with a clear
+        # CASM-V-001 error rather than silently passing into a
+        # missing verifier.
+        if language not in ("python", "rust"):
             raise CasmVerificationError(
                 "CASM-V-001",
-                f"v1.0 supports only language='python'; got {language!r}",
+                f"v1.0 supports language in (python, rust); "
+                f"got {language!r}. Go support ships in Phase "
+                f"G11.2; ONNX in Phase G11.3.",
             )
 
     # Step 4
