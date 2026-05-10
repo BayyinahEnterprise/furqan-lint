@@ -119,6 +119,45 @@ then tagged):
   gate cross-checks the CHANGELOG `Test count: A -> B` line
   against `pytest --collect-only -q`.
 
+## 1.5 Pre-push checklist (al-Hujurat T07 / F20 closure)
+
+Before running the `git push origin vX.Y.Z` command that
+triggers `release.yml`, walk through the following three
+gates in order:
+
+1. **Sandbox-version verification** (per
+   `docs/sandbox-ci-parity.md`). Run the pre-push verification
+   shell snippet from that document. If divergence reported,
+   install the pinned tool version, then re-run `ruff check
+   .` and `ruff format --check .` against the assembled
+   patch series. Fold any formatting fixups into the
+   originating commits via `git commit --fixup` +
+   `git rebase --autosquash` rather than appending a
+   separate "ruff format" commit.
+
+2. **Test-count claim verification.** Run:
+   ```bash
+   pytest --collect-only -q | tail -1
+   ```
+   The output ("N tests collected") MUST match the count
+   claimed in the CHANGELOG entry's `### Tests` section. If
+   divergence, either correct the CHANGELOG before push, or
+   document the divergence under a `### Projection drift`
+   subsection (per the recalibrated CHANGELOG-math gate;
+   v0.8.3 introduction with v0.11.7 al-Hujurat T04
+   calibration).
+
+3. **PR review verification.** Confirm the commit being
+   tagged was reviewed via PR (per Section 0 above). If the
+   audit-of-self pattern was used, confirm the audit
+   checklist was walked. If a documented bypass is being
+   used, confirm the CHANGELOG entry under construction
+   names the bypass.
+
+A bypass of any of these three gates MUST be documented in
+the CHANGELOG entry under a "Process bypass" subsection per
+Section 0.
+
 ## 2. Tag and push
 
 Single command, tag-at-merge-commit (do NOT tag at a local-
