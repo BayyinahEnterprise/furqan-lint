@@ -12,6 +12,45 @@ in their browser and a fresh venv.
 This document is under 600 lines by design; it is a checklist,
 not a reference manual.
 
+## 0. Pre-tag verification gates (al-Hujurat T01)
+
+Phase G10.5.A al-Hujurat (v0.11.7) closes Round 29 anomaly
+A1 by promoting these gates from convention to documented
+release-checklist requirements.
+
+Before pushing a tag that triggers `release.yml`, the
+following gates MUST be verified:
+
+1. **PR review.** The commit being tagged MUST have been
+   reviewed via a PR (either by a co-maintainer or, in the
+   single-person audit-of-self pattern, by the project lead
+   running an audit checklist against the PR diff before
+   merge). A direct-to-main commit followed by a tag on that
+   commit is a documented bypass and MUST be accompanied by a
+   CHANGELOG entry naming the bypass and the rationale. The
+   GitHub branch protection rule on `main` (al-Hujurat T02)
+   mechanically enforces this for non-admin pushes; admin
+   override (`enforce_admins: false`) preserves the
+   audit-of-self pattern when justified.
+2. **Sandbox-CI parity** (per F20 / al-Hujurat T06). Before
+   push, run `ruff check . && ruff format --check .` against
+   the assembled patch series in a virtualenv with the
+   CI-pinned ruff version (see `docs/sandbox-ci-parity.md`).
+3. **Pytest collect-only count.** The test count claimed in
+   the CHANGELOG entry MUST match `pytest --collect-only`
+   actual count (per CHANGELOG-math gate; see al-Hujurat
+   T04).
+
+A bypass of any of (1) -- (3) MUST be documented in the
+CHANGELOG entry under a "Process bypass" subsection naming
+which gate was bypassed and the rationale.
+
+The gates here are the verification mandate that surrounds
+the substrate work documented in subsequent sections of this
+checklist. Section 1 below is the substrate-side pre-tag
+checklist (version sync, CHANGELOG content, etc.); Section 0
+above is the process-side wrapper.
+
 ## 1. Pre-tag checklist
 
 Before pushing a `vX.Y.Z` tag, confirm the following on the
