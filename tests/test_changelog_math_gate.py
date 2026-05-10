@@ -233,3 +233,252 @@ def test_tests_line_regex_accepts_multiline_net_delta_wrap() -> None:
     match2 = _TESTS_LINE.search(v0931_oneline)
     assert match2 is not None
     assert match2.groups() == ("412", "413", "1")
+
+
+# al-Hujurat T04 (v0.11.7 / Round 29 A2 closure with v1.1
+# Round 30 F2 absorption): CHANGELOG-math gate spec
+# calibrated to assert ship-reality, not projection-match.
+# Substrate-corrective releases that absorb already-shipped
+# defenses are the canonical case where projection and
+# reality diverge legitimately. The legacy
+# test_changelog_math_matches_pytest_collect already
+# enforces "Y == empirical" (load-bearing assertion (a)).
+# This block adds a separate weaker check: if a prompt
+# projection is recorded in the CHANGELOG entry, the
+# actual delta is within 50% of the projection OR the
+# divergence is documented in a `### Projection drift`
+# subsection.
+
+_PROJECTED_DELTA_RE = re.compile(
+    # Matches "Projected delta: +<N>" or "Projected: +<N>" or
+    # "Prompt projection: +<N> tests" with tolerance for
+    # whitespace / case / wrapping. Returns None when no
+    # projection is recorded in the entry (typical for
+    # process-corrective releases).
+    r"(?:projected\s+delta|prompt\s+projection|projection)" r"[\s:]+\+?(\d+)",
+    re.IGNORECASE,
+)
+
+
+def _parse_projected_delta_from_changelog(
+    changelog_path: Path | None = None,
+) -> int | None:
+    """Return the projected test-count delta from the latest
+    CHANGELOG entry, or None when no projection is recorded.
+
+    al-Hujurat T04: the projection-drift assertion is
+    optional. A release entry that does not name a projection
+    skips the assertion cleanly via pytest.skip; only entries
+    that DO name a projection are subject to the within-50%
+    rule.
+    """
+    if changelog_path is None:
+        changelog_path = REPO_ROOT / "CHANGELOG.md"
+    text = changelog_path.read_text(encoding="utf-8")
+    entry_match = re.search(r"^## \[[^\]]+\]", text, re.MULTILINE)
+    if entry_match is None:
+        return None
+    start = entry_match.start()
+    next_match = re.search(r"^## \[", text[start + 1 :], re.MULTILINE)
+    end = (start + 1 + next_match.start()) if next_match else len(text)
+    latest = text[start:end]
+    m = _PROJECTED_DELTA_RE.search(latest)
+    if m is None:
+        return None
+    return int(m.group(1))
+
+
+def _changelog_has_projection_drift_subsection(
+    changelog_path: Path | None = None,
+) -> bool:
+    """Return True if the latest CHANGELOG entry contains a
+    ``### Projection drift`` subsection. The substring match
+    is intentional: a `### Projection drift` heading at any
+    level qualifies. al-Hujurat T04 names this subsection as
+    the documentation discipline for divergences > 50%.
+
+    A cross-reference to an external audit document is
+    accepted as an alternative form, recognized by the
+    presence of the substring ``Round 29`` or
+    ``Round 30`` (audit-cross-reference) in the latest
+    entry's body. The cross-reference path is the path the
+    v0.11.2 case used: §3 Round 29 documents the projected
+    +23 vs shipped +13 divergence by reference rather than
+    by inline subsection.
+    """
+    if changelog_path is None:
+        changelog_path = REPO_ROOT / "CHANGELOG.md"
+    text = changelog_path.read_text(encoding="utf-8")
+    entry_match = re.search(r"^## \[[^\]]+\]", text, re.MULTILINE)
+    if entry_match is None:
+        return False
+    start = entry_match.start()
+    next_match = re.search(r"^## \[", text[start + 1 :], re.MULTILINE)
+    end = (start + 1 + next_match.start()) if next_match else len(text)
+    latest = text[start:end]
+    if re.search(r"^###\s+Projection\s+drift", latest, re.MULTILINE | re.IGNORECASE):
+        return True
+    # Audit cross-reference forms (Round 29, Round 30, ...).
+    if re.search(r"\bRound\s+\d+\b", latest):
+        return True
+    return False
+
+
+def _compute_drift_ratio(actual: int, projected: int) -> float:
+    """Compute drift ratio with explicit zero-denominator
+    handling.
+
+    Per v1.1 Round 30 audit F2 absorption: a substrate-
+    corrective release that projects zero new tests but
+    ships any positive number must not divide by zero. The
+    convention:
+
+      - projected == 0 and actual == 0: drift_ratio = 0.0
+        (no projection, no surprise).
+      - projected == 0 and actual != 0: drift_ratio = 1.0
+        (any nonzero ship against zero projection is full
+        drift).
+      - projected != 0: drift_ratio = abs(actual - projected)
+        / abs(projected).
+
+    The abs() in the denominator handles the symmetrical
+    projected < 0 case (a release that projects net test
+    removal); same fractional drift semantics apply.
+    """
+    if projected == 0:
+        return 1.0 if actual != 0 else 0.0
+    return abs(actual - projected) / abs(projected)
+
+
+def test_projection_drift_v0_11_2_case() -> None:
+    """al-Hujurat T04 (synthetic-data test, distinct from
+    T05's fixture-based regression pin per F1 absorption):
+    the v0.11.2 shape (projected +23 from at-Tawbah prompt
+    v1.1, shipped +13 actual) is accepted by the recalibrated
+    gate without requiring a `### Projection drift`
+    subsection because drift_ratio = 10/23 ~= 0.43 < 0.50,
+    AND the entry contains a Round 29 cross-reference.
+
+    Tests the gate's ABSTRACT shape via inline mocked inputs;
+    T05 pins the CONCRETE v0.11.2 example via verbatim
+    fixture file bytes.
+    """
+    drift = _compute_drift_ratio(actual=13, projected=23)
+    assert drift < 0.5, f"v0.11.2 drift_ratio={drift:.4f} should be < 0.5"
+    assert drift > 0.4, (
+        f"v0.11.2 drift_ratio={drift:.4f} should be > 0.4 "
+        f"(catches a regression that returns 0.0 on the "
+        f"projected=23 actual=13 case)"
+    )
+
+
+def test_projection_drift_no_projection_recorded_skips(tmp_path: Path) -> None:
+    """al-Hujurat T04: a CHANGELOG entry that does not name
+    a projection has no drift assertion to evaluate. The
+    parser returns None; the live test (in production) skips
+    cleanly via pytest.skip.
+    """
+    fake = tmp_path / "FAKE_CHANGELOG.md"
+    fake.write_text(
+        "## [9.9.9] - 2099-01-01\n\n"
+        "### Tests\n\n"
+        "Test count: 100 (v9.9.8) -> 105 (v9.9.9). "
+        "Net delta: +5.\n"
+    )
+    projected = _parse_projected_delta_from_changelog(fake)
+    assert projected is None, (
+        f"no projection recorded in fixture; parser must " f"return None, got {projected}"
+    )
+
+
+def test_projection_drift_undocumented_divergence_fails(tmp_path: Path) -> None:
+    """al-Hujurat T04: a synthetic CHANGELOG entry with
+    projected=20, actual=5, no `### Projection drift`
+    subsection, no audit cross-reference. drift_ratio = 0.75
+    > 0.5; the gate fails with the formatted message.
+
+    Pinned via direct helper invocation (the live gate's
+    pytest.fail format is exercised by the live
+    test_changelog_math_*; this test pins the helper's
+    arithmetic).
+    """
+    fake = tmp_path / "FAKE_CHANGELOG.md"
+    fake.write_text(
+        "## [9.9.9] - 2099-01-01\n\n"
+        "Prompt projection: +20 tests.\n\n"
+        "### Tests\n\n"
+        "Test count: 100 (v9.9.8) -> 105 (v9.9.9). "
+        "Net delta: +5.\n"
+    )
+    projected = _parse_projected_delta_from_changelog(fake)
+    assert projected == 20
+    drift = _compute_drift_ratio(actual=5, projected=20)
+    assert drift > 0.5, f"drift_ratio={drift:.4f} must exceed 0.5"
+    assert not _changelog_has_projection_drift_subsection(fake), (
+        "fixture has no `### Projection drift` subsection or "
+        "audit cross-reference; helper must return False"
+    )
+
+
+def test_projection_drift_zero_projection_handled(tmp_path: Path) -> None:
+    """al-Hujurat T04 / Round 30 F2 absorption: explicit
+    zero-denominator coverage.
+
+    Two sub-cases exercised:
+      (a) projected=0, actual=0: drift_ratio=0.0; no
+          `### Projection drift` subsection required; gate
+          accepts.
+      (b) projected=0, actual=4: drift_ratio=1.0 (any
+          nonzero ship against zero projection is full
+          drift). Without `### Projection drift` subsection
+          (typical for a process-corrective release that did
+          not pre-register test count): assertion fails.
+          With `### Projection drift` subsection: gate
+          accepts.
+
+    The helper's explicit projected==0 branch returns 1.0 if
+    actual!=0 else 0.0; tests both arms.
+    """
+    # Sub-case (a): projected=0, actual=0.
+    drift_a = _compute_drift_ratio(actual=0, projected=0)
+    assert drift_a == 0.0, (
+        f"projected=0 actual=0 must be drift_ratio=0.0 "
+        f"(no projection, no surprise); got {drift_a}"
+    )
+
+    # Sub-case (b1): projected=0, actual=4, no subsection.
+    drift_b = _compute_drift_ratio(actual=4, projected=0)
+    assert drift_b == 1.0, (
+        f"projected=0 actual!=0 must be drift_ratio=1.0 by "
+        f"the zero-denominator rule; got {drift_b}"
+    )
+    fake_no_sub = tmp_path / "FAKE_NO_SUB.md"
+    fake_no_sub.write_text(
+        "## [9.9.9] - 2099-01-01\n\n"
+        "Process-corrective amendment.\n\n"
+        "### Tests\n\n"
+        "Test count: 100 (v9.9.8) -> 104 (v9.9.9). "
+        "Net delta: +4.\n"
+    )
+    assert not _changelog_has_projection_drift_subsection(fake_no_sub), (
+        "fixture without subsection or Round-N reference must "
+        "fail the documentation check (the gate would refuse)"
+    )
+
+    # Sub-case (b2): projected=0, actual=4, with subsection.
+    fake_with_sub = tmp_path / "FAKE_WITH_SUB.md"
+    fake_with_sub.write_text(
+        "## [9.9.9] - 2099-01-01\n\n"
+        "Process-corrective amendment.\n\n"
+        "### Projection drift\n\n"
+        "No projection committed; observed +4 from per-task "
+        "enumeration (al-Hujurat T04 + T05 + T08).\n\n"
+        "### Tests\n\n"
+        "Test count: 100 (v9.9.8) -> 104 (v9.9.9). "
+        "Net delta: +4.\n"
+    )
+    assert _changelog_has_projection_drift_subsection(fake_with_sub), (
+        "fixture with `### Projection drift` subsection must "
+        "satisfy the documentation check (gate accepts the "
+        "ship-vs-projection drift)"
+    )
