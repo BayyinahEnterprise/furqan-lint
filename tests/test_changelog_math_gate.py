@@ -482,3 +482,108 @@ def test_projection_drift_zero_projection_handled(tmp_path: Path) -> None:
         "satisfy the documentation check (gate accepts the "
         "ship-vs-projection drift)"
     )
+
+
+# al-Hujurat T05 (v0.11.7 / Round 30 F1 absorption):
+# fixture-based regression pin distinct from T04's
+# synthetic v0.11.2 case. T04 tests "does the gate's logic
+# accept inputs matching the v0.11.2 shape?"; T05 tests
+# "does the gate accept the actual v0.11.2 CHANGELOG entry
+# verbatim?" The distinction matters because if someone
+# later edits the v0.11.2 entry text (adds or removes a
+# subsection, changes wording referencing Round 29), T04
+# may still pass but T05 fails -- the regression-pin
+# discipline applied to a documented-acceptance case.
+
+_V0_11_2_FIXTURE_PATH = REPO_ROOT / "tests" / "fixtures" / "changelog" / "v0_11_2_entry.md"
+
+
+def _evaluate_gate_against_entry_text(
+    entry_text: str,
+) -> tuple[bool, str]:
+    """Run the recalibrated gate's three-assertion suite
+    against an entry-text input rather than the actual
+    CHANGELOG.md. Returns (accepted, reason).
+
+    Implementation: parse X, Y, Z from the entry; if no
+    canonical sentence found, return (False, "no test count
+    sentence"). If Y - X != Z, return (False, "arithmetic
+    mismatch"). If a projection is recorded and the drift
+    exceeds 50% AND no `### Projection drift` subsection or
+    audit cross-reference is present, return (False,
+    "undocumented projection divergence"). Otherwise return
+    (True, "ok").
+
+    The function does NOT verify "Y == empirical pytest
+    count" -- that assertion is environment-coupled (depends
+    on which version's test suite is currently installed).
+    The fixture-pin test only verifies the entry's internal
+    arithmetic + projection-drift discipline.
+    """
+    # Treat the entry text as if it were the latest entry of
+    # a CHANGELOG file. Reuse the existing helpers by writing
+    # to a tmp file is overkill; do the parsing inline.
+    m = _TESTS_LINE.search(entry_text)
+    if m is None:
+        return (False, "no test-count sentence found")
+    x = int(m.group(1))
+    y = int(m.group(2))
+    z = int(m.group(3))
+    if y - x != z:
+        return (
+            False,
+            f"arithmetic mismatch: Y-X={y - x} != Z={z}",
+        )
+    proj_match = _PROJECTED_DELTA_RE.search(entry_text)
+    if proj_match is None:
+        return (True, "ok (no projection)")
+    projected = int(proj_match.group(1))
+    drift = _compute_drift_ratio(actual=z, projected=projected)
+    if drift <= 0.5:
+        return (True, f"ok (drift={drift:.2f} <= 0.5)")
+    has_subsection = bool(
+        re.search(
+            r"^###\s+Projection\s+drift",
+            entry_text,
+            re.MULTILINE | re.IGNORECASE,
+        )
+    )
+    has_audit_xref = bool(re.search(r"Round\s+\d+", entry_text))
+    if has_subsection or has_audit_xref:
+        return (
+            True,
+            f"ok (drift={drift:.2f} > 0.5, but documented)",
+        )
+    return (
+        False,
+        f"undocumented projection divergence (drift={drift:.2f})",
+    )
+
+
+def test_v0_11_2_changelog_entry_fixture_accepted() -> None:
+    """al-Hujurat T05 (Round 30 F1 absorption): regression
+    pin loading the verbatim v0.11.2 CHANGELOG entry text
+    from tests/fixtures/changelog/v0_11_2_entry.md and
+    asserting the recalibrated gate accepts it.
+
+    A future spec change that breaks this fixture surfaces
+    as a test failure with the v0.11.2 entry's exact bytes
+    in the failing test, forcing explicit fixture amendment.
+
+    Distinct from test_projection_drift_v0_11_2_case (T04):
+    T04 tests the abstract shape via inline mocked inputs;
+    T05 pins concrete bytes via the fixture file.
+    """
+    assert _V0_11_2_FIXTURE_PATH.is_file(), (
+        f"v0.11.2 fixture missing at {_V0_11_2_FIXTURE_PATH}; "
+        f"al-Hujurat T05 requires verbatim entry text "
+        f"committed alongside the test"
+    )
+    entry_text = _V0_11_2_FIXTURE_PATH.read_text()
+    accepted, reason = _evaluate_gate_against_entry_text(entry_text)
+    assert accepted, (
+        f"v0.11.2 fixture rejected by recalibrated gate: "
+        f"{reason}. If the gate spec has been intentionally "
+        f"changed, amend the fixture at "
+        f"{_V0_11_2_FIXTURE_PATH} explicitly."
+    )
