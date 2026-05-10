@@ -47,7 +47,42 @@ which gate was bypassed and the rationale.
 
 The gates here are the verification mandate that surrounds
 the substrate work documented in subsequent sections of this
-checklist. Section 1 below is the substrate-side pre-tag
+checklist.
+
+### Canonical sequence for new releases (al-Hujurat T02 / F5)
+
+The branch protection rule on `main` (al-Hujurat T02) applies
+to v0.11.7 and all subsequent releases. The canonical
+chronology that makes v0.11.7 the worked example by
+chronology, and applies to every later release without
+modification:
+
+1. **Open PR** for the release branch (convention-based for
+   v0.11.7 since T02 is being applied; mechanically required
+   for v0.11.8 and later).
+2. **Project-lead self-approves** the PR (audit-of-self
+   pattern; co-maintainer review accepted when a co-maintainer
+   exists).
+3. **Merge PR** to main.
+4. **Apply T02 branch protection rule** via the `gh api -X
+   PUT` call below (one-time for v0.11.7; already in effect
+   for subsequent releases; verify via `gh api .../protection`).
+5. **Push the release tag** (`git tag vX.Y.Z merge_commit && git
+   push origin vX.Y.Z`); release.yml runs.
+6. **Record the protection-rule timestamp** (or last-verified
+   timestamp for subsequent releases) in the release
+   CHANGELOG entry's "Process-corrective amendment timestamp
+   record" subsection.
+
+The `gh api -X PUT /repos/BayyinahEnterprise/furqan-lint/branches/main/protection`
+JSON payload sets `required_pull_request_reviews` (one
+approving review required), `enforce_admins: false` (admin
+override preserved for the audit-of-self pattern when
+justified), and disables force-push and branch deletion.
+Sub-step 6 captures the configuration `updated_at` field as
+returned by the GitHub API.
+
+ Section 1 below is the substrate-side pre-tag
 checklist (version sync, CHANGELOG content, etc.); Section 0
 above is the process-side wrapper.
 
