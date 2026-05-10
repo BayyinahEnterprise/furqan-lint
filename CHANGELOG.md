@@ -19,6 +19,35 @@ introduced this convention.
 
 ---
 
+## [0.11.8] - <DATE>
+
+### Architecture-refactor corrective (as-Saff / G11.0.6)
+
+Phase G11.0.6 introduces a Route B procedural facade over the
+existing class-based ``Verifier`` API in
+``furqan_lint.gate11.verification``. This is an additive
+refactor: existing callers (``furqan_lint.gate11.cli`` and all
+tests) continue using ``Verifier(...).verify_bundle(...)``
+unchanged; a new module-level ``verify(manifest, args)``
+function dispatches to per-language facades
+(``python_verification.py``, ``rust_verification.py``) via a
+private ``_LANGUAGE_DISPATCH`` table.
+
+This refactor unblocks Phase G11.2 (al-Mursalat / Go) and Phase
+G11.3 (an-Naziat / ONNX), both of which T00-halted at v0.12.0
+and v0.13.0 respectively because their prompts assumed Route A
+(per-language modules already extracted) but substrate-truth at
+v0.11.7 was a monolithic ``Verifier`` class with no module-level
+dispatch surface.
+
+Test count: 408 (v0.11.7) -> <TBD> (v0.11.8). Net delta: <TBD>.
+
+### Round 35 absorption ledger
+
+<TBD>
+
+---
+
 ## [0.11.7] - 2026-05-09
 
 ### Process-corrective amendment (al-Hujurat / G10.5.A)
