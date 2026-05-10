@@ -454,6 +454,24 @@ were already shared between the two pipelines from v0.11.0.
 | Side closure | 1 | F19 |
 | Deferral | 7 | F4, F5, F10, F12, F17, F20, F21 |
 
+#### Round 29 addendum -- Process bypass (added retroactively in v0.11.7 per al-Hujurat T03)
+
+The v0.11.2 commit `474aee488257d3aea6fd4c99209d6f50cfde0c32`
+was committed directly to `main` without a PR. Per the
+audit-of-self pattern that has been the convention for
+v0.11.0, v0.11.1, v0.10.A, and v0.10.0 releases, this is a
+process bypass. Round 29 audit named this as A1 ADVISORY.
+
+v0.11.7 closes A1 by documenting PR review as a release-
+checklist gate (al-Hujurat T01) and applying a branch
+protection rule on `main` (al-Hujurat T02). The v0.11.2
+substrate work is unchanged by this addendum; the addendum
+records the process state at the time of release.
+
+(Round 30 audit F4 absorption: this is the Option A default
+disposition. Project lead did not invoke Option B; this
+addendum is the canonical record.)
+
 ---
 
 ## [0.11.1] - 2026-05-08
