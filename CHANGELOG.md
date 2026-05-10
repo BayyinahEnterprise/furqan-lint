@@ -19,19 +19,218 @@ introduced this convention.
 
 ---
 
-## [0.11.7] - <DATE>
+## [0.11.7] - 2026-05-09
 
 ### Process-corrective amendment (al-Hujurat / G10.5.A)
 
-(populate during release commit 10)
+Phase G10.5.A closes three Round 29 process anomalies that
+the al-Mubin pipeline does not surface (because its gates
+operate post-tag): A1 (direct-to-main without PR review,
+ADVISORY), A2 (CHANGELOG-math projection-vs-reality
+calibration, ADVISORY), F20 (sandbox-CI parity, deferred
+from v0.11.2).
+
+This release ships no substrate behavior changes. CLI
+surface, verifier behavior, and checker semantics are
+byte-identical to v0.11.6. Only verification-gate process
+and documentation change. The al-Hujurat phase prompt
+originally targeted v0.11.3, but that version number was
+already consumed by the v0.11.3 F22 substrate corrective
+(dispatch whitelist alignment); the al-Hujurat work lands
+on v0.11.7 as the next available patch above the v0.11.6
+tip without changing scope.
 
 ### Closures
 
-(populate during release commit 10)
+- A1 ADVISORY -> PROCESS-DISCIPLINE (T01-T03): PR review
+  documented as pre-tag gate in
+  ``docs/release-checklist.md`` Section 0; canonical
+  PR-merge-then-protection-then-tag sequence documented
+  in Section 0.canonical-sequence subsection per Round 30
+  audit F5 absorption; v0.11.2 direct-to-main commit
+  ``474aee4`` named retroactively in the v0.11.2 entry's
+  ``#### Round 29 addendum -- Process bypass`` subsection
+  per Option A default (Round 30 audit F4 absorption);
+  branch protection rule on ``main`` applied between
+  v0.11.7 PR merge and v0.11.7 tag push at TIMESTAMP_TBD
+  (recorded by project lead at apply time per Round 30
+  audit F3 same-calendar-day absorption).
+- A2 ADVISORY -> SPEC-CORRECTIVE (T04-T05): CHANGELOG-math
+  gate calibrated to assert ship-reality (Y == empirical
+  preserved from v0.8.3) plus a separate weaker check via
+  ``test_projection_drift_*`` tests -- if a prompt
+  projection is recorded in the entry, actual delta MUST
+  be within 50% of projection OR the divergence documented
+  in a ``### Projection drift`` subsection or via audit
+  cross-reference. Zero-denominator case explicitly handled
+  via ``_compute_drift_ratio`` (Round 30 audit F2
+  absorption). Verbatim v0.11.2 CHANGELOG entry text pinned
+  as a fixture at ``tests/fixtures/changelog/v0_11_2_entry.md``
+  (T05 distinct from T04's synthetic v0.11.2 case per Round
+  30 audit F1 absorption).
+- F20 DEFERRED -> CLOSED-AT-CONVENTION-STATUS (T06-T07):
+  sandbox-CI parity discipline documented at
+  ``docs/sandbox-ci-parity.md`` with explicit
+  ``Enforcement profile`` subsection naming the convention-
+  vs-enforcement asymmetry between mechanically-enforced
+  PR-review (T01+T02) and documentation-only sandbox-CI
+  parity (Round 30 audit F6 absorption). Pre-push
+  checklist amended at ``docs/release-checklist.md``
+  Section 1.5 with three gates (sandbox-version
+  verification, test-count claim verification, PR review
+  verification).
+
+#### Round 30 audit absorption ledger
+
+Round 30 audit (Perplexity validator-by-different-instance)
+applied 49:6 verification mandate to the al-Hujurat v1.0
+prompt itself before ship. v1.1 absorbed all seven findings
+pre-ship:
+
+| Finding | Severity | Closure point |
+|---|---|---|
+| F1 | MEDIUM | T04 / T05 distinction (synthetic vs fixture) |
+| F2 | MEDIUM | Zero-denominator handling in ``_compute_drift_ratio`` |
+| F3 | LOW | Same-calendar-day timing for T02 protection rule |
+| F4 | ADVISORY | Option A default for T03 retroactive amendment |
+| F5 | ADVISORY | Canonical sequence in Section 0 of release-checklist |
+| F6 | ADVISORY | Enforcement profile subsection in sandbox-ci-parity.md |
+| F7 | ADVISORY | G11.2-first ordering note (recalibrated gate back-compat) |
+
+#### Process-corrective amendment timestamp record
+
+Per Round 30 audit F3 absorption, the T02 branch protection
+rule on ``main`` is applied between PR merge and tag push,
+on the same calendar day as the v0.11.7 release. The
+``updated_at`` field returned by the GitHub API at apply
+time is recorded here as **TIMESTAMP_TBD** (project lead
+fills at apply time). Sequence:
+
+1. v0.11.7 PR opened (convention-based; this is the last
+   release without mechanical enforcement)
+2. Project-lead self-approves (audit-of-self pattern)
+3. PR merges to main
+4. T02 branch protection applied at TIMESTAMP_TBD
+5. v0.11.7 tag pushed at TIMESTAMP_TBD + epsilon
+6. release.yml runs (T01 PyPI verify, T02 gh release create
+   from al-Mubin pipeline)
+
+The al-Hujurat T02 (branch protection) is distinct from
+al-Mubin T02 (release.yml gh release create); same
+identifier, different phase. Disambiguation: al-Hujurat
+T02 = branch protection; al-Mubin T02 = release-workflow
+gh release create.
+
+### No substrate change
+
+\`\`\`
+git diff v0.11.6..v0.11.7 -- src/furqan_lint/
+\`\`\`
+
+returns empty. Phase G10.5.A is process-corrective; CLI
+surface, verifier behavior, checker semantics, and SAFETY
+invariants are byte-identical to v0.11.6.
 
 ### Tests
 
-Test count: 403 (v0.11.6) -> <TBD> (v0.11.7). Net delta: <TBD>.
+Test count: 403 (v0.11.6) -> 408 (v0.11.7). Net delta: +5.
+
+Per the §3 inventory: +4 from al-Hujurat T04 (synthetic
+v0.11.2 case + skip-no-projection + undocumented-divergence
++ zero-projection-handled with two sub-cases), +1 from
+al-Hujurat T05 (verbatim v0.11.2 fixture pin distinct from
+T04's synthetic case per Round 30 audit F1 absorption).
+
+The recalibrated CHANGELOG-math gate verifies (assertion
+(a) ``Y == empirical`` from v0.8.3 introduction; assertion
+(b) ``Y - X == Z`` from v0.8.3 introduction; assertion (c)
+projection drift documented or within 50% with
+zero-denominator handling, NEW in v0.11.7).
+
+### Limitations introduced
+
+None.
+
+### §11.3 Five Questions
+
+1. **What was added?** Three documentation files
+   (``docs/sandbox-ci-parity.md``; sections 0 + 1.5 of
+   ``docs/release-checklist.md``); one verbatim fixture
+   (``tests/fixtures/changelog/v0_11_2_entry.md``); five
+   tests in ``tests/test_changelog_math_gate.py``
+   covering projection-drift assertions including
+   zero-denominator case.
+2. **What was fixed?** Three Round 29 process anomalies
+   (A1 PR-review gap, A2 CHANGELOG-math calibration, F20
+   sandbox-CI parity). v0.11.2 retroactively amended with
+   process-bypass addendum per Option A default.
+3. **What was retired?** Implicit-convention status of PR
+   review (now mechanically enforced via T02 branch
+   protection rule on main, with audit-of-self override
+   preserved via enforce_admins: false). Implicit
+   sandbox-CI parity (now documentation + pre-push
+   checklist convention with explicit Enforcement profile
+   naming the convention-vs-enforcement asymmetry).
+4. **What did this release introduce as new limitations?**
+   None. The Enforcement profile names sandbox-CI parity
+   as candidate-discipline (convention with audit-of-self
+   verification) rather than enforced-discipline; this is
+   honest scope-naming, not a new limitation.
+5. **What is the empirical evidence the substrate behaves
+   as claimed?** 408 tests pass (T04 + T05 covers the
+   recalibrated gate); ``git diff v0.11.6..v0.11.7 --
+   src/furqan_lint/`` returns empty (no substrate change);
+   the v0.11.2 fixture pin loads verbatim entry text and
+   the recalibrated gate accepts it (T05 regression pin).
+
+### §5.1 Validator-bias self-disclosure
+
+I (Claude / cowork) am the producer + validator + reporter
+for the v0.11.7 series. Round 30 audit (Perplexity
+validator-by-different-instance) applied 49:6 verification
+mandate to the v1.0 al-Hujurat prompt before ship; all
+seven findings absorbed in v1.1. The recursive-failure-mode
+risk (the closure prompt's own count claim tripping the
+assertion the prompt was closing) was caught at audit time
+rather than implementation time.
+
+Load-bearing fresh-instance review questions:
+
+* Does ``_compute_drift_ratio`` correctly handle the
+  zero-denominator case across both arms (projected=0
+  actual=0 returns 0.0; projected=0 actual!=0 returns 1.0)?
+  Both arms exercised in
+  ``test_projection_drift_zero_projection_handled``.
+* Does the T05 fixture file at
+  ``tests/fixtures/changelog/v0_11_2_entry.md`` correctly
+  capture the v0.11.2 entry as it stood AT v0.11.2 SHIP
+  TIME? The Round 29 addendum applied retroactively to
+  CHANGELOG.md in T03 does NOT flow back to the fixture
+  by intent; the divergence is documented in the T03 commit
+  body.
+* Does the Section 0 / Section 1.5 split in
+  ``docs/release-checklist.md`` preserve the existing
+  Section 1 (Pre-tag substrate checklist) intact? The new
+  sections wrap the substrate work without modifying it.
+
+### §5.2 Prompt-grounding self-check
+
+§0 grounding commands run before commit 1:
+
+* ``docs/release-checklist.md`` exists at v0.11.6 (135
+  lines pre-amendment; v0.11.7 grew it to ~370 lines via
+  Section 0 + Section 1.5 + canonical-sequence subsection).
+* ``tests/test_changelog_math_gate.py`` v0.11.6 baseline:
+  3 tests (1 live gate that skips on placeholder + 2
+  self-tests). v0.11.7 adds 5 tests (4 T04 + 1 T05).
+* ``tests/fixtures/changelog/`` did not exist at v0.11.6;
+  created in v0.11.7 commit 4 (T05).
+* ``CHANGELOG.md`` v0.11.2 entry boundary: lines 344..458
+  at v0.11.6 (post-T03 addendum: 344..476). awk-extracted
+  verbatim into the T05 fixture at ship-time bytes.
+* Baseline pytest count: 403 (v0.11.6).
+* Empirical at v0.11.7: 408. Delta: +5. Matches §4
+  inventory exactly.
 
 ## [0.11.6] - 2026-05-09
 
