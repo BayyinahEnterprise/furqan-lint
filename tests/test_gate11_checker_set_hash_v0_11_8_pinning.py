@@ -52,7 +52,7 @@ def test_v0_11_8_facade_modules_in_checker_source_files() -> None:
         "must be pinned in _CHECKER_SOURCE_FILES; absence is a "
         "regression of the H-6 propagation-defense audit."
     )
-    # Pre-v0.11.8 pinning still in place — byte-stable discipline.
+    # Pre-v0.11.8 pinning still in place -- byte-stable discipline.
     for v0_11_7_pinned in (
         "additive.py",
         "cli.py",

@@ -85,7 +85,7 @@ def test_module_level_verify_is_exported() -> None:
     Verifier) remain for byte-stable discipline.
     """
     assert "verify" in v_mod.__all__
-    # Existing entries remain — byte-stable discipline.
+    # Existing entries remain -- byte-stable discipline.
     for name in (
         "CasmIndeterminateError",
         "CasmVerificationError",
