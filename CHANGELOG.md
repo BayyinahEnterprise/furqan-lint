@@ -19,6 +19,20 @@ introduced this convention.
 
 ---
 
+## [0.11.7] - <DATE>
+
+### Process-corrective amendment (al-Hujurat / G10.5.A)
+
+(populate during release commit 10)
+
+### Closures
+
+(populate during release commit 10)
+
+### Tests
+
+Test count: 403 (v0.11.6) -> <TBD> (v0.11.7). Net delta: <TBD>.
+
 ## [0.11.6] - 2026-05-09
 
 ### Workflow corrective (G11.0.5 al-Furqan / F25 corrective)
