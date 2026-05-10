@@ -528,10 +528,91 @@ class Verifier:
         return result
 
 
+# ---------------------------------------------------------------
+# Phase G11.0.6 (as-Saff / v0.11.8) Route B procedural facade
+# ---------------------------------------------------------------
+#
+# Module-level ``verify(manifest, args)`` function with a private
+# ``_LANGUAGE_DISPATCH`` table dispatching to per-language facades
+# in ``python_verification.py`` and ``rust_verification.py``. This
+# is purely additive: existing callers using
+# ``Verifier(...).verify_bundle(...)`` directly are unaffected
+# (gate11/cli.py, all tests pre-v0.11.8).
+#
+# The dispatch table imports the per-language facades **lazily**
+# inside the ``verify`` function rather than at module top-level.
+# The per-language facade modules import ``Verifier``,
+# ``VerificationResult``, and ``TrustConfig`` from this module;
+# importing them eagerly here would create a circular import. The
+# lazy-import pattern is documented in F-RV-7 of the v1.3 audit.
+#
+# D24 discipline: ``verify`` uses single-trailing-return shape
+# (raise on miss, return on hit) per the v0.8.0 finding. Do NOT
+# refactor to ``if handler: return handler(...); raise ...`` --
+# D24 doesn't model ``raise`` as terminal and the all-paths-return
+# analysis fires MARAD P1.
+
+
+def verify(manifest, args):  # type: ignore[no-untyped-def]
+    """Module-level procedural facade introduced at v0.11.8.
+
+    Dispatches to a language-specific facade per
+    ``_LANGUAGE_DISPATCH`` based on
+    ``manifest.module_identity['language']``. Raises
+    :class:`CasmVerificationError` with code ``CASM-V-001`` if
+    the language is not in the dispatch table.
+
+    Parameters:
+        manifest: parsed :class:`Manifest` object (informational
+            at this layer; the language-specific facade composes
+            a Verifier and re-parses the bundle from
+            ``args.bundle_path`` to enforce the byte-stable
+            single-source-of-truth contract).
+        args: ``argparse.Namespace`` from ``gate11/cli.py``
+            carrying ``bundle_path``, ``module_path``,
+            ``force_refresh``, ``expected_identity``,
+            ``expected_issuer``, ``allow_any_identity``.
+
+    Returns:
+        :class:`VerificationResult` populated by the underlying
+        ``Verifier.verify_bundle`` 9-step flow.
+
+    Raises:
+        :class:`CasmVerificationError`: with positional
+        ``CASM-V-001`` if the manifest's language is not in the
+        dispatch table (see F-XR-5 audit absorption: positional
+        args, not keyword, to match the rest of the verification
+        module's exception-construction style).
+    """
+    # Lazy import to avoid module-level circular import:
+    # python_verification / rust_verification import Verifier from
+    # this module; we import their _verify_* handlers here at
+    # call time.
+    from furqan_lint.gate11.python_verification import _verify_python
+    from furqan_lint.gate11.rust_verification import _verify_rust
+
+    _LANGUAGE_DISPATCH = {
+        "python": _verify_python,
+        "rust": _verify_rust,
+    }
+
+    language = manifest.module_identity.get("language")
+    handler = _LANGUAGE_DISPATCH.get(language)
+    if handler is None:
+        raise CasmVerificationError(
+            "CASM-V-001",
+            f"v1.0 supports language in (python, rust); "
+            f"got {language!r}. Go support ships in Phase "
+            f"G11.2; ONNX in Phase G11.3.",
+        )
+    return handler(manifest, args)
+
+
 __all__ = (
     "CasmIndeterminateError",
     "CasmVerificationError",
     "TrustConfig",
     "VerificationResult",
     "Verifier",
+    "verify",
 )
