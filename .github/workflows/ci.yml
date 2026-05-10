@@ -43,8 +43,8 @@ jobs:
           # CODE_OF_CONDUCT.md is Contributor Covenant v2.1 verbatim;
           # third-party text is excluded per the policy that bans
           # em-dashes from project-authored prose only.
-          if LC_ALL=C.UTF-8 grep -rPn --exclude=CODE_OF_CONDUCT.md '[\x{2013}\x{2014}]' src/ tests/ README.md CHANGELOG.md pyproject.toml; then
-            echo "Em-dash or en-dash found in source, tests, README, CHANGELOG, or pyproject.toml"
+          if LC_ALL=C.UTF-8 grep -rPn --exclude=CODE_OF_CONDUCT.md '[\x{2013}\x{2014}]' src/ tests/ docs/ README.md CHANGELOG.md pyproject.toml; then
+            echo "Em-dash or en-dash found in source, tests, docs, README, CHANGELOG, or pyproject.toml"
             exit 1
           fi
           echo "Em-dash check: clean"

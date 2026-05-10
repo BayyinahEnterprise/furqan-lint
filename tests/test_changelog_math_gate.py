@@ -318,10 +318,12 @@ def _changelog_has_projection_drift_subsection(
     latest = text[start:end]
     if re.search(r"^###\s+Projection\s+drift", latest, re.MULTILINE | re.IGNORECASE):
         return True
-    # Audit cross-reference forms (Round 29, Round 30, ...).
-    if re.search(r"\bRound\s+\d+\b", latest):
-        return True
-    return False
+    # Audit cross-reference forms (Round 29, Round 30, ...). The
+    # bool(...) wrap collapses the if/return to a single trailing
+    # return per SIM103 (the v0.11.7 al-Hujurat ship slipped this
+    # through; v0.11.8 cleans it up as a release-time housekeeping
+    # fix).
+    return bool(re.search(r"\bRound\s+\d+\b", latest))
 
 
 def _compute_drift_ratio(actual: int, projected: int) -> float:
@@ -548,7 +550,7 @@ def _evaluate_gate_against_entry_text(
             re.MULTILINE | re.IGNORECASE,
         )
     )
-    has_audit_xref = bool(re.search(r"Round\s+\d+", entry_text))
+    has_audit_xref = bool(re.search(r"\bRound\s+\d+\b", entry_text))
     if has_subsection or has_audit_xref:
         return (
             True,
