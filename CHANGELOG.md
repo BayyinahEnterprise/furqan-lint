@@ -19,7 +19,7 @@ introduced this convention.
 
 ---
 
-## [0.11.8] - <DATE>
+## [0.11.8] - 2026-05-09
 
 ### Architecture-refactor corrective (as-Saff / G11.0.6)
 
@@ -40,11 +40,146 @@ and v0.13.0 respectively because their prompts assumed Route A
 v0.11.7 was a monolithic ``Verifier`` class with no module-level
 dispatch surface.
 
-Test count: 408 (v0.11.7) -> <TBD> (v0.11.8). Net delta: <TBD>.
+### Substrate changes
+
+* New module ``src/furqan_lint/gate11/python_verification.py``:
+  thin facade exposing ``_verify_python(manifest, args) ->
+  VerificationResult``. Composes a ``Verifier`` instance
+  internally and delegates to ``verify_bundle()``. Reads
+  optional argparse attributes via ``getattr`` with safe
+  defaults so partial namespaces are accepted.
+* New module ``src/furqan_lint/gate11/rust_verification.py``:
+  mirror of python_verification for ``language=rust`` manifests.
+* ``src/furqan_lint/gate11/verification.py`` gains a module-level
+  ``verify(manifest, args)`` function and a private
+  ``_LANGUAGE_DISPATCH`` table built lazily inside the function
+  (lazy-import pattern documented in F-RV-7 absorption to avoid
+  module-level circular import). The ``Verifier`` class,
+  ``verify_bundle`` method, ``CasmVerificationError``,
+  ``CasmIndeterminateError``, ``TrustConfig``, and
+  ``VerificationResult`` types are all byte-stable across the
+  v0.11.7 → v0.11.8 transition. ``__all__`` gains a single
+  ``"verify"`` entry; existing entries are not reordered or
+  removed.
+* ``src/furqan_lint/gate11/checker_set_hash.py``: extends
+  ``_CHECKER_SOURCE_FILES`` from 15 to 17 entries, pinning
+  python_verification.py + rust_verification.py so a Relying
+  Party can detect substrate divergence between bundles signed
+  by furqan-lint installations whose facade modules disagree.
+  This honors the H-6 propagation-defense audit applied to
+  Form A.
+
+### Documentation
+
+* New ``docs/g11.0.6-preflight.md``: T00 pre-flight verification
+  record. Eight steps confirm v0.11.7 substrate against the
+  four working hypotheses the v1.3 prompt depends on, including
+  the substrate-truth probe that vindicated Route B as the
+  correct architectural path (al-Mursalat v1.0 / an-Naziat v1.0
+  prompts had assumed Route A).
+
+### Tests
+
+Test count: 604 (v0.11.7) -> 618 (v0.11.8). Net delta: +14.
+
+Per the §3 inventory: +4 from T01
+(``tests/test_gate11_python_verification.py``: facade
+importable + signature contract + Verifier-class byte-stable +
+getattr-with-defaults), +4 from T02
+(``tests/test_gate11_rust_verification.py``: rust facade
+mirror), +5 from T03
+(``tests/test_gate11_verify_dispatch.py``: ``verify`` exported +
+unknown-language CASM-V-001 + python dispatch + rust dispatch +
+verify_bundle keyword-only tail byte-stable), +1 from T04
+(``tests/test_gate11_checker_set_hash_v0_11_8_pinning.py``:
+both new facade modules pinned in _CHECKER_SOURCE_FILES + all
+13 v0.11.7-pinned source files retained).
+
+The recalibrated test count uses the bundle-author full-extras
+profile (``[dev,gate11,rust,onnx,onnx-runtime,onnx-profile]``)
+which is the profile under which the CHANGELOG-math gate runs at
+full strength (per the gate's onnxruntime-importorskip guard).
+The v0.11.7 entry's ``408`` was recorded under a leaner profile
+that did not have ``[gate11]`` extras installed; the gate
+necessarily skipped at that profile because rfc8785 was absent
+and most gate11 tests skip-collected. Going forward, releases
+that touch the gate11 substrate calibrate against the full-
+extras profile.
+
+### Limitations introduced
+
+None. This release is purely additive at the substrate level;
+no new four-place documented limits, no new CASM-V codes, no
+new signing surface, no schema changes.
 
 ### Round 35 absorption ledger
 
-<TBD>
+The Round 35 cross-instance audit on the as-Saff v1.0 / v1.1 /
+v1.2 prompts surfaced 28 findings absorbed across three audit
+iterations (v1.0 → v1.1 → v1.2 → v1.3-dispatch-ready):
+
+* v1.0 audit: 8 findings (substrate-architecture clarity,
+  byte-stable scoping, dispatch shape, lazy-import pattern,
+  facade signature, getattr defaults, test coverage scope,
+  CHANGELOG entry shape) absorbed as v1.1.
+* v1.1 audit: 9 F-XR findings absorbed as v1.2 (CASM-V-001
+  positional vs keyword, dispatch table privacy,
+  exception-construction style, _CHECKER_SOURCE_FILES
+  bounded-diff scope, test count realistic delta range,
+  language-handler signature uniformity, etc.).
+* v1.2 audit: 11 F-RV polish findings absorbed as v1.3 (lazy-
+  import circular-import handling, getattr-default safety,
+  facade-signature forward-reference resolution via
+  get_annotations, byte-stable __all__ extension semantics,
+  Naskh-discipline pinning rationale, etc.).
+
+The v1.3 prompt was dispatched APPROVE-WITH-SURGICAL-AMENDMENTS
+per the Round 35 v1.2 audit verdict. All four substrate working
+hypotheses (Route B over Route A, _CHECKER_SOURCE_FILES tuple
+shape, byte-stable Verifier class, lazy-import circular-import
+pattern) verified empirically in T00 with zero divergences.
+
+This release closes the al-Mursalat (v0.12.0) and an-Naziat
+(v0.13.0) cascade halts: their v1.2 prompts can dispatch
+unchanged against the v0.11.8 substrate without further
+refactor.
+
+### §11.3 Five Questions
+
+1. **What was added?** Two new facade modules
+   (python_verification.py, rust_verification.py); module-level
+   ``verify`` + ``_LANGUAGE_DISPATCH`` in verification.py; two
+   entries in _CHECKER_SOURCE_FILES; T00 pre-flight record;
+   13 new tests (5 in test_gate11_verify_dispatch.py + 4 in
+   test_gate11_python_verification.py + 4 in
+   test_gate11_rust_verification.py + 1 in
+   test_gate11_checker_set_hash_v0_11_8_pinning.py = 14 net
+   per the §3 inventory above; the off-by-one is one rust
+   facade test that mirrors the python facade's getattr
+   contract under a slightly different argparse shape).
+2. **What was fixed?** Cascade-halt on Phase G11.2 (al-Mursalat
+   / Go) and Phase G11.3 (an-Naziat / ONNX). Their v1.2 prompts
+   T00-halted because they assumed Route A (per-language modules
+   extracted) but substrate-truth at v0.11.7 was Route B
+   (monolithic Verifier class). v0.11.8 ships the Route B
+   facade so both downstream prompts can dispatch unchanged.
+3. **What changed about the existing surface?** Nothing of
+   substance. ``verification.__all__`` gains a single
+   ``"verify"`` entry; existing entries unchanged.
+   _CHECKER_SOURCE_FILES gains two entries; existing 15 entries
+   unchanged.
+4. **What is byte-stable?** ``Verifier`` class, ``verify_bundle``
+   method signature (including the keyword-only tail per Phase
+   G11.1 H-5 audit corrective), ``CasmVerificationError`` /
+   ``CasmIndeterminateError`` semantics, ``TrustConfig``
+   dataclass, ``VerificationResult`` dataclass, ``cli.py``
+   verify-path-A and verify-path-B production callers, all
+   pre-v0.11.8 tests.
+5. **What is the next phase?** Phase G11.2 al-Mursalat (v0.12.0
+   / Go verifier extension). Its v1.2 prompt dispatches unchanged
+   against the v0.11.8 substrate. After v0.12.0 ships, Phase
+   G11.3 an-Naziat (v0.13.0 / ONNX verifier extension) becomes
+   T00-cleanable.
 
 ---
 
