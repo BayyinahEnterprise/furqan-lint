@@ -37,15 +37,24 @@ _CHECKER_SOURCE_FILES: tuple[Path, ...] = (
     # Core checker substrate (Python).
     _PKG_ROOT / "additive.py",
     _PKG_ROOT / "cli.py",
-    # Gate 11 substrate (Phase G11.0 + G11.1).
+    # Gate 11 substrate (Phase G11.0 + G11.1 + G11.0.6 / as-Saff).
     _PKG_ROOT / "gate11" / "__init__.py",
     _PKG_ROOT / "gate11" / "bundle.py",
     _PKG_ROOT / "gate11" / "cli.py",
     _PKG_ROOT / "gate11" / "manifest_schema.py",
     _PKG_ROOT / "gate11" / "module_canonicalization.py",
+    # Phase G11.0.6 / as-Saff (v0.11.8): Route B procedural facade
+    # introduces python_verification.py and rust_verification.py
+    # as thin facades over the existing Verifier class API.
+    # Their substrate bytes participate in the checker_set_hash so
+    # a Relying Party can detect substrate divergence between
+    # bundles signed by furqan-lint installations whose facade
+    # modules disagree.
+    _PKG_ROOT / "gate11" / "python_verification.py",
     _PKG_ROOT / "gate11" / "rust_manifest.py",
     _PKG_ROOT / "gate11" / "rust_signature_canonicalization.py",
     _PKG_ROOT / "gate11" / "rust_surface_extraction.py",
+    _PKG_ROOT / "gate11" / "rust_verification.py",
     _PKG_ROOT / "gate11" / "signature_canonicalization.py",
     _PKG_ROOT / "gate11" / "signing.py",
     _PKG_ROOT / "gate11" / "surface_extraction.py",
