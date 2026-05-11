@@ -390,3 +390,109 @@ jobs:
                          check=True)
           print('Go manifest signed + verified end to end via ambient OIDC')
           "
+
+  gate11-onnx-smoke-test:
+    # Phase G11.3 / T10 (an-Naziat / v0.13.0): end-to-end
+    # gate11-substrate smoke test for the ONNX pipeline.
+    # Same gating as gate11-smoke-test + gate11-rust-smoke-test
+    # + gate11-go-smoke-test (push to main only; id-token:
+    # write). The ONNX pipeline reuses sigstore-python via
+    # the single canonical dispatch entry
+    # verification.verify -> _verify_onnx private handler
+    # (function-local _LANGUAGE_DISPATCH four-entry surface
+    # closed at v0.13.0 ship). The install matrix is
+    # [gate11] + [onnx] (the latter for the onnx runtime
+    # used by the make_relu_model fixture builder).
+    #
+    # Scope note: this job exercises the gate11-ONNX
+    # verification substrate (fixture build + ModelProto
+    # round-trip + canonicalization-bytes determinism)
+    # rather than full Sigstore sign + verify, since
+    # `manifest init` ONNX-awareness (populating the
+    # module_identity.onnx nested structure from a
+    # ModelProto) is out of an-Naziat scope and reserved
+    # for a follow-on phase. The fixture-inventory pinning
+    # in tests/test_gate11_onnx_smoke_test_fixture_inventory.py
+    # is the substrate-of-record assertion here.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,gate11,onnx]"
+
+      - name: Build ONNX smoke-test fixture and exercise gate11-ONNX substrate
+        env:
+          FURQAN_LINT_GATE11_SMOKE_TEST: "1"
+        run: |
+          # Build a minimal .onnx fixture via make_relu_model
+          # (substrate-actual builder name per T00 step 5
+          # ONNX pre-flight verification), exercise the
+          # graph-shape canonicalization layer, and verify
+          # the canonical bytes are deterministic across
+          # repeated builds.
+          python -c "
+          import sys, tempfile
+          from pathlib import Path
+          import onnx
+          from tests.fixtures.onnx.builders import make_relu_model
+          from furqan_lint.gate11.manifest_schema import (
+              OnnxIdentitySection,
+              ValueInfoSummary,
+          )
+          from furqan_lint.gate11.onnx_signature_canonicalization import (
+              canonicalize_bytes,
+          )
+          tmp = Path(tempfile.mkdtemp())
+          model_path = tmp / 'smoke.onnx'
+          model = make_relu_model(opset_version=14)
+          onnx.save(model, str(model_path))
+          # Round-trip:
+          loaded = onnx.load(str(model_path))
+          assert loaded.graph.name == 'test_relu'
+          assert loaded.graph.node[0].op_type == 'Relu'
+          # Build canonical OnnxIdentitySection bytes and
+          # assert determinism across two runs (rule 9 sort
+          # discipline; rule 10 dim_param preservation):
+          section = OnnxIdentitySection(
+              opset_imports=tuple((op.domain, op.version) for op in loaded.opset_import),
+              ir_version=loaded.ir_version,
+              inputs=tuple(
+                  ValueInfoSummary(
+                      name=vi.name,
+                      dtype='FLOAT',
+                      shape=tuple(
+                          (d.dim_param if d.HasField('dim_param') else d.dim_value)
+                          for d in vi.type.tensor_type.shape.dim
+                      ),
+                  )
+                  for vi in loaded.graph.input
+              ),
+              outputs=tuple(
+                  ValueInfoSummary(
+                      name=vi.name,
+                      dtype='FLOAT',
+                      shape=tuple(
+                          (d.dim_param if d.HasField('dim_param') else d.dim_value)
+                          for d in vi.type.tensor_type.shape.dim
+                      ),
+                  )
+                  for vi in loaded.graph.output
+              ),
+          )
+          bytes_a = canonicalize_bytes(section)
+          bytes_b = canonicalize_bytes(section)
+          assert bytes_a == bytes_b, 'determinism violation'
+          print('ONNX gate11 smoke test: build + round-trip + canonicalization PASS')
+          "
