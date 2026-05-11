@@ -48,7 +48,6 @@ from furqan_lint.gate11.verification import (
     CasmIndeterminateError,
     CasmVerificationError,
     TrustConfig,
-    Verifier,
 )
 
 
@@ -330,16 +329,35 @@ def cmd_manifest_verify(args: list[str]) -> int:
         print(f"module not found for bundle {bundle_path}", file=sys.stderr)
         return 1
 
-    verifier = Verifier(trust_config=trust_config)
+    # Per al-Mursalat T02 Edit 3a (Route a1-via-args):
+    # build args Namespace from opts + positional +
+    # loaded trust_config; load manifest from bundle;
+    # route through verification.verify single canonical
+    # dispatch dict (function-local _LANGUAGE_DISPATCH).
+    # Per F-RN-1 v1.5 absorption: trust_config attached
+    # to Namespace so private handlers honor it via
+    # getattr(args, "trust_config", None) or TrustConfig().
+    import argparse as _argparse
+
+    from furqan_lint.gate11 import verification as _verification
+
     try:
-        result = verifier.verify_bundle(
-            bundle_path,
-            module_path,
-            force_refresh=bool(opts["force_refresh"]),
-            expected_identity=opts["expected_identity"],  # type: ignore[arg-type]
-            expected_issuer=opts["expected_issuer"],  # type: ignore[arg-type]
-            allow_any_identity=bool(opts["allow_any_identity"]),
-        )
+        _manifest = Bundle.read(bundle_path).manifest
+    except (BundleParseError, KeyError, CasmSchemaError) as e:
+        print(f"bundle parse failed for {bundle_path}: {e}", file=sys.stderr)
+        return 1
+    _namespace = _argparse.Namespace(
+        bundle_path=bundle_path,
+        module_path=module_path,
+        trust_config=trust_config,
+        trust_config_path=opts["trust_config_path"],
+        expected_identity=opts["expected_identity"],
+        expected_issuer=opts["expected_issuer"],
+        allow_any_identity=bool(opts["allow_any_identity"]),
+        force_refresh=bool(opts["force_refresh"]),
+    )
+    try:
+        result = _verification.verify(_manifest, _namespace)
     except CasmIndeterminateError as e:
         print(f"INDETERMINATE: {e}", file=sys.stderr)
         return 2
@@ -450,10 +468,21 @@ def cmd_check_gate11(directory: Path, opts: dict[str, object]) -> int:
     bundles = sorted(directory.rglob(f"*{GATE11_BUNDLE_SUFFIX}"))
     if not bundles:
         return 0
+    # Per al-Mursalat T02 Edit 3b (Route a1-via-args;
+    # F-PF-2 v1.7 asymmetric vs Edit 3a):
+    # cmd_check_gate11 receives PRE-PARSED directory + opts
+    # from dispatch_manifest upstream (signature divergence
+    # from cmd_manifest_verify per F-PF-2 absorption);
+    # single trust_config load shared across all bundles;
+    # per-bundle Namespace built from shared base + per-
+    # bundle path; route through verification.verify.
+    import argparse as _argparse
+
+    from furqan_lint.gate11 import verification as _verification
+
     trust_config = _trust_config_from_path(
         opts["trust_config_path"]  # type: ignore[arg-type]
     )
-    verifier = Verifier(trust_config=trust_config)
     overall = 0
     for bp in bundles:
         if bp.name.endswith(GATE11_BUNDLE_SUFFIX):
@@ -473,13 +502,23 @@ def cmd_check_gate11(directory: Path, opts: dict[str, object]) -> int:
             print(f"GATE11-SKIP  {bp}  module not found", file=sys.stderr)
             continue
         try:
-            result = verifier.verify_bundle(
-                bp,
-                module_path,
-                expected_identity=opts["expected_identity"],  # type: ignore[arg-type]
-                expected_issuer=opts["expected_issuer"],  # type: ignore[arg-type]
-                allow_any_identity=bool(opts["allow_any_identity"]),
-            )
+            _manifest = Bundle.read(bp).manifest
+        except (BundleParseError, KeyError, CasmSchemaError) as e:
+            print(f"{bp}  bundle parse failed: {e}", file=sys.stderr)
+            overall = max(overall, 1)
+            continue
+        _namespace = _argparse.Namespace(
+            bundle_path=bp,
+            module_path=module_path,
+            trust_config=trust_config,
+            trust_config_path=opts["trust_config_path"],
+            expected_identity=opts["expected_identity"],
+            expected_issuer=opts["expected_issuer"],
+            allow_any_identity=bool(opts["allow_any_identity"]),
+            force_refresh=False,
+        )
+        try:
+            result = _verification.verify(_manifest, _namespace)
         except CasmIndeterminateError as e:
             print(f"INDETERMINATE  {bp}  {e}", file=sys.stderr)
             overall = max(overall, 2)

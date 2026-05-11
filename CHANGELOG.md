@@ -19,6 +19,166 @@ introduced this convention.
 
 ---
 
+## [0.12.0] - 2026-05-11
+
+### Substrate extension (al-Mursalat / G11.2)
+
+Phase G11.2 extends gate11 substrate to Go (third in the
+canonical mushaf chain after Python G11.0 v0.10.0 and Rust
+G11.1 v0.11.0) and closes Round 29 finding F22 at the CLI
+dispatch surface (gate11-rust-smoke-test previously invoked
+Python verifier on rust-language manifest, fail-closed at
+CASM-V-001; gate11-go-smoke-test would have failed the same
+way pre-v0.12.0). Resolves the dispatch question once for
+all three substrates per the Shape-B consolidation pattern
+under Route (a1-via-args): single canonical dispatch entry
+through ``verification.verify(manifest, args)`` with the
+function-local ``_LANGUAGE_DISPATCH`` extended via lazy-
+import of ``_verify_go``; CLI flags (--trust-config,
+--force-refresh, --expected-identity, --expected-issuer,
+--allow-any-identity) threaded uniformly through args
+Namespace.
+
+### Closures
+
+- F22 dispatch consolidation at the CLI surface across both
+  entry points (cmd_manifest_verify + cmd_check_gate11);
+  gate11-rust-smoke-test passes; new gate11-go-smoke-test
+  passes (T02, T08). F22 substrate closure was at v0.11.3
+  G11.0.2; al-Mursalat closes the CLI dispatch layer per
+  F-AL-7 v1.3 absorption framing.
+- Go gate11 substrate: signature canonicalization (T03;
+  rules 6-8 mirror of Python H-4 closure adapted for Go
+  containers); verifier (T04; private ``_verify_go`` handler
+  mirrors v0.11.8-LIVE Python/Rust facade pattern per F3
+  v1.1 + F-RM-1 v1.4 absorption); pinned source list (T05;
+  Option (alpha) alphabetical-within-section per F-PA-3
+  v1.8 absorption); identity policy parity (T06; CASM-V-032/
+  035/036 honored).
+- Per F-RN-1 v1.5 absorption + Route (a1-via-args): the
+  ``_verify_python`` / ``_verify_rust`` private handlers
+  bodies are extended to honor caller-passed
+  ``args.trust_config`` via
+  ``getattr(args, "trust_config", None) or TrustConfig()``;
+  preserves v0.11.8 programmatic-RP backward compatibility.
+- Per F-PF-3 v1.7 absorption + F6 v1.1 SOURCE-PRESENT
+  branch: goast source at
+  ``src/furqan_lint/go_adapter/cmd/goast/main.go`` pinned in
+  ``_CHECKER_SOURCE_FILES``; Form A checker_set_hash surface
+  now attests the Go AST emitter source code alongside the
+  gate11/* verification modules.
+- Schema + dispatch whitelists extended: language set
+  ``("python", "rust")`` becomes ``("python", "rust", "go")``
+  at both ``Manifest.from_dict`` (manifest_schema.py line
+  186) and ``Verifier.step2_3_check_version_and_language``
+  (verification.py line 157); same precedent as v0.11.3
+  G11.0.2 F22 corrective extension.
+- Three-substrate symmetry documentation: README + SECURITY.md
+  (N2 typosquatting disclosure extended for Go v0.12.0+) +
+  new docs/gate11-symmetry.md with seven-row symmetry table
+  (T07).
+
+### Audit-chain absorption ledger
+
+Round 38.5 fresh-Claude cross-instance audit absorbed as v1.8
+(5 F-PA findings); Co-work T00 absorbed as v1.7 (3 F-PF
+findings); Round 38 Claude continuity audit absorbed as v1.6
+(7 F-TR findings); Round 37 Perplexity absorbed as v1.5 (10
+F-RN findings including F-RN-1 CRITICAL trust-config flow);
+Round 36 Perplexity absorbed as v1.4 (12 F-RM findings
+including 3 CRITICAL substrate-untrue symbol claims); self-
+review absorbed as v1.3 (10 F-AL findings; substrate-state
+alignment to v0.11.8 post-as-Saff); Round 32 polish absorbed
+as v1.2 (F10-F13); Round 31 cross-instance absorbed as v1.1
+(F1-F9 + F-PMD-1). Monotonic-narrowing residual surface
+across rounds: 3 CRITICAL (Round 36) -> 1 CRITICAL (Round 37)
+-> 0 CRITICAL (Round 38 / 38.5 / Co-work T00); CRITICAL
+convergence held.
+
+### Tests
+
+Test count: 618 (v0.11.8) -> 642 (v0.12.0). Net delta: +24.
+
+Per the §3 inventory: +4 from T02 (new dispatch fixtures in
+test_gate11_verify_dispatch.py covering Go dispatch routing +
+ONNX-as-next-phase callout + trust_config threading +
+function-local dispatch isolation), +1 from T02 substrate
+evolution in test_gate11_dispatch_f22_corrective.py
+(retired test_schema_rejects_language_go +
+test_step2_3_rejects_go_pre_g11_2 per their own retirement
+docstrings; replaced with test_schema_accepts_language_go +
+test_al_mursalat_step2_3_accepts_go_manifest +
+test_al_mursalat_step2_3_unknown_language_message_names_onnx_phase),
++5 from T03 (Go signature canonicalization rules 6-8),
++5 from T04 (Go verifier facade contract pins),
++6 from T05 (checker_set_hash v0.12.0 pinning; 4 prompt-
+specified fixtures + 2 added for diagnostic granularity on
+F-PA-3 Option (alpha) alphabetical-within-section discipline),
++3 from T08 (smoke-test fixture inventory pins).
+
+Projection per al-Mursalat v1.8 prompt was +26 / 644; empirical
+is +24 / 642 (drift -2; within al-Hujurat T05 CHANGELOG-math
+gate assertion (c) projection-drift tolerance). The two-test
+under-projection reflects T02 dispatch fixture inventory
+substrate-actual delta of +4 against the 5 pre-existing
+test_gate11_verify_dispatch.py fixtures rather than +9 fresh
+(the prompt's "T02 adds 9 dispatch tests" was full post-edit
+count, not delta-against-substrate).
+
+### Limitations introduced
+
+None. This release is purely additive at the substrate level;
+no new four-place documented limits, no new CASM-V codes, no
+new signing surface, no schema-version bump (v1.0 retained).
+
+### §11.3 Five Questions
+
+1. **What was added?** Three new gate11 substrate files
+   (gate11/go_signature_canonicalization.py with rules 6-8;
+   gate11/go_verification.py with private _verify_go handler;
+   tests/fixtures/gate11/go_smoke_module.go); three new test
+   files (test_go_signature_canonicalization.py;
+   test_gate11_go_verification.py;
+   test_gate11_checker_set_hash_v0_12_0_pinning.py;
+   test_gate11_smoke_test_fixture_inventory.py); module-level
+   verification.py dispatch dict extension; cmd_manifest_verify
+   + cmd_check_gate11 refactors to route through
+   verification.verify; CI gate11-go-smoke-test job;
+   docs/gate11-symmetry.md; SAFETY_INVARIANTS.md Invariant 6
+   step 3 generalization; goast source pin in
+   _CHECKER_SOURCE_FILES (16 -> 19 entries per F-PA-3 Option
+   (alpha)).
+2. **What was fixed?** F22 at the CLI dispatch surface (the
+   substrate closure was at v0.11.3; al-Mursalat closes the
+   dispatch consolidation layer). Trust-config flow under
+   Route (a1-via-args) -- private handlers now honor
+   args.trust_config rather than constructing default
+   unconditionally (F-RN-1 v1.5 absorption).
+3. **What changed about the existing surface?** Verifier
+   class API + verify_bundle method signature byte-stable
+   (per as-Saff Acceptance §15 byte-stability commitment).
+   Schema + dispatch language whitelists extended in lock-
+   step (v0.11.3 F22 corrective precedent). python_verification
+   + rust_verification bodies extended to thread
+   args.trust_config (post-as-Saff scope; those modules are
+   new at as-Saff with no pre-existing byte-stability claim).
+4. **What is byte-stable?** Verifier class, verify_bundle
+   method signature (including keyword-only tail per Phase
+   G11.1 H-5 audit corrective), CasmVerificationError /
+   CasmIndeterminateError semantics, TrustConfig dataclass,
+   VerificationResult dataclass. Programmatic Relying Parties
+   not setting args.trust_config see v0.11.8 default
+   behavior unchanged.
+5. **What is the next phase?** Phase G11.3 an-Naziat
+   (v0.13.0 / ONNX verifier extension). an-Naziat v1.4 will
+   inherit v1.8 dispositions verbatim against true v0.12.0
+   substrate (Route a1-via-args + asymmetric cmd_check_gate11
+   signature + alphabetical-within-section _CHECKER_SOURCE_FILES
+   + goast-equivalent SOURCE-PRESENT branch for any ONNX
+   tooling source pinning).
+
+---
+
 ## [0.11.8] - 2026-05-09
 
 ### Architecture-refactor corrective (as-Saff / G11.0.6)

@@ -276,7 +276,20 @@ The nine steps:
    schema error)
 2. Check `casm_version == "1.0"` (`CASM-V-001`)
 3. Check `language` matches the substrate the verifier is
-   running against (`CASM-V-001`)
+   running against (`CASM-V-001`). The substrate-LIVE
+   supported-language set at v0.12.0 is `{python (Phase
+   G11.0, v0.10.0), rust (Phase G11.1, v0.11.0), go (Phase
+   G11.2, v0.12.0)}`; ONNX (Phase G11.3) is substrate-
+   anticipated per Invariant 5 extraction-method enumeration
+   and ships in v0.13.0 an-Naziat. CASM-V-001 is the
+   canonical code for both casm_version mismatch and
+   language-not-supported semantics (Option A per
+   al-Mursalat T01 disposition: single code, union
+   semantic). The verifier-side dispatch site at
+   `verification.verify`'s function-local
+   `_LANGUAGE_DISPATCH` raises CASM-V-001 with a positional
+   message naming the next phase target when an unsupported
+   language is encountered.
 4. Load Sigstore trust root via TUF (`CASM-V-020` ADVISORY
    on refresh failure with cache fallback; `CASM-V-021` if
    no cache exists)
