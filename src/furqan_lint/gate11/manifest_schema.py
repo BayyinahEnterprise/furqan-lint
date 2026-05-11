@@ -10,8 +10,10 @@ Top-level fields (all required unless marked OPTIONAL):
 
 * ``casm_version``: schema version. v1.0 implementations reject
   manifests with ``casm_version != "1.0"`` (CASM-V-001).
-* ``module_identity.language``: only ``"python"`` is supported in
-  v1.0; other values raise CASM-V-001.
+* ``module_identity.language``: one of ``"python"`` (Phase G11.0,
+  v0.10.0), ``"rust"`` (Phase G11.1, v0.11.0), ``"go"`` (Phase
+  G11.2, v0.12.0), or ``"onnx"`` (Phase G11.3, v0.13.0); other
+  values raise CASM-V-001.
 * ``module_identity.module_path``: informational repo-relative
   path. Cryptographic identity is ``module_root_hash``.
 * ``module_identity.module_root_hash``: ``"sha256:<hex64>"``.
@@ -36,9 +38,9 @@ Reserved values rejected by v1.0:
 
 * ``kind`` of ``"alias"`` or ``"module"`` (reserved for future
   use; presence is a schema violation).
-* Languages other than ``"python"`` (Phase G11.1 ships Rust;
-  G11.2 ships Go; salim-onnx supplies ONNX manifests reusing
-  this substrate).
+* Languages other than ``"python"`` / ``"rust"`` / ``"go"`` /
+  ``"onnx"`` (the complete mushaf chain after Phase G11.3
+  an-Naziat v0.13.0 ship).
 """
 
 from __future__ import annotations
@@ -65,7 +67,12 @@ class CasmSchemaError(ValueError):
 # Phase G11.1 (as-Saffat) extends the kind whitelist with Rust
 # kinds. Python kinds remain unchanged: function / class / constant.
 # Rust adds: struct, enum, trait, type_alias, alias.
-# Go (Phase G11.2) and ONNX (Phase G11.3) will extend further.
+# Go (Phase G11.2, v0.12.0) reuses the same whitelist (function /
+# struct / interface / type_alias / constant map to existing kinds).
+# ONNX (Phase G11.3, v0.13.0) attests graph inputs/outputs rather
+# than named kinds; the kind whitelist is bypassed for
+# ``language == "onnx"`` manifests (ValueInfoSummary entries are
+# parsed via the ``module_identity.onnx`` nested structure).
 _VALID_KINDS = frozenset(
     {
         "function",
@@ -78,6 +85,61 @@ _VALID_KINDS = frozenset(
         "alias",
     }
 )
+
+
+# Phase G11.0 (Python, v0.10.0) shipped python-only. Each Phase
+# G11.x release extends this tuple to its substrate; Phase G11.3
+# (an-Naziat, v0.13.0) closes the canonical mushaf chain.
+SUPPORTED_LANGUAGES: tuple[str, ...] = ("python", "rust", "go", "onnx")
+
+
+@dataclass(frozen=True)
+class ValueInfoSummary:
+    """Canonical summary of one ONNX ``ValueInfo`` entry.
+
+    Represents either a graph input or a graph output. Carries
+    the symbolic / concrete dimension distinction faithfully:
+    int dims are concrete (per ``dim_value``); str dims are
+    symbolic (per ``dim_param``).
+
+    Phase G11.3 (an-Naziat, v0.13.0): an-Naziat T02 introduces
+    this dataclass as the canonical ONNX ValueInfo entry. The
+    canonicalization rules at
+    :mod:`furqan_lint.gate11.onnx_signature_canonicalization`
+    (rules 9-12) consume this dataclass directly; symbolic-vs-
+    concrete divergence between manifest and substrate
+    ModelProto raises ``CASM-V-071``.
+
+    Frozen to preserve manifest immutability after parse.
+    """
+
+    name: str
+    dtype: str  # canonical TensorProto.DataType name (e.g., "FLOAT", "INT64")
+    shape: tuple[int | str, ...]  # int = concrete dim_value; str = symbolic dim_param
+
+
+@dataclass(frozen=True)
+class OnnxIdentitySection:
+    """Canonical ``module_identity.onnx`` nested structure.
+
+    Present iff ``module_identity.language == "onnx"``. Captures
+    the four ModelProto fields that the graph-shape canonical
+    surface depends on: ``opset_imports``, ``ir_version``,
+    ``inputs``, ``outputs``.
+
+    Phase G11.3 (an-Naziat, v0.13.0): an-Naziat T02 introduces
+    this dataclass. The verification path consumes it in
+    :mod:`furqan_lint.gate11.onnx_verification` to enforce
+    opset-policy consistency (``CASM-V-070`` on mismatch with
+    substrate ModelProto's ``opset_imports``) and dim_param
+    consistency (``CASM-V-071`` on symbolic-vs-concrete
+    divergence).
+    """
+
+    opset_imports: tuple[tuple[str, int], ...]
+    ir_version: int
+    inputs: tuple[ValueInfoSummary, ...]
+    outputs: tuple[ValueInfoSummary, ...]
 
 
 @dataclass(frozen=True)
@@ -182,14 +244,17 @@ class Manifest:
         language = module_identity["language"]
         # Phase G11.1 (as-Saffat) extended accepted languages
         # to include "rust"; Phase G11.2 (al-Mursalat, v0.12.0)
-        # extends to "go"; Phase G11.3 (salim-onnx) will add
-        # "onnx".
-        if language not in ("python", "rust", "go"):
+        # extended to "go"; Phase G11.3 (an-Naziat, v0.13.0)
+        # extends to "onnx" -- closing the canonical mushaf
+        # chain. No further Phase G11.x language extensions
+        # are anticipated; Phase G11.4 Tasdiq al-Bayan
+        # operates against this surface as a drift-detection
+        # invariant rather than adding entries.
+        if language not in SUPPORTED_LANGUAGES:
             raise CasmSchemaError(
                 "CASM-V-001",
-                f"v1.0 supports only language in (python, rust, go); "
-                f"got {language!r}. ONNX via Phase G11.3 "
-                f"(salim-onnx).",
+                f"v1.0 supports only language in {SUPPORTED_LANGUAGES!r}; "
+                f"got {language!r}.",
             )
         module_root_hash = module_identity["module_root_hash"]
         if not isinstance(module_root_hash, str) or not module_root_hash.startswith("sha256:"):
@@ -318,5 +383,8 @@ class Manifest:
 __all__ = (
     "CasmSchemaError",
     "Manifest",
+    "OnnxIdentitySection",
     "PublicName",
+    "SUPPORTED_LANGUAGES",
+    "ValueInfoSummary",
 )

@@ -125,7 +125,7 @@ def test_step2_3_rejects_unknown_language_with_supported_list() -> None:
     with CasmVerificationError(CASM-V-001) and the supported list
     enumerated in the error message. Phase G11.2 (Go) extended
     the whitelist at v0.12.0; Phase G11.3 (ONNX) extends at
-    v0.13.0 (an-Naziat).
+    v0.13.0 (an-Naziat) -- closing the canonical mushaf chain.
     """
     # We bypass schema (which would reject 'haskell') and forge
     # the language field directly to exercise the verifier-side
@@ -138,12 +138,13 @@ def test_step2_3_rejects_unknown_language_with_supported_list() -> None:
         verifier.step2_3_check_version_and_language(valid)
     assert exc.value.code == "CASM-V-001"
     # The error message must enumerate the supported list so an
-    # operator hitting this knows how to adjust. Post-v0.12.0,
-    # the set is {python, rust, go}.
+    # operator hitting this knows how to adjust. Post-v0.13.0,
+    # the set is {python, rust, go, onnx}.
     msg = str(exc.value).lower()
     assert "python" in msg
     assert "rust" in msg
     assert "go" in msg
+    assert "onnx" in msg
 
 
 def test_al_mursalat_step2_3_accepts_go_manifest() -> None:
@@ -166,13 +167,20 @@ def test_al_mursalat_step2_3_accepts_go_manifest() -> None:
     verifier.step2_3_check_version_and_language(manifest)
 
 
-def test_al_mursalat_step2_3_unknown_language_message_names_onnx_phase() -> None:
-    """Post-v0.12.0, the unknown-language error message names
-    ONNX (Phase G11.3) as the next-phase extension target
-    rather than Go (Phase G11.2 -- now substrate).
+def test_an_naziat_step2_3_unknown_language_message_no_next_phase() -> None:
+    """Post-v0.13.0, the unknown-language error message no
+    longer names a next-phase extension target -- ONNX
+    (Phase G11.3 an-Naziat) closed the canonical mushaf chain
+    at v0.13.0. The error message now states no further Phase
+    G11.x dispatch entries are anticipated; Phase G11.4
+    Tasdiq al-Bayan operates against this surface as a
+    drift-detection invariant rather than adding entries.
 
-    Closes the supported-language-set narrative continuity per
-    F-AL-6 v1.3 absorption.
+    Supersedes test_al_mursalat_step2_3_unknown_language_message_names_onnx_phase
+    per the closed-form dispatch surface at an-Naziat ship.
+    Closes the supported-language-set narrative continuity
+    per F-AL-6 v1.3 absorption chain (al-Mursalat T01 ->
+    an-Naziat T02 terminal-state propagation).
     """
     valid = Manifest.from_dict(_baseline_manifest_dict("python"))
     valid.module_identity["language"] = "haskell"  # forge past schema
@@ -182,9 +190,62 @@ def test_al_mursalat_step2_3_unknown_language_message_names_onnx_phase() -> None
         verifier.step2_3_check_version_and_language(valid)
     assert exc.value.code == "CASM-V-001"
     msg = str(exc.value).lower()
-    # Supported set now lists go alongside python/rust:
+    # Supported set now lists onnx alongside python/rust/go:
     assert "python" in msg
     assert "rust" in msg
     assert "go" in msg
-    # Future-phase callout now names ONNX (G11.3), not Go:
-    assert "g11.3" in msg
+    assert "onnx" in msg
+    # No-further-phase callout (replaces the prior "g11.3"
+    # next-phase callout which is now substrate):
+    assert "no further phase g11.x" in msg or "drift-detection" in msg
+
+
+# ---------------------------------------------------------------------------
+# an-Naziat (v0.13.0) T02 +2 deterministic fixtures per F-PB-NZ-6 v1.6
+# absorption. Both fixtures are required for T01 + T02 closure:
+# test_schema_accepts_language_onnx exercises the schema-layer
+# language whitelist extension at Manifest.from_dict;
+# test_step2_3_accepts_onnx_manifest exercises the verifier-side
+# dispatch whitelist at Verifier.step2_3_check_version_and_language.
+# Both substrate edits are part of the T02 commit per the
+# F-PB-NZ-6 deterministic-rather-than-implementer-latitude
+# closure.
+# ---------------------------------------------------------------------------
+
+
+def test_schema_accepts_language_onnx() -> None:
+    """an-Naziat (v0.13.0) closure: onnx manifest no longer
+    rejected by Manifest.from_dict schema validation.
+
+    Pre-v0.13.0, the schema whitelist was ("python", "rust",
+    "go") and an onnx manifest raised CasmSchemaError(CASM-V-001).
+    v0.13.0 extends SUPPORTED_LANGUAGES to include "onnx",
+    closing the canonical mushaf chain. The 4-substrate
+    enumeration is closed-form: no further Phase G11.x
+    language extensions are anticipated.
+    """
+    manifest = Manifest.from_dict(_baseline_manifest_dict("onnx"))
+    assert manifest.module_identity["language"] == "onnx"
+
+
+def test_step2_3_accepts_onnx_manifest() -> None:
+    """an-Naziat (v0.13.0) closure: onnx manifest no longer
+    rejected at the Verifier.step2_3_check_version_and_language
+    dispatch site.
+
+    Mirrors test_al_mursalat_step2_3_accepts_go_manifest pattern
+    at the v0.13.0 ship. Substrate edit: the
+    Verifier.step2_3_check_version_and_language whitelist at
+    gate11/verification.py extends from
+    ("python", "rust", "go") to
+    ("python", "rust", "go", "onnx"). Same pattern as the
+    v0.11.3 G11.0.2 F22 corrective extension and the v0.12.0
+    al-Mursalat T01 Option A generalization.
+
+    Per F-PB-NZ-6 v1.6 absorption: deterministic closure fixture
+    for T01 + T02 verifier-side dispatch path.
+    """
+    verifier = Verifier(trust_config=TrustConfig())
+    manifest = Manifest.from_dict(_baseline_manifest_dict("onnx"))
+    # No exception raised -> dispatch accepts.
+    verifier.step2_3_check_version_and_language(manifest)
