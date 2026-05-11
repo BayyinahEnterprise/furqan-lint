@@ -1,11 +1,29 @@
-# Gate 11 four-substrate symmetry (with honest asymmetries)
+# Gate 11 four-substrate symmetry (mechanically enforced from v0.14.0)
 
 After v0.13.0 (an-Naziat / Phase G11.3 ship), the Python,
 Rust, Go, and ONNX verifiers share behavior on the
 identity-policy / trusted-root / dispatch substrate, with
 honest asymmetries where ONNX is structurally different
 (graph-shape canonicalization vs type-shape; ONNX-specific
-opset/dim_param checks):
+opset/dim_param checks).
+
+After v0.14.0 (Tasdiq al-Bayan / Phase G11.4 ship), the table
+below is the **contract** between the four gate11 substrates,
+NOT an aspirational summary. Each cell marked `vX.Y+` is a
+parity claim empirically verified by the cross-substrate
+corpus (`tests/test_gate11_cross_substrate_corpus.py`); each
+cell marked `N/A` is an honest asymmetry pinned by
+`tests/test_gate11_cross_substrate_onnx_asymmetry.py` (T05
+pins per Tasdiq al-Bayan) and documented as a four-place limit
+at `tests/test_gate11_onnx_limits.py`.
+
+The corpus's drift detection meta-test
+(`tests/test_gate11_cross_substrate_drift_detection.py::test_corpus_covers_all_symmetry_table_claims`)
+asserts the table-corpus correspondence: any future change
+that breaks parity (or adds a parity claim without corpus
+coverage) fails the meta-test mechanically.
+
+The parity table:
 
 | Concern | Python | Rust | Go | ONNX |
 |---|---|---|---|---|
@@ -78,12 +96,51 @@ surface at v0.13.0+.
 ## Successor phase
 
 Phase G11.4 Tasdiq al-Bayan (cross-substrate verification
-corpus) will exercise the symmetry as a unified test matrix
-that runs the same conceptual test against each of the four
-substrates (4 signers x 4 verifiers = 16 cells). Honest
-asymmetries documented in this file (graph-shape vs type-
-shape canonicalization; ONNX-specific opset/dim_param
-checks) are not forced into parallel; they are exercised in
-their own corpus entries. After G11.4, the foundation is in
-place for v1.0 self-attestation (furqan-lint signing its own
-releases with gate11).
+corpus) ships at v0.14.0 and exercises the symmetry as a
+unified test matrix that runs the same conceptual test
+against each of the four substrates. Honest asymmetries
+documented in this file (graph-shape vs type-shape
+canonicalization; ONNX-specific opset/dim_param checks) are
+not forced into parallel; they are exercised in their own
+positive-asymmetry pins. After Tasdiq al-Bayan, the
+foundation is in place for v1.0 self-attestation
+(furqan-lint signing its own releases with gate11) -- the
+successor phase to Tasdiq al-Bayan, documented at
+`docs/gate11-v1-self-attestation.md`.
+
+## How to add a new concern
+
+If a future phase introduces a new gate11 concern that should
+apply across substrates:
+
+1. Add a row to the parity table above with the version+ for
+   each applicable substrate (or `N/A` for honest asymmetries).
+2. Add a parameterized test to the corpus
+   (`tests/test_gate11_cross_substrate_corpus.py`); the test
+   name should match the concern keyword (snake_case).
+3. If the concern applies to some substrates but not others,
+   document the asymmetry: extend
+   `docs/onnx-attestation-boundary.md` (or a similar
+   substrate-specific document) and pin the positive
+   asymmetry in
+   `tests/test_gate11_cross_substrate_onnx_asymmetry.py`.
+4. Run the drift-detection meta-test
+   (`tests/test_gate11_cross_substrate_drift_detection.py::test_corpus_covers_all_symmetry_table_claims`);
+   it asserts the corpus parameterization includes the new
+   concern keyword.
+5. Add a CHANGELOG entry per the framework's delete-plus-add
+   discipline noting the new contract row.
+
+## How to retire a concern
+
+If a future phase retires a gate11 concern (substrate behavior
+changes such that the concern no longer applies):
+
+1. Remove the row from the parity table above.
+2. Remove the corresponding corpus parameterization from
+   `tests/test_gate11_cross_substrate_corpus.py`.
+3. Document the retirement in the CHANGELOG per the framework's
+   delete-plus-add discipline (`### Retired` subsection with
+   cross-reference to the retired CASM-V codes if applicable).
+4. Verify the drift-detection meta-test still passes (the
+   retired keyword is no longer required of the corpus).
