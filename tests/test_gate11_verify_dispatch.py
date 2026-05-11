@@ -120,21 +120,26 @@ def test_module_level_verify_raises_casm_v_001_on_unknown_language() -> None:
     the verification module's exception-construction style.
     """
     valid = Manifest.from_dict(_baseline_manifest_dict("python"))
-    # Forge the language past the schema (which would reject 'go')
-    # to exercise the verifier-side dispatch defense.
-    valid.module_identity["language"] = "go"
+    # Forge the language past the schema (which would reject
+    # 'haskell') to exercise the verifier-side dispatch defense.
+    # Post-al-Mursalat (v0.12.0): 'go' is now substrate-LIVE so
+    # the unknown-language fixture uses 'haskell' instead.
+    valid.module_identity["language"] = "haskell"
 
     args = argparse.Namespace(
         bundle_path="/nonexistent/bundle.tar",
-        module_path="/nonexistent/module.go",
+        module_path="/nonexistent/module.hs",
     )
     with pytest.raises(CasmVerificationError) as exc:
         verify(valid, args)
     assert exc.value.code == "CASM-V-001"
     msg = str(exc.value)
-    assert "G11.2" in msg
+    # Post-v0.12.0: G11.3 (ONNX) is the next-phase target, not
+    # G11.2 (Go, now substrate).
+    assert "G11.3" in msg
     assert "python" in msg.lower()
     assert "rust" in msg.lower()
+    assert "go" in msg.lower()
 
 
 # ---------------------------------------------------------------
@@ -221,3 +226,117 @@ def test_verifier_class_api_byte_stable_at_v0_11_8() -> None:
     assert params["expected_identity"].kind == inspect.Parameter.KEYWORD_ONLY
     assert params["expected_issuer"].kind == inspect.Parameter.KEYWORD_ONLY
     assert params["allow_any_identity"].kind == inspect.Parameter.KEYWORD_ONLY
+
+
+# ---------------------------------------------------------------
+# Phase G11.2 al-Mursalat (v0.12.0) extension tests
+# ---------------------------------------------------------------
+
+
+def test_module_level_verify_dispatches_go_to_facade() -> None:
+    """Go manifests dispatch to go_verification._verify_go (al-Mursalat).
+
+    Mirror of the python / rust dispatch tests; same reasoning.
+    Per F-PA-3 / F-PF-1 / F-PF-3 v1.8 substrate-of-record: Go is
+    substrate-LIVE at v0.12.0; the function-local
+    _LANGUAGE_DISPATCH dict inside verification.verify is
+    extended via a third lazy-import line; the dispatch routes
+    cleanly to _verify_go which propagates the substrate
+    CASM-V-010 (bundle parse failure) for nonexistent paths.
+    """
+    valid = Manifest.from_dict(_baseline_manifest_dict("go"))
+    args = argparse.Namespace(
+        bundle_path="/nonexistent/bundle.tar",
+        module_path="/nonexistent/module.go",
+    )
+    with pytest.raises(CasmVerificationError) as exc:
+        verify(valid, args)
+    assert exc.value.code == "CASM-V-010", (
+        f"dispatch routed wrongly: expected CASM-V-010 (bundle "
+        f"parse failure from go facade), got {exc.value.code}"
+    )
+
+
+def test_module_level_verify_unknown_language_message_names_onnx() -> None:
+    """Post-v0.12.0, the unknown-language error message names
+    ONNX (Phase G11.3) as the next-phase extension target.
+
+    Closes F-AL-6 / F-AL-7 narrative continuity: Go is no longer
+    a future-phase target (it ships at v0.12.0); ONNX is the
+    next-phase target awaiting v0.13.0 an-Naziat.
+    """
+    valid = Manifest.from_dict(_baseline_manifest_dict("python"))
+    # Forge past schema:
+    valid.module_identity["language"] = "haskell"
+    args = argparse.Namespace(
+        bundle_path="/nonexistent/bundle.tar",
+        module_path="/nonexistent/module.hs",
+    )
+    with pytest.raises(CasmVerificationError) as exc:
+        verify(valid, args)
+    assert exc.value.code == "CASM-V-001"
+    msg = str(exc.value).lower()
+    # Supported set now lists go alongside python/rust:
+    assert "python" in msg
+    assert "rust" in msg
+    assert "go" in msg
+    # Future-phase callout names ONNX / G11.3, not G11.2 / go:
+    assert "g11.3" in msg
+    assert "g11.2" not in msg, (
+        "G11.2 still cited as future-phase target; al-Mursalat "
+        "(v0.12.0) is substrate-LIVE -- update the dispatch's "
+        "CasmVerificationError message"
+    )
+
+
+def test_module_level_verify_threads_trust_config_to_go_handler() -> None:
+    """Per F-RN-1 v1.5 absorption + T02 Edit 2: trust_config
+    flows through args.trust_config Namespace attribute to
+    _verify_go via the substrate-true
+    ``getattr(args, "trust_config", None) or TrustConfig()``
+    pattern.
+
+    Structural-honesty test: read the _verify_go source bytes
+    and confirm the getattr pattern is present (mirrors the
+    test_go_verification_facade_honors_args_trust_config
+    structural pin in test_gate11_go_verification.py).
+    """
+    import inspect as _inspect
+
+    from furqan_lint.gate11 import go_verification
+
+    source = _inspect.getsource(go_verification._verify_go)
+    assert 'getattr(args, "trust_config", None)' in source, (
+        "_verify_go missing args.trust_config getattr pattern; " "F-RN-1 v1.5 absorption regression"
+    )
+    assert "or TrustConfig()" in source, (
+        "_verify_go missing 'or TrustConfig()' default; " "F-RN-1 v1.5 absorption regression"
+    )
+
+
+def test_module_level_verify_function_local_dispatch_isolation_at_v0_12_0() -> None:
+    """The function-local _LANGUAGE_DISPATCH dict is constructed
+    inside verify() at call time (NOT module-level).
+
+    Closes failure mode #2 of §5.1 step 4 ranked list (CLI
+    dispatch by _VERIFIER_DISPATCH accidentally becomes Python-
+    only when imports are lazy). The dispatch dict is built
+    via three lazy-import lines (python / rust / go) and
+    constructed fresh on each verify() call -- a stale
+    module-level binding cannot drift.
+
+    Structural-honesty test: read the verify source and confirm
+    all three lazy-imports + the three dict entries are present.
+    """
+    import inspect as _inspect
+
+    from furqan_lint.gate11 import verification
+
+    source = _inspect.getsource(verification.verify)
+    assert "from furqan_lint.gate11.python_verification import _verify_python" in source
+    assert "from furqan_lint.gate11.rust_verification import _verify_rust" in source
+    assert "from furqan_lint.gate11.go_verification import _verify_go" in source
+    # Dispatch dict entries:
+    assert '"python": _verify_python' in source
+    assert '"rust": _verify_rust' in source
+    assert '"go": _verify_go' in source

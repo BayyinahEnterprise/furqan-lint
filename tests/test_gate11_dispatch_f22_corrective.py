@@ -30,7 +30,6 @@ import pytest
 pytest.importorskip("rfc8785")
 
 from furqan_lint.gate11.manifest_schema import (
-    CasmSchemaError,
     Manifest,
 )
 from furqan_lint.gate11.verification import (
@@ -82,15 +81,17 @@ def test_schema_accepts_language_rust() -> None:
     Manifest.from_dict(_baseline_manifest_dict("rust"))
 
 
-def test_schema_rejects_language_go() -> None:
-    """Go support ships in Phase G11.2; until then schema rejects it.
+def test_schema_accepts_language_go() -> None:
+    """Go support ships at Phase G11.2 / v0.12.0 al-Mursalat.
 
-    This pin is removed when Phase G11.2 ships (v0.12.0+).
+    Replaces the pre-v0.12.0 test_schema_rejects_language_go pin
+    per its own retirement docstring ("This pin is removed when
+    Phase G11.2 ships (v0.12.0+)"). At v0.12.0, the schema
+    whitelist at manifest_schema.py is extended to include go;
+    a go manifest validates cleanly through Manifest.from_dict.
     """
-    bad = _baseline_manifest_dict("go")
-    with pytest.raises(CasmSchemaError) as exc:
-        Manifest.from_dict(bad)
-    assert exc.value.code == "CASM-V-001"
+    # NOT raises -- go is now substrate-accepted.
+    Manifest.from_dict(_baseline_manifest_dict("go"))
 
 
 # ---------------------------------------------------------------
@@ -122,9 +123,9 @@ def test_f22_step2_3_accepts_rust_manifest() -> None:
 def test_step2_3_rejects_unknown_language_with_supported_list() -> None:
     """Unsupported languages still fail-closed at the dispatch site
     with CasmVerificationError(CASM-V-001) and the supported list
-    enumerated in the error message. Future Phase G11.2 (Go) and
-    G11.3 (ONNX) will extend the whitelist when their verifiers
-    ship.
+    enumerated in the error message. Phase G11.2 (Go) extended
+    the whitelist at v0.12.0; Phase G11.3 (ONNX) extends at
+    v0.13.0 (an-Naziat).
     """
     # We bypass schema (which would reject 'haskell') and forge
     # the language field directly to exercise the verifier-side
@@ -137,23 +138,53 @@ def test_step2_3_rejects_unknown_language_with_supported_list() -> None:
         verifier.step2_3_check_version_and_language(valid)
     assert exc.value.code == "CASM-V-001"
     # The error message must enumerate the supported list so an
-    # operator hitting this knows how to adjust.
+    # operator hitting this knows how to adjust. Post-v0.12.0,
+    # the set is {python, rust, go}.
     msg = str(exc.value).lower()
     assert "python" in msg
     assert "rust" in msg
+    assert "go" in msg
 
 
-def test_step2_3_rejects_go_pre_g11_2() -> None:
-    """Go is not yet supported (Phase G11.2 / v0.12.0). The
-    dispatch site fails-closed with CASM-V-001 + a clear error
-    message naming the future phase.
+def test_al_mursalat_step2_3_accepts_go_manifest() -> None:
+    """al-Mursalat (v0.12.0) closure: go manifest no longer
+    rejected at step 2_3.
+
+    Replaces the pre-v0.12.0 test_step2_3_rejects_go_pre_g11_2
+    pin. Substrate edit: the Verifier.step2_3_check_version_and_language
+    whitelist at gate11/verification.py extends from
+    ("python", "rust") to ("python", "rust", "go") -- same
+    pattern as the v0.11.3 G11.0.2 F22 corrective that
+    extended ("python",) to ("python", "rust"). The new
+    extension does NOT close F22 (which was closed at v0.11.3);
+    it generalizes the supported-language set per T01 Option A
+    disposition.
+    """
+    verifier = Verifier(trust_config=TrustConfig())
+    manifest = Manifest.from_dict(_baseline_manifest_dict("go"))
+    # No exception raised -> dispatch accepts.
+    verifier.step2_3_check_version_and_language(manifest)
+
+
+def test_al_mursalat_step2_3_unknown_language_message_names_onnx_phase() -> None:
+    """Post-v0.12.0, the unknown-language error message names
+    ONNX (Phase G11.3) as the next-phase extension target
+    rather than Go (Phase G11.2 -- now substrate).
+
+    Closes the supported-language-set narrative continuity per
+    F-AL-6 v1.3 absorption.
     """
     valid = Manifest.from_dict(_baseline_manifest_dict("python"))
-    valid.module_identity["language"] = "go"
+    valid.module_identity["language"] = "haskell"  # forge past schema
 
     verifier = Verifier(trust_config=TrustConfig())
     with pytest.raises(CasmVerificationError) as exc:
         verifier.step2_3_check_version_and_language(valid)
     assert exc.value.code == "CASM-V-001"
-    # Error message names the phase that will add Go.
-    assert "G11.2" in str(exc.value)
+    msg = str(exc.value).lower()
+    # Supported set now lists go alongside python/rust:
+    assert "python" in msg
+    assert "rust" in msg
+    assert "go" in msg
+    # Future-phase callout now names ONNX (G11.3), not Go:
+    assert "g11.3" in msg

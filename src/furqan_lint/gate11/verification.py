@@ -154,12 +154,12 @@ class Verifier:
         # languages still fail-closed at this step with a clear
         # CASM-V-001 error rather than silently passing into a
         # missing verifier.
-        if language not in ("python", "rust"):
+        if language not in ("python", "rust", "go"):
             raise CasmVerificationError(
                 "CASM-V-001",
-                f"v1.0 supports language in (python, rust); "
-                f"got {language!r}. Go support ships in Phase "
-                f"G11.2; ONNX in Phase G11.3.",
+                f"v1.0 supports language in (python, rust, go); "
+                f"got {language!r}. ONNX support ships in Phase "
+                f"G11.3.",
             )
 
     # Step 4
@@ -553,7 +553,7 @@ class Verifier:
 # analysis fires MARAD P1.
 
 
-def verify(manifest, args):  # type: ignore[no-untyped-def]
+def verify(manifest: Any, args: Any) -> VerificationResult:
     """Module-level procedural facade introduced at v0.11.8.
 
     Dispatches to a language-specific facade per
@@ -585,15 +585,21 @@ def verify(manifest, args):  # type: ignore[no-untyped-def]
         module's exception-construction style).
     """
     # Lazy import to avoid module-level circular import:
-    # python_verification / rust_verification import Verifier from
-    # this module; we import their _verify_* handlers here at
-    # call time.
+    # python_verification / rust_verification / go_verification
+    # import Verifier from this module; we import their
+    # _verify_* handlers here at call time. al-Mursalat
+    # (v0.12.0) extends the function-local dispatch with a
+    # third lazy-import line for Go per F-RM-2 v1.4 absorption
+    # (function-local design preserved; not lifted to module
+    # level).
+    from furqan_lint.gate11.go_verification import _verify_go
     from furqan_lint.gate11.python_verification import _verify_python
     from furqan_lint.gate11.rust_verification import _verify_rust
 
     _LANGUAGE_DISPATCH = {
         "python": _verify_python,
         "rust": _verify_rust,
+        "go": _verify_go,
     }
 
     language = manifest.module_identity.get("language")
@@ -601,9 +607,9 @@ def verify(manifest, args):  # type: ignore[no-untyped-def]
     if handler is None:
         raise CasmVerificationError(
             "CASM-V-001",
-            f"v1.0 supports language in (python, rust); "
-            f"got {language!r}. Go support ships in Phase "
-            f"G11.2; ONNX in Phase G11.3.",
+            f"v1.0 supports language in (python, rust, go); "
+            f"got {language!r}. ONNX support ships in Phase "
+            f"G11.3.",
         )
     return handler(manifest, args)
 

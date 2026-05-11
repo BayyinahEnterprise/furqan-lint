@@ -180,15 +180,16 @@ class Manifest:
                     f"module_identity missing field {k!r}",
                 )
         language = module_identity["language"]
-        # Phase G11.1 (as-Saffat) extends accepted languages
-        # to include "rust"; Phase G11.2 will add "go"; Phase
-        # G11.3 (salim-onnx) will add "onnx".
-        if language not in ("python", "rust"):
+        # Phase G11.1 (as-Saffat) extended accepted languages
+        # to include "rust"; Phase G11.2 (al-Mursalat, v0.12.0)
+        # extends to "go"; Phase G11.3 (salim-onnx) will add
+        # "onnx".
+        if language not in ("python", "rust", "go"):
             raise CasmSchemaError(
                 "CASM-V-001",
-                f"v1.0 supports only language in (python, rust); "
-                f"got {language!r}. Go ships in Phase G11.2; "
-                f"ONNX via Phase G11.3 (salim-onnx).",
+                f"v1.0 supports only language in (python, rust, go); "
+                f"got {language!r}. ONNX via Phase G11.3 "
+                f"(salim-onnx).",
             )
         module_root_hash = module_identity["module_root_hash"]
         if not isinstance(module_root_hash, str) or not module_root_hash.startswith("sha256:"):

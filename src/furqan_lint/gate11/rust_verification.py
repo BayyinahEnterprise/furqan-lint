@@ -72,7 +72,13 @@ def _verify_rust(
     code if any of the nine verification steps fail. Returns the
     populated ``VerificationResult`` on success.
     """
-    trust_config = TrustConfig()
+    # Per F-RN-1 v1.5 absorption + al-Mursalat T02 Edit 2:
+    # honor caller-passed trust_config via args Namespace
+    # attribute if attached by the CLI; fall back to
+    # default TrustConfig() when absent (preserves v0.11.8
+    # programmatic-RP backward compatibility for callers
+    # that don't set args.trust_config).
+    trust_config = getattr(args, "trust_config", None) or TrustConfig()
     verifier = Verifier(trust_config=trust_config)
     return verifier.verify_bundle(
         bundle_path=args.bundle_path,
