@@ -107,12 +107,14 @@ def test_module_level_verify_is_exported() -> None:
 
 
 def test_module_level_verify_raises_casm_v_001_on_unknown_language() -> None:
-    """``verify`` raises CasmVerificationError(CASM-V-001) for go.
+    """``verify`` raises CasmVerificationError(CASM-V-001) for
+    unsupported languages.
 
-    Future Phase G11.2 (Go) and G11.3 (ONNX) will extend the
-    dispatch table; until then, ``language=go`` falls through
-    to the dispatch-miss branch and raises CASM-V-001 with a
-    message naming the future phase.
+    Post-an-Naziat (v0.13.0): the canonical mushaf chain
+    (python, rust, go, onnx) is closed-form; no further Phase
+    G11.x dispatch entries are anticipated. Phase G11.4
+    Tasdiq al-Bayan operates against this surface as a
+    drift-detection invariant rather than adding entries.
 
     Per F-XR-5 audit absorption: the CasmVerificationError is
     constructed with positional args (``CasmVerificationError(
@@ -122,8 +124,9 @@ def test_module_level_verify_raises_casm_v_001_on_unknown_language() -> None:
     valid = Manifest.from_dict(_baseline_manifest_dict("python"))
     # Forge the language past the schema (which would reject
     # 'haskell') to exercise the verifier-side dispatch defense.
-    # Post-al-Mursalat (v0.12.0): 'go' is now substrate-LIVE so
-    # the unknown-language fixture uses 'haskell' instead.
+    # Post-an-Naziat (v0.13.0): all four mushaf-chain languages
+    # are substrate-LIVE so the unknown-language fixture uses
+    # 'haskell' instead.
     valid.module_identity["language"] = "haskell"
 
     args = argparse.Namespace(
@@ -134,12 +137,14 @@ def test_module_level_verify_raises_casm_v_001_on_unknown_language() -> None:
         verify(valid, args)
     assert exc.value.code == "CASM-V-001"
     msg = str(exc.value)
-    # Post-v0.12.0: G11.3 (ONNX) is the next-phase target, not
-    # G11.2 (Go, now substrate).
-    assert "G11.3" in msg
+    # Post-v0.13.0: no next-phase callout (canonical mushaf
+    # chain closed); message explicitly notes G11.4 acts as
+    # drift-detection rather than adding entries.
+    assert "G11.4" in msg or "drift-detection" in msg
     assert "python" in msg.lower()
     assert "rust" in msg.lower()
     assert "go" in msg.lower()
+    assert "onnx" in msg.lower()
 
 
 # ---------------------------------------------------------------
@@ -257,13 +262,19 @@ def test_module_level_verify_dispatches_go_to_facade() -> None:
     )
 
 
-def test_module_level_verify_unknown_language_message_names_onnx() -> None:
-    """Post-v0.12.0, the unknown-language error message names
-    ONNX (Phase G11.3) as the next-phase extension target.
+def test_module_level_verify_unknown_language_message_no_next_phase() -> None:
+    """Post-v0.13.0 (an-Naziat ship), the unknown-language error
+    message no longer names a next-phase extension target --
+    ONNX (Phase G11.3) closed the canonical mushaf chain. The
+    error message now states no further Phase G11.x dispatch
+    entries are anticipated; Phase G11.4 Tasdiq al-Bayan
+    operates against this surface as a drift-detection
+    invariant.
 
-    Closes F-AL-6 / F-AL-7 narrative continuity: Go is no longer
-    a future-phase target (it ships at v0.12.0); ONNX is the
-    next-phase target awaiting v0.13.0 an-Naziat.
+    Supersedes test_module_level_verify_unknown_language_message_names_onnx
+    per F-AL-6 / F-AL-7 narrative continuity chain at terminal
+    state (al-Mursalat T01 -> an-Naziat T09 terminal-state
+    propagation).
     """
     valid = Manifest.from_dict(_baseline_manifest_dict("python"))
     # Forge past schema:
@@ -276,15 +287,17 @@ def test_module_level_verify_unknown_language_message_names_onnx() -> None:
         verify(valid, args)
     assert exc.value.code == "CASM-V-001"
     msg = str(exc.value).lower()
-    # Supported set now lists go alongside python/rust:
+    # Supported set lists onnx alongside python/rust/go:
     assert "python" in msg
     assert "rust" in msg
     assert "go" in msg
-    # Future-phase callout names ONNX / G11.3, not G11.2 / go:
-    assert "g11.3" in msg
-    assert "g11.2" not in msg, (
-        "G11.2 still cited as future-phase target; al-Mursalat "
-        "(v0.12.0) is substrate-LIVE -- update the dispatch's "
+    assert "onnx" in msg
+    # No-further-phase callout (replaces the prior "g11.3"
+    # next-phase callout which is now substrate):
+    assert "no further phase g11.x" in msg or "drift-detection" in msg
+    assert "g11.3" not in msg, (
+        "G11.3 still cited as future-phase target; an-Naziat "
+        "(v0.13.0) is substrate-LIVE -- update the dispatch's "
         "CasmVerificationError message"
     )
 
@@ -314,19 +327,24 @@ def test_module_level_verify_threads_trust_config_to_go_handler() -> None:
     )
 
 
-def test_module_level_verify_function_local_dispatch_isolation_at_v0_12_0() -> None:
+def test_module_level_verify_function_local_dispatch_isolation_at_v0_13_0() -> None:
     """The function-local _LANGUAGE_DISPATCH dict is constructed
     inside verify() at call time (NOT module-level).
 
     Closes failure mode #2 of §5.1 step 4 ranked list (CLI
     dispatch by _VERIFIER_DISPATCH accidentally becomes Python-
     only when imports are lazy). The dispatch dict is built
-    via three lazy-import lines (python / rust / go) and
-    constructed fresh on each verify() call -- a stale
-    module-level binding cannot drift.
+    via four lazy-import lines (python / rust / go / onnx) at
+    v0.13.0 ship and constructed fresh on each verify() call
+    -- a stale module-level binding cannot drift.
+
+    Per an-Naziat T09 + F-NA-6 v1.4 absorption: the dispatch
+    surface closes at four entries; Phase G11.4 Tasdiq al-Bayan
+    operates against this surface as a drift-detection
+    invariant rather than adding entries.
 
     Structural-honesty test: read the verify source and confirm
-    all three lazy-imports + the three dict entries are present.
+    all four lazy-imports + the four dict entries are present.
     """
     import inspect as _inspect
 
@@ -336,7 +354,68 @@ def test_module_level_verify_function_local_dispatch_isolation_at_v0_12_0() -> N
     assert "from furqan_lint.gate11.python_verification import _verify_python" in source
     assert "from furqan_lint.gate11.rust_verification import _verify_rust" in source
     assert "from furqan_lint.gate11.go_verification import _verify_go" in source
+    assert "from furqan_lint.gate11.onnx_verification import _verify_onnx" in source
     # Dispatch dict entries:
     assert '"python": _verify_python' in source
     assert '"rust": _verify_rust' in source
     assert '"go": _verify_go' in source
+    assert '"onnx": _verify_onnx' in source
+
+
+# ---------------------------------------------------------------------------
+# an-Naziat (v0.13.0) T09 +2 deterministic fixtures per F-NA-4 v1.4 +
+# F-PB-NZ-1 v1.6 absorption T00 step 4.1 pinning table T09 row.
+# ---------------------------------------------------------------------------
+
+
+def test_module_level_verify_dispatches_onnx_to_facade() -> None:
+    """ONNX manifests dispatch to onnx_verification._verify_onnx
+    (an-Naziat / v0.13.0).
+
+    Mirror of the python / rust / go dispatch tests; same
+    reasoning. Per F-NA-2 v1.4 + F-PB-NZ-2 v1.6 substrate-of-
+    record: ONNX is substrate-LIVE at v0.13.0; the function-
+    local _LANGUAGE_DISPATCH dict inside verification.verify
+    is extended via a fourth lazy-import line; the dispatch
+    routes cleanly to _verify_onnx which propagates the
+    substrate CASM-V-010 (bundle parse failure) for
+    nonexistent paths.
+    """
+    valid = Manifest.from_dict(_baseline_manifest_dict("onnx"))
+    args = argparse.Namespace(
+        bundle_path="/nonexistent/bundle.tar",
+        module_path="/nonexistent/module.onnx",
+    )
+    with pytest.raises(CasmVerificationError) as exc:
+        verify(valid, args)
+    assert exc.value.code == "CASM-V-010", (
+        f"dispatch routed wrongly: expected CASM-V-010 (bundle "
+        f"parse failure from onnx facade), got {exc.value.code}"
+    )
+
+
+def test_module_level_verify_threads_trust_config_to_onnx_handler() -> None:
+    """Per F-RN-1 v1.5 absorption + an-Naziat T04: trust_config
+    flows through args.trust_config Namespace attribute to
+    _verify_onnx via the substrate-true
+    ``getattr(args, "trust_config", None) or TrustConfig()``
+    pattern.
+
+    Structural-honesty test: read the _verify_onnx source bytes
+    and confirm the getattr pattern is present (mirrors the
+    test_module_level_verify_threads_trust_config_to_go_handler
+    structural pin from al-Mursalat T02).
+    """
+    import inspect as _inspect
+
+    from furqan_lint.gate11 import onnx_verification
+
+    source = _inspect.getsource(onnx_verification._verify_onnx)
+    assert 'getattr(args, "trust_config", None)' in source, (
+        "_verify_onnx missing args.trust_config getattr pattern; "
+        "F-RN-1 v1.5 absorption regression"
+    )
+    assert "or TrustConfig()" in source, (
+        "_verify_onnx missing 'or TrustConfig()' default; "
+        "F-RN-1 v1.5 absorption regression"
+    )

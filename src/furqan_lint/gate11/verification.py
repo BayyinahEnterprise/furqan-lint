@@ -584,13 +584,17 @@ def verify(manifest: Any, args: Any) -> VerificationResult:
     """
     # Lazy import to avoid module-level circular import:
     # python_verification / rust_verification / go_verification
-    # import Verifier from this module; we import their
-    # _verify_* handlers here at call time. al-Mursalat
-    # (v0.12.0) extends the function-local dispatch with a
-    # third lazy-import line for Go per F-RM-2 v1.4 absorption
-    # (function-local design preserved; not lifted to module
-    # level).
+    # / onnx_verification import Verifier from this module; we
+    # import their _verify_* handlers here at call time.
+    # an-Naziat (v0.13.0) extends the function-local dispatch
+    # with a fourth lazy-import line for ONNX per F-RM-2 v1.4
+    # absorption (function-local design preserved; not lifted
+    # to module level). The four-entry dispatch closes the
+    # canonical mushaf chain; Phase G11.4 Tasdiq al-Bayan
+    # operates against this exact dispatch surface as a
+    # drift-detection invariant rather than adding entries.
     from furqan_lint.gate11.go_verification import _verify_go
+    from furqan_lint.gate11.onnx_verification import _verify_onnx
     from furqan_lint.gate11.python_verification import _verify_python
     from furqan_lint.gate11.rust_verification import _verify_rust
 
@@ -598,6 +602,7 @@ def verify(manifest: Any, args: Any) -> VerificationResult:
         "python": _verify_python,
         "rust": _verify_rust,
         "go": _verify_go,
+        "onnx": _verify_onnx,
     }
 
     language = manifest.module_identity.get("language")
@@ -605,9 +610,11 @@ def verify(manifest: Any, args: Any) -> VerificationResult:
     if handler is None:
         raise CasmVerificationError(
             "CASM-V-001",
-            f"v1.0 supports language in (python, rust, go); "
-            f"got {language!r}. ONNX support ships in Phase "
-            f"G11.3.",
+            f"v1.0 supports language in "
+            f"(python, rust, go, onnx); got {language!r}. "
+            f"No further Phase G11.x dispatch entries are "
+            f"anticipated post-an-Naziat (Phase G11.4 "
+            f"operates as a drift-detection invariant).",
         )
     return handler(manifest, args)
 
