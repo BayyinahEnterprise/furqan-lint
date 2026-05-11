@@ -92,10 +92,12 @@ residual disclosures apply to any consumer running
 2. **Typosquatting at the publish boundary.** Sigstore proves
    "identity X signed bytes Y at time T", not "identity X is
    the legitimate maintainer". Relying Parties MUST configure
-   `--expected-identity <pattern>` for both the Python
-   verifier (v0.11.2+) and the Rust verifier (v0.11.0+); the
-   default `CASM-V-035` refuse-without-policy ensures
-   verification fails closed when no policy is configured.
+   `--expected-identity <pattern>` for the Python verifier
+   (v0.11.2+; v0.11.5 al-Bayyina F24 corrective re-routed the
+   sigstore API path), the Rust verifier (v0.11.0+), and the
+   Go verifier (v0.12.0+ al-Mursalat); the default
+   `CASM-V-035` refuse-without-policy ensures verification
+   fails closed when no policy is configured.
    Use of `--allow-any-identity` is the explicit opt-in to
    `UnsafeNoOp` policy; presence in CI logs is itself a
    Sulayman-Naml ADVISORY signal per Phase G11.A Strategy 7.

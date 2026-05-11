@@ -282,7 +282,8 @@ diagnostics as in v0.9.4. Gate 11 only activates when the user
 opts in via the flag or the `manifest` subcommand.
 
 **Wire format.** Each manifest is a JSON document carrying
-`casm_version: "1.0"`, `language: "python"`,
+`casm_version: "1.0"`, `language` (one of ``"python"`` (Phase
+G11.0), ``"rust"`` (Phase G11.1), ``"go"`` (Phase G11.2)),
 `module_root_hash` (BOM-stripped, LF-normalized, UTF-8 SHA-256),
 `public_surface.names` (ASCII-sorted entries of kind
 `function` / `class` / `constant`, each with a canonical
@@ -297,7 +298,10 @@ documented under the `CASM-V-NNN` error namespace:
 
 1. Parse bundle (CASM-V-010 on JSON failure).
 2. Check `casm_version == "1.0"` (CASM-V-001).
-3. Check `language == "python"` (CASM-V-001).
+3. Check `language` is in the supported substrate set
+   ``{python (Phase G11.0, v0.10.0), rust (Phase G11.1,
+   v0.11.0), go (Phase G11.2, v0.12.0)}`` (CASM-V-001);
+   ONNX (Phase G11.3) ships in v0.13.0 an-Naziat.
 4. Load Sigstore trust root via TUF (CASM-V-020 ADVISORY on
    refresh failure with cache fallback; CASM-V-021 if no cache).
 5. Re-canonicalize the manifest (RFC 8785).
