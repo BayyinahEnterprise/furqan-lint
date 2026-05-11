@@ -2,7 +2,7 @@
 
 ## Phase G11.A -- al-Fatiha
 ## Universal Safety Invariants for Sigstore-CASM Gate 11
-## v1.0_second_revision_amended_2
+## v1.0_second_revision_amended_3
 
 > "All praise is due to Allah, Lord of the worlds. The Most
 > Merciful, the Especially Merciful. Sovereign of the Day of
@@ -267,8 +267,10 @@ constitute the multi-corpus baseline at the substrate level.
 **Declaration**: the nine-step offline verification flow
 defined in Phase G11.0 MUST be implemented identically across
 all substrates. The error code namespace `CASM-V-001` through
-`CASM-V-064` (plus the Phase-specific extensions) is universal
-across substrates.
+`CASM-V-064` (plus the Phase-specific extensions
+`CASM-V-070` and `CASM-V-071` allocated at Phase G11.3
+an-Naziat v0.13.0 for ONNX-specific failure modes) is
+universal across substrates.
 
 The nine steps:
 
@@ -277,19 +279,20 @@ The nine steps:
 2. Check `casm_version == "1.0"` (`CASM-V-001`)
 3. Check `language` matches the substrate the verifier is
    running against (`CASM-V-001`). The substrate-LIVE
-   supported-language set at v0.12.0 is `{python (Phase
+   supported-language set at v0.13.0 is `{python (Phase
    G11.0, v0.10.0), rust (Phase G11.1, v0.11.0), go (Phase
-   G11.2, v0.12.0)}`; ONNX (Phase G11.3) is substrate-
-   anticipated per Invariant 5 extraction-method enumeration
-   and ships in v0.13.0 an-Naziat. CASM-V-001 is the
-   canonical code for both casm_version mismatch and
-   language-not-supported semantics (Option A per
-   al-Mursalat T01 disposition: single code, union
-   semantic). The verifier-side dispatch site at
-   `verification.verify`'s function-local
+   G11.2, v0.12.0), onnx (Phase G11.3, v0.13.0)}` -- the
+   complete mushaf chain. CASM-V-001 is the canonical code
+   for both casm_version mismatch and language-not-supported
+   semantics (Option A per al-Mursalat T01 disposition:
+   single code, union semantic). The verifier-side dispatch
+   site at `verification.verify`'s function-local
    `_LANGUAGE_DISPATCH` raises CASM-V-001 with a positional
-   message naming the next phase target when an unsupported
-   language is encountered.
+   message when an unsupported language is encountered;
+   no further Phase G11.x dispatch entries are anticipated
+   post-an-Naziat (Phase G11.4 Tasdiq al-Bayan operates
+   against this exact dispatch surface as a drift-detection
+   invariant rather than adding new entries).
 4. Load Sigstore trust root via TUF (`CASM-V-020` ADVISORY
    on refresh failure with cache fallback; `CASM-V-021` if
    no cache exists)
@@ -307,7 +310,20 @@ The nine steps:
 8. Compare `public_surface.names` to the live extraction;
    surface `CASM-V-INDETERMINATE` rather than a false pass
    when the live module exposes dynamic shape that the
-   extractor cannot resolve (e.g., Python dynamic `__all__`)
+   extractor cannot resolve (e.g., Python dynamic `__all__`).
+   For ONNX manifests (`language == "onnx"`, Phase G11.3
+   v0.13.0+), this step additionally enforces opset-policy
+   consistency (`CASM-V-070` on `opset_imports` mismatch
+   between manifest and substrate ModelProto) and dim_param
+   consistency (`CASM-V-071` on symbolic-vs-concrete
+   divergence between manifest-declared shape and substrate
+   ModelProto shape). Both codes are exit-code-1 hard fails;
+   mechanical enforcement happens through the canonicalized
+   graph-shape surface from
+   `onnx_signature_canonicalization.py` rules 9-12 (which
+   produce divergent canonical strings when opsets or
+   dim_params drift) plus explicit pre-canonicalization
+   consistency checks in `gate11/onnx_verification.py`.
 9. Check `chain_pointer` integrity against the previous bundle
    when supplied (`CASM-V-060` on hard mismatch; `CASM-V-061`
    ADVISORY when no previous bundle is locally accessible)
