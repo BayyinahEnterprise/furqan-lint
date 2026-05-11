@@ -61,7 +61,6 @@ from furqan_lint.gate11.onnx_signature_canonicalization import (
     canonicalize_bytes,
 )
 
-
 # ---------------------------------------------------------------------------
 # Limit 1: Binary substrate (ModelProto bytes, not source bytes)
 # ---------------------------------------------------------------------------
@@ -128,12 +127,8 @@ def test_limit_dim_param_promote_to_concrete_changes_canonical_bytes() -> None:
     drift at the attestation layer per SAFETY_INVARIANTS.md
     Invariant 6 step 8 extension).
     """
-    vi_symbolic = ValueInfoSummary(
-        name="input", dtype="FLOAT", shape=("batch", 3, 224, 224)
-    )
-    vi_concrete = ValueInfoSummary(
-        name="input", dtype="FLOAT", shape=(1, 3, 224, 224)
-    )
+    vi_symbolic = ValueInfoSummary(name="input", dtype="FLOAT", shape=("batch", 3, 224, 224))
+    vi_concrete = ValueInfoSummary(name="input", dtype="FLOAT", shape=(1, 3, 224, 224))
     section_symbolic = OnnxIdentitySection(
         opset_imports=(("", 18),),
         ir_version=9,

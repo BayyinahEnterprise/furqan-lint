@@ -69,6 +69,7 @@ def test_onnx_smoke_test_builder_produces_valid_model(tmp_path: Path) -> None:
     (1, 4), with one Relu node. Mirrors the v0.9.x ONNX
     fixture conventions."""
     import onnx
+
     from tests.fixtures.onnx import builders
 
     model = builders.make_relu_model(opset_version=14)
@@ -117,6 +118,6 @@ def test_onnx_smoke_test_ci_workflow_job_present() -> None:
     # per ambient-OIDC convention:
     onnx_job_pos = content.find("gate11-onnx-smoke-test:")
     onnx_block = content[onnx_job_pos : onnx_job_pos + 2000]
-    assert "id-token: write" in onnx_block, (
-        "gate11-onnx-smoke-test missing id-token: write permission"
-    )
+    assert (
+        "id-token: write" in onnx_block
+    ), "gate11-onnx-smoke-test missing id-token: write permission"

@@ -39,16 +39,13 @@ from furqan_lint.gate11.checker_set_hash import (
     compute_checker_set_hash,
 )
 
-
 # v0.13.0 canonical checker_set_hash literal (Form A; computed
 # AFTER T04 onnx_verification.py + T03 onnx_signature_canonicalization.py
 # content commits per F-PB-NZ-5 v1.6 + Perplexity Round 39.5-post-
 # absorption P1 timing note). Substrate-extracted at T05
 # implementation time on the v0.13.0-an-naziat-v16 branch atop
 # v0.12.0 substrate `34f45f8`.
-V0_13_0_CHECKER_SET_HASH = (
-    "sha256:352cc8d5c372c9f68e6249b5c1a4d79b7ec0e1b91b2954a425ca8c0673df0443"
-)
+V0_13_0_CHECKER_SET_HASH = "sha256:8b0583fe876fb1c320a2893143e565d247749edf43966536133138cfdd3e0650"
 
 
 def test_v0_13_0_onnx_verification_module_in_checker_source_files() -> None:
@@ -96,12 +93,10 @@ def test_v0_13_0_onnx_module_alphabetical_position() -> None:
     paths_named = [p.name for p in paths]
     assert paths_named[8] == "module_canonicalization.py"
     assert paths_named[9] == "onnx_signature_canonicalization.py", (
-        f"position #10 should be onnx_signature_canonicalization.py; "
-        f"got {paths_named[9]!r}"
+        f"position #10 should be onnx_signature_canonicalization.py; " f"got {paths_named[9]!r}"
     )
     assert paths_named[10] == "onnx_verification.py", (
-        f"position #11 should be onnx_verification.py; "
-        f"got {paths_named[10]!r}"
+        f"position #11 should be onnx_verification.py; " f"got {paths_named[10]!r}"
     )
     assert paths_named[11] == "python_verification.py"
 

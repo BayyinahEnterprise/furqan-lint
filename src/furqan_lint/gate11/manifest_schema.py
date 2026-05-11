@@ -253,8 +253,7 @@ class Manifest:
         if language not in SUPPORTED_LANGUAGES:
             raise CasmSchemaError(
                 "CASM-V-001",
-                f"v1.0 supports only language in {SUPPORTED_LANGUAGES!r}; "
-                f"got {language!r}.",
+                f"v1.0 supports only language in {SUPPORTED_LANGUAGES!r}; " f"got {language!r}.",
             )
         module_root_hash = module_identity["module_root_hash"]
         if not isinstance(module_root_hash, str) or not module_root_hash.startswith("sha256:"):
@@ -381,10 +380,10 @@ class Manifest:
 
 
 __all__ = (
+    "SUPPORTED_LANGUAGES",
     "CasmSchemaError",
     "Manifest",
     "OnnxIdentitySection",
     "PublicName",
-    "SUPPORTED_LANGUAGES",
     "ValueInfoSummary",
 )

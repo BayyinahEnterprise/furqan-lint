@@ -63,9 +63,10 @@ def test_verify_onnx_module_exports_only_private_handler() -> None:
 
     sig = inspect.signature(_verify_onnx)
     params = list(sig.parameters)
-    assert params == ["manifest", "args"], (
-        f"_verify_onnx signature must be (manifest, args); got {params!r}"
-    )
+    assert params == [
+        "manifest",
+        "args",
+    ], f"_verify_onnx signature must be (manifest, args); got {params!r}"
 
 
 def test_verify_onnx_delegates_to_verifier_with_six_kwarg_pattern() -> None:
@@ -111,9 +112,10 @@ def test_verify_onnx_honors_args_trust_config() -> None:
     args = _make_args(trust_config=custom_trust)
     fake_manifest = object()
 
-    with patch.object(Verifier, "__init__", return_value=None) as mock_init, patch.object(
-        Verifier, "verify_bundle"
-    ) as mock_verify:
+    with (
+        patch.object(Verifier, "__init__", return_value=None) as mock_init,
+        patch.object(Verifier, "verify_bundle") as mock_verify,
+    ):
         mock_verify.return_value = object()
         _verify_onnx(fake_manifest, args)  # type: ignore[arg-type]
 
@@ -134,9 +136,10 @@ def test_verify_onnx_defaults_trust_config_when_args_lacks_attribute() -> None:
     args = _make_args()  # no trust_config attribute
     fake_manifest = object()
 
-    with patch.object(Verifier, "__init__", return_value=None) as mock_init, patch.object(
-        Verifier, "verify_bundle"
-    ) as mock_verify:
+    with (
+        patch.object(Verifier, "__init__", return_value=None) as mock_init,
+        patch.object(Verifier, "verify_bundle") as mock_verify,
+    ):
         mock_verify.return_value = object()
         _verify_onnx(fake_manifest, args)  # type: ignore[arg-type]
 

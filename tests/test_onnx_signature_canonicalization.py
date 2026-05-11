@@ -167,7 +167,9 @@ def test_canonicalization_rejects_malformed_inputs() -> None:
 
     # Bad shape element type:
     bad_shape_vi = ValueInfoSummary(
-        name="bad", dtype="FLOAT", shape=(3.14,),  # type: ignore[arg-type]
+        name="bad",
+        dtype="FLOAT",
+        shape=(3.14,),  # type: ignore[arg-type]
     )
     with pytest.raises(CasmSchemaError) as exc_info:
         canonicalize(_make_section(inputs=(bad_shape_vi,)))
@@ -175,7 +177,9 @@ def test_canonicalization_rejects_malformed_inputs() -> None:
 
     # Empty symbolic dim_param string:
     empty_param_vi = ValueInfoSummary(
-        name="bad", dtype="FLOAT", shape=("",),
+        name="bad",
+        dtype="FLOAT",
+        shape=("",),
     )
     with pytest.raises(CasmSchemaError) as exc_info:
         canonicalize(_make_section(inputs=(empty_param_vi,)))
@@ -184,7 +188,9 @@ def test_canonicalization_rejects_malformed_inputs() -> None:
     # bool is subclass of int but explicitly rejected (rule 10
     # type discipline):
     bool_shape_vi = ValueInfoSummary(
-        name="bad", dtype="FLOAT", shape=(True,),  # type: ignore[arg-type]
+        name="bad",
+        dtype="FLOAT",
+        shape=(True,),  # type: ignore[arg-type]
     )
     with pytest.raises(CasmSchemaError) as exc_info:
         canonicalize(_make_section(inputs=(bool_shape_vi,)))

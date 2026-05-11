@@ -416,6 +416,5 @@ def test_module_level_verify_threads_trust_config_to_onnx_handler() -> None:
         "F-RN-1 v1.5 absorption regression"
     )
     assert "or TrustConfig()" in source, (
-        "_verify_onnx missing 'or TrustConfig()' default; "
-        "F-RN-1 v1.5 absorption regression"
+        "_verify_onnx missing 'or TrustConfig()' default; " "F-RN-1 v1.5 absorption regression"
     )
