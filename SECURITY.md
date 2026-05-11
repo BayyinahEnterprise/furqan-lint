@@ -94,10 +94,11 @@ residual disclosures apply to any consumer running
    the legitimate maintainer". Relying Parties MUST configure
    `--expected-identity <pattern>` for the Python verifier
    (v0.11.2+; v0.11.5 al-Bayyina F24 corrective re-routed the
-   sigstore API path), the Rust verifier (v0.11.0+), and the
-   Go verifier (v0.12.0+ al-Mursalat); the default
-   `CASM-V-035` refuse-without-policy ensures verification
-   fails closed when no policy is configured.
+   sigstore API path), the Rust verifier (v0.11.0+), the
+   Go verifier (v0.12.0+ al-Mursalat), and the ONNX verifier
+   (v0.13.0+ an-Naziat); the default `CASM-V-035`
+   refuse-without-policy ensures verification fails closed
+   when no policy is configured.
    Use of `--allow-any-identity` is the explicit opt-in to
    `UnsafeNoOp` policy; presence in CI logs is itself a
    Sulayman-Naml ADVISORY signal per Phase G11.A Strategy 7.
@@ -137,6 +138,46 @@ substrate as the Phase G11.0 Python pipeline. The four
 mandatory disclosures (OIDC issuer compromise; typosquatting;
 Rekor privacy; log retention horizon) apply identically to
 Rust manifests.
+
+## Sigstore-CASM Gate 11 Go extension (v0.12.0)
+
+The Phase G11.2 al-Mursalat Go extension uses the same
+Sigstore substrate as the Python / Rust pipelines. The four
+mandatory disclosures apply identically to Go manifests. Go
+manifests additionally pin the goast source binary in the
+Form A checker_set_hash surface per F-PF-3 v1.7 SOURCE-PRESENT
+branch (a Relying Party detects substrate divergence in the
+Go AST emitter source code, not just the gate11/* verification
+modules).
+
+## Sigstore-CASM Gate 11 ONNX extension (v0.13.0)
+
+The Phase G11.3 an-Naziat ONNX extension uses the same
+Sigstore substrate as the source-code pipelines. The four
+mandatory disclosures apply identically to ONNX manifests.
+ONNX manifests carry two additional substrate-specific
+disclosures per the four-place documented-limit discipline:
+
+5. **Graph-shape vs type-shape canonicalization (honest
+   asymmetry).** ONNX gate11 canonicalization operates on
+   graph inputs/outputs (per
+   `onnx_signature_canonicalization.py` rules 9-12: ValueInfo
+   sort, dim_param preservation, opset sort, ir_version
+   integer), not on type expressions. Two CASM-V codes
+   specific to ONNX: `CASM-V-070` (opset-policy-mismatch)
+   and `CASM-V-071` (dim-param-violation). Both are exit-
+   code-1 hard fails enforced mechanically through divergent
+   canonical strings at the signature-verification step.
+
+6. **Attestation boundary excludes weights and NeuroGolf
+   sidecars.** ONNX attestation covers ModelProto topology
+   (opset_imports, ir_version, graph.input, graph.output,
+   graph.node) and excludes weight tensors (initializer; may
+   change with retraining without invalidating attestation)
+   plus NeuroGolf-convention sidecar metadata
+   (numpy_reference, probe-grid YAML, score-validity
+   thresholds). See `docs/onnx-attestation-boundary.md` for
+   the full boundary classification and decision flowchart.
 
 ### Identity policy enforcement
 
