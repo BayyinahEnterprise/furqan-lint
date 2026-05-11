@@ -19,6 +19,185 @@ introduced this convention.
 
 ---
 
+## [0.14.0] - 2026-05-11
+
+### Verification corpus (Tasdiq al-Bayan / G11.4)
+
+Phase G11.4 ships the cross-substrate verification corpus that
+exercises the four-substrate gate11 parity claim from
+`docs/gate11-symmetry.md`. The corpus is mechanical-not-
+aspirational: every parity claim is exercised by a
+parameterized test; every honest asymmetry is pinned as a
+positive verification of the documented difference.
+
+This release ships **no new substrate behavior**; all four
+verifiers (Python, Rust, Go, ONNX) are byte-stable from
+v0.13.0 (Acceptance §15 binding). The corpus is verification
+infrastructure that exercises the existing substrates.
+
+After v0.14.0, the four-substrate gate11 parity is no longer
+just documented; it is **mechanically enforced**. Any future
+change that breaks parity in one substrate but not others
+fails the corpus. Any future addition of a gate11 concern that
+should apply across substrates fails the drift-detection
+meta-test until added to both the symmetry table and the
+corpus parameterization.
+
+This is the verification surface v1.0 self-attestation will
+rely on. v1.0 is the successor phase
+(`docs/gate11-v1-self-attestation.md` documents the scope
+boundary).
+
+#### Closures
+
+- T01 (`SAFETY_INVARIANTS.md` verification): no-edit
+  verification commit confirming Section 8 completeness across
+  the four substrates (universal codes 001/007/032/035/036
+  reachable from all four; ONNX-specific 070/071 reachable
+  from ONNX substrate per Invariant 6 step 8 extension); each
+  CASM-V code reachable from at least one substrate, no
+  orphaned codes.
+- T02 (`tests/test_gate11_cross_substrate_corpus.py` NEW): 38
+  parameterized tests covering universal concerns (8 x 4
+  substrates), source-code concerns (1 x 3 source-code
+  substrates), and ONNX-specific concerns (3 x 1).
+  Structural-parity discipline: tests exercise substrate-
+  convention parity via source-inspection + structural pattern
+  presence (e.g., `getattr(args, "trust_config", None) or
+  TrustConfig()` pattern across all four `_verify_*`).
+  Behavioral verification of full sign+verify flows lives in
+  the per-substrate gate11-*-smoke-test CI jobs (NOT replaced
+  by this corpus).
+- T03 (`tests/fixtures/gate11/cross_substrate/_build.py` + 4
+  helper tests): structurally-parallel fixture sets across the
+  four substrates per concern; helper-built to ensure
+  cross-substrate parity by construction (single
+  `build_cross_substrate_fixtures(concern_name)` helper).
+- T04
+  (`tests/test_gate11_cross_substrate_drift_detection.py`
+  NEW; +2 tests): meta-test asserting corpus parameterization
+  matches the symmetry-table claims; self-test proving the
+  meta-test fires on synthetic-bad input. Drift detection is
+  the mechanical-enforcement layer for the corpus-as-contract
+  framing.
+- T05 (`tests/test_gate11_cross_substrate_onnx_asymmetry.py`
+  NEW; +4 tests): four ONNX honest asymmetries pinned as
+  POSITIVE asymmetry tests (binary substrate; dim_param
+  partial concreteness; intermediates excluded;
+  NeuroGolf sidecar boundary). Mechanical enforcement via
+  schema-shape constraints on `OnnxIdentitySection` plus
+  cross-reference to `docs/onnx-attestation-boundary.md`
+  Class A / B / C boundary decision flowchart.
+- T06 (`docs/gate11-symmetry.md` extended): corpus-as-contract
+  framing; title bump to "mechanically enforced from v0.14.0";
+  new sections for "How to add a new concern" and "How to
+  retire a concern" with explicit 4-5-step procedures
+  including drift-detection verification.
+- T07 (`docs/gate11-v1-self-attestation.md` NEW): v1.0 scope
+  documented as separate successor phase; structural-honesty
+  thesis closing on itself ("the tool that attests other
+  projects' supply-chain integrity attests its own"); four
+  enumerated corpus invariants v1.0 will depend on.
+
+#### Findings absorbed (LIGHT-tier audit + Co-work surfacing)
+
+Pre-dispatch (Perplexity Mode A rotation audit):
+
+- F-TAB-1 MEDIUM (fixture-path divergence): T03 fixture root
+  aligned to `tests/fixtures/gate11/cross_substrate/` per
+  repo convention (`tests/fixtures/gate11/` is the existing
+  gate11 fixture root at v0.13.0). Absorbed in same patch as
+  O-TAB-1 (single LIGHT-tier patch usage).
+- O-TAB-1 LOW (expected-output spec looseness in §0.5.3):
+  tightened to "empty stdout; exit code 0".
+
+Queued to PMD v1.2 backlog (NOT absorbed mid-cycle per LIGHT
+calibration discipline):
+
+- O-TAB-2 LOW: T-task example-test sufficiency threshold
+  heuristic.
+- O-TAB-3 LOW: Asymmetry-pin framing should explicitly
+  contrast against absence-of-equivalent in other substrates.
+
+Co-work-surfaced during T01-T08 implementation:
+
+- F-TAB-2 LOW (T02 CASM-V code substrate-vs-prompt divergence):
+  dispatch-locked v1.1 prompt T02 ONNX_CONCERNS list cited
+  stale `casm_v_033` / `casm_v_034` references. Substrate-
+  actual at v0.13.0 ship is CASM-V-070 (opset-policy-mismatch)
+  and CASM-V-071 (dim-param-violation) per an-Naziat T01
+  allocation. Additionally, CASM-V-033/034 are already in use
+  at v0.10.0+ baseline for signature-verification-failure /
+  signed-payload-tampering -- re-using them for ONNX-specific
+  concerns would conflict. Disposition: SUBSTRATE-ACTUAL-
+  OVERRIDES-PROMPT; corpus uses CASM-V-070/071 throughout.
+  Patch usage: this is patch #1 within the LIGHT-tier 2-patch
+  cap (Co-work-absorbed; remaining capacity for one more
+  substrate-truth surfacing before escalation-to-STANDARD).
+
+#### Test count delta (per al-Hujurat T05 CHANGELOG-math gate
++ F-NA-4 v1.4 absorption: delta-against-substrate per-fixture-file)
+
+Per-task delta-against-substrate:
+
+- T01 (`SAFETY_INVARIANTS.md` verification; docs-only): +0
+- T02 (`tests/test_gate11_cross_substrate_corpus.py` NEW): +38
+- T03 (`tests/test_gate11_cross_substrate_fixture_parity.py`
+  NEW; +4 helper tests): +4
+- T04 (`tests/test_gate11_cross_substrate_drift_detection.py`
+  NEW): +2
+- T05 (`tests/test_gate11_cross_substrate_onnx_asymmetry.py`
+  NEW): +4
+- T06 (`docs/gate11-symmetry.md` extended; docs-only): +0
+- T07 (`docs/gate11-v1-self-attestation.md` NEW; docs-only): +0
+- T08 (CHANGELOG; docs-only): +0
+
+Sum: 0 + 38 + 4 + 2 + 4 + 0 + 0 + 0 = +48 (exact match to
+T08 working hypothesis +48; ZERO drift from projection;
+assertion (c) projection-drift tolerance +/- 4 absorbed without
+incident).
+
+Baseline + delta:
+
+- v0.13.0 baseline: 668 (per `### Tests` block CHANGELOG
+  v0.13.0 entry; v0.13.0 §7-analog Capture 3; canonical
+  full-extras profile)
+- v0.14.0 ship: 716 (empirical pytest --collect-only -q;
+  matches working hypothesis 716 exactly)
+- Projection drift: 0 (perfect projection match per
+  al-Hujurat T05 CHANGELOG-math gate assertion (c) -- well
+  inside +/- 4 tolerance)
+
+#### Substrate byte-stability (Acceptance §15 binding)
+
+Per Acceptance §15: `git diff v0.13.0..v0.14.0 -- src/furqan_lint/gate11/`
+returns empty for verifier files. All four `_verify_*` facades
+plus `verification.py` _LANGUAGE_DISPATCH plus the
+`onnx_signature_canonicalization.py` graph-shape rules plus
+the manifest schema are byte-identical to v0.13.0. The corpus
+exercises the substrates as-is; no substrate modifications
+are part of v0.14.0.
+
+#### Mechanically-enforced four-substrate symmetry
+
+After v0.14.0, the four-substrate gate11 parity is mechanically
+enforced. The contract is the parity table at
+`docs/gate11-symmetry.md`; the mechanical-enforcement layer is
+the cross-substrate corpus
+(`tests/test_gate11_cross_substrate_corpus.py`) +
+drift-detection meta-test
+(`tests/test_gate11_cross_substrate_drift_detection.py`). Any
+future change that breaks parity fails the corpus; any future
+addition that bypasses corpus coverage fails the drift-
+detection meta-test.
+
+This is the verification surface v1.0 self-attestation will
+rely on. v1.0 is the successor phase; furqan-lint will sign
+its own releases with gate11, attesting its own structural
+integrity to its own Relying Parties.
+
+---
+
 ## [0.13.0] - 2026-05-11
 
 ### Substrate extension (an-Naziat / G11.3)

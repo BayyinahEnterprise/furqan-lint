@@ -41,10 +41,10 @@ pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile,gate11]"  # all adapt
 ### Install from a specific commit or tag
 
 ```bash
-pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v0.13.0"
+pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v0.14.0"
 ```
 
-Replace `v0.13.0` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
+Replace `v0.14.0` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
 
 ### Furqan dependency
 
@@ -523,7 +523,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: BayyinahEnterprise/furqan-lint@v0.13.0
+      - uses: BayyinahEnterprise/furqan-lint@v0.14.0
         with:
           path: src/
 ```
@@ -543,7 +543,7 @@ Python files:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v0.13.0
+    rev: v0.14.0
     hooks:
       - id: furqan-lint
 ```
@@ -578,7 +578,7 @@ repos:
       - id: mypy
 
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v0.13.0
+    rev: v0.14.0
     hooks:
       - id: furqan-lint
 ```
