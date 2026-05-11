@@ -37,19 +37,30 @@ _CHECKER_SOURCE_FILES: tuple[Path, ...] = (
     # Core checker substrate (Python).
     _PKG_ROOT / "additive.py",
     _PKG_ROOT / "cli.py",
-    # Gate 11 substrate (Phase G11.0 + G11.1 + G11.0.6 / as-Saff).
+    # Gate 11 substrate (Phase G11.0 + G11.1 + G11.0.6 / as-Saff
+    # + G11.2 / al-Mursalat).
+    #
+    # v0.12.0 al-Mursalat additions per F-PA-3 v1.8 absorption
+    # Option (alpha): alphabetical-within-section discipline.
+    # Go gate11 entries slot between gate11/cli.py and
+    # gate11/manifest_schema.py since "go_" sorts alphabetically
+    # before "m". Goast source lives in separate go_adapter
+    # section after gate11 section per F-PF-3 v1.7 absorption +
+    # F6 v1.1 SOURCE-PRESENT branch.
     _PKG_ROOT / "gate11" / "__init__.py",
     _PKG_ROOT / "gate11" / "bundle.py",
     _PKG_ROOT / "gate11" / "cli.py",
+    # al-Mursalat T03 (v0.12.0): Go signature canonicalization.
+    _PKG_ROOT / "gate11" / "go_signature_canonicalization.py",
+    # al-Mursalat T04 (v0.12.0): Go verifier facade (private
+    # _verify_go handler dispatched via verification.verify's
+    # function-local _LANGUAGE_DISPATCH).
+    _PKG_ROOT / "gate11" / "go_verification.py",
     _PKG_ROOT / "gate11" / "manifest_schema.py",
     _PKG_ROOT / "gate11" / "module_canonicalization.py",
-    # Phase G11.0.6 / as-Saff (v0.11.8): Route B procedural facade
-    # introduces python_verification.py and rust_verification.py
-    # as thin facades over the existing Verifier class API.
-    # Their substrate bytes participate in the checker_set_hash so
-    # a Relying Party can detect substrate divergence between
-    # bundles signed by furqan-lint installations whose facade
-    # modules disagree.
+    # as-Saff T04(b) (v0.11.8): Python facade introduced; the
+    # path-join idiom from as-Saff F-XR-3 absorption is reused
+    # by al-Mursalat T05 below for the Go entries.
     _PKG_ROOT / "gate11" / "python_verification.py",
     _PKG_ROOT / "gate11" / "rust_manifest.py",
     _PKG_ROOT / "gate11" / "rust_signature_canonicalization.py",
@@ -59,6 +70,14 @@ _CHECKER_SOURCE_FILES: tuple[Path, ...] = (
     _PKG_ROOT / "gate11" / "signing.py",
     _PKG_ROOT / "gate11" / "surface_extraction.py",
     _PKG_ROOT / "gate11" / "verification.py",
+    # al-Mursalat T05 (v0.12.0) goast source pin per F-PF-3 v1.7
+    # absorption + F6 v1.1 SOURCE-PRESENT branch: substrate-
+    # attestation of the Go AST emitter source so a Relying
+    # Party detects substrate divergence in the goast binary's
+    # source code, not just the gate11/* verification modules.
+    # New go_adapter section follows gate11 section alphabetically
+    # ("gate11" < "go_adapter" < everything else at v0.12.0).
+    _PKG_ROOT / "go_adapter" / "cmd" / "goast" / "main.go",
 )
 
 
