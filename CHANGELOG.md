@@ -19,6 +19,235 @@ introduced this convention.
 
 ---
 
+## [0.13.0] - 2026-05-11
+
+### Substrate extension (an-Naziat / G11.3)
+
+Phase G11.3 extends gate11 substrate to ONNX, the fourth and
+final substrate in the canonical mushaf chain (Python G11.0
+v0.10.0, Rust G11.1 v0.11.0, Go G11.2 v0.12.0, ONNX G11.3
+v0.13.0). ONNX is structurally different from source-code
+substrates: the substrate is binary protobuf (ModelProto), not
+source code; the public surface is graph inputs/outputs, not
+named function/struct signatures; canonicalization is
+graph-shape rather than type-shape. an-Naziat names these
+asymmetries honestly as four-place documented limits rather
+than forcing a parallel to source-code substrates.
+
+The four-entry function-local ``_LANGUAGE_DISPATCH`` at
+v0.13.0 closes the canonical mushaf chain at the CLI surface;
+no further Phase G11.x dispatch entries are anticipated;
+Phase G11.4 Tasdiq al-Bayan (cross-substrate verification
+corpus) operates against this surface as a drift-detection
+invariant rather than adding entries.
+
+### Closures
+
+- SAFETY_INVARIANTS.md error-code namespace extension (T01):
+  CASM-V-070 (opset-policy-mismatch) and CASM-V-071
+  (dim-param-violation) allocated as universal-namespace
+  Phase-specific extensions. Invariant 6 step 3 updated to
+  reflect substrate-LIVE ONNX language; Invariant 6 step 8
+  extended with ONNX-specific consistency checks; document
+  stamp ``v1.0_second_revision_amended_3``.
+- ONNX manifest schema extension (T02):
+  ``SUPPORTED_LANGUAGES`` module-level constant +``"onnx"``;
+  ``ValueInfoSummary`` + ``OnnxIdentitySection`` dataclasses
+  for ``module_identity.onnx`` nested structure
+  (opset_imports, ir_version, inputs, outputs);
+  ``Verifier.step2_3_check_version_and_language`` whitelist
+  extended; CASM-V-001 error message updated for closed-form
+  dispatch surface.
+- ONNX signature canonicalization (T03):
+  ``gate11/onnx_signature_canonicalization.py`` with rules
+  9-12 continuing the H-4 closure rule numbering across
+  substrates (Python at-Tawbah T03: rules 1-5; Go al-Mursalat
+  T03: rules 6-8; ONNX an-Naziat T03: rules 9-12).
+  Graph-shape canonical bytes via RFC 8785 JCS.
+- ONNX verifier substrate (T04): ``gate11/onnx_verification.py``
+  with private ``_verify_onnx`` handler; six-kwarg
+  verify_bundle pattern mirroring as-Saff (v0.11.8)
+  ``_verify_python`` + al-Mursalat (v0.12.0) ``_verify_go``
+  per F-PB-NZ-2 v1.6 absorption.
+- ONNX pinned checker source list (T05): ``_CHECKER_SOURCE_FILES``
+  19 -> 21 entries (+2; both ``onnx_signature_canonicalization.py``
+  and ``onnx_verification.py`` pinned per F-CW-NZ-2 MEDIUM
+  substrate-convention parity precedent from al-Mursalat T05
+  and Phase G11.1 baseline; prompt v1.6 T05 specified +1 / 20
+  entries inserting only onnx_verification, but substrate-
+  convention precedent over-rode to preserve rust/go parity
+  at the gate11 substrate hash surface). v0.13.0 canonical
+  Form A hash literal pinned in
+  ``tests/test_gate11_checker_set_hash_v0_13_0_pinning.py``.
+- Four ONNX-specific four-place documented limits with
+  mechanical enforcement (T06): binary substrate, dim_param
+  partial concreteness (CASM-V-071 enforcement layer),
+  intermediates excluded from attestation surface, NeuroGolf
+  sidecar boundary (each pinning test exercises both
+  compliant and limit-violating cases per F-AN-6 ranked list
+  failure mode #4 closure).
+- NeuroGolf sidecar attestation-boundary documentation (T07):
+  ``docs/onnx-attestation-boundary.md`` with three boundary
+  classes (Inside attestation, Outside attestation but under
+  integrity, Outside attestation entirely) and decision
+  flowchart for new artifact types.
+- Four-substrate symmetry parity (T08): README + SECURITY.md
+  + ``docs/gate11-symmetry.md`` extended; honest-asymmetry
+  N/A markers for graph-shape vs type-shape canonicalization
+  and ONNX-specific CASM-V-070/071 codes; substrate-of-record
+  table extends to 21 entries.
+- CLI dispatch extended to ONNX (T09): function-local
+  ``_LANGUAGE_DISPATCH`` in ``verification.verify()`` extended
+  with fourth lazy-import + dict entry for ``_verify_onnx``;
+  CASM-V-001 error message updated to remove ``Phase G11.3``
+  next-phase callout (canonical mushaf chain is now closed).
+- gate11-onnx-smoke-test in CI (T10): fourth gate11 smoke
+  job parallel to gate11-smoke-test (G11.0), gate11-rust-
+  smoke-test (G11.1), gate11-go-smoke-test (G11.2 al-Mursalat
+  T08); uses ``make_relu_model`` (substrate-actual builder
+  per T00 step 5; NOT ``make_simple_relu_model`` per v1.6
+  prompt §5.1 reference).
+
+### Findings absorbed
+
+Audit chain v1.0 -> v1.6 (an-Naziat self-review absorption
+preserving F-AN-N v1.1 namespace + Round 39 chain layers):
+
+- F-AN-1 through F-AN-11 (v1.1 self-review): test-count
+  phrasing softened to actual v0.12.0 baseline subject to
+  T00 confirmation; T00 pre-flight verification gate added;
+  T04 sigstore API mirrored from v0.13.0-LIVE evidence;
+  CASM-V-NNN allocation evidence-based; LaTeX em-dash
+  exception added; successor field cross-references full
+  canonical chain.
+- F-PA-NZ-1 through F-PA-NZ-5 (v1.5 absorption): preamble-
+  to-body-site propagation discipline (PMD v1.2 candidate
+  #11); mechanical-verification preamble lock states (PMD
+  v1.2 candidate #12); inventory-table column auditability
+  scaffolding (PMD v1.2 candidate #13); single-vendor
+  rotation partial-violation as methodology data point
+  (PMD v1.2 candidate #14).
+- F-PB-NZ-1 through F-PB-NZ-8 (v1.6 first-patch absorption
+  per Perplexity Round 39.5-post-absorption): T11 CHANGELOG
+  template stale +29 per-task arithmetic corrected;
+  ``_verify_onnx`` six-kwarg signature mirror; §0.5.4 /
+  §0.5.6 verbatim grep output split; T05 inventory table
+  positive verification; T05 fixture #3 hash literal timing
+  note; T01/T02 row +2 deterministic tightening; PMD v1.2
+  candidate count reconciliation; v1.0 -> v1.1 historical
+  preservation cross-reference per §14.5 graceful-
+  degradation pattern.
+- F-PC-NZ-1 (v1.6 third-patch absorption per GPT-5 Session 3):
+  consumer-without-source absorption gap; T00 step 4.1
+  aggregate range tightened to +25 to +31; working hypothesis
+  +27 conservative selection within tightened range. PMD
+  v1.2 candidate #18.
+- F-PD-NZ-1, F-PD-NZ-2 (v1.6 fourth-patch absorption per
+  Gemini Round 39.5-triple-prime): both refuted via PMD #17
+  consumer-evidence rotation discipline; ledger-only
+  documentary. PMD v1.2 candidate #19.
+
+Cross-vendor convergence: four sessions (GPT-5 Session 1
+APPROVE-WITH-MEDIUM-AMENDMENTS; GPT-5 Session 2 HALT with
+F-PB-NZ-7 + 2 hallucinations + 1 misread; GPT-5 Session 3
+HALT with F-PC-NZ-1; Gemini APPROVE-WITH-LOW-AMENDMENTS,
+F-PD-NZ-1/2 refuted) converged on APPROVE-CLEAN-PENDING-
+LOCK-PROTOCOL substrate-truth. The v1.6 fourth-patch
+substrate is the canonical dispatch baseline.
+
+### Findings surfaced during T01-T11 implementation
+
+- F-CW-NZ-1 LOW (T00 dispatch envelope vs workspace artifact
+  set transparency): the locked file
+  ``PHASE_G11_3_AN_NAZIAT_v1_6_dispatch_locked.md`` was not
+  present in the workspace at dispatch time; the dispatch
+  envelope substrate parameters (tag bf02995, test count
+  642, working hypothesis +27, range +25 to +31) were
+  sufficient to execute. Disposition: PROCEED-WITH-DISPATCH-
+  ENVELOPE-PARAMS-INLINE.
+
+- F-CW-NZ-2 MEDIUM (T05 substrate-convention parity): prompt
+  v1.6 T05 specified pinning ONLY
+  ``gate11/onnx_verification.py`` (19 -> 20; +1), but
+  substrate-convention from al-Mursalat T05 + Phase G11.1
+  baseline pinned BOTH ``signature_canonicalization`` +
+  ``verification`` files for each substrate. ONNX parity
+  required pinning BOTH ``onnx_signature_canonicalization.py``
+  and ``onnx_verification.py`` (19 -> 21; +2). Disposition:
+  PROCEED-WITH-21-ENTRIES per substrate-convention precedent;
+  Round 40 post-ship audit can adjudicate prompt-vs-substrate
+  if convention precedent proves insufficient warrant.
+
+### Tests
+
+Test count: 642 (v0.12.0) -> 668 (v0.13.0). Net delta: +26.
+
+Projected delta per v1.6 prompt T00 step 4.1 working
+hypothesis: +27 (within +25 to +31 range per F-PC-NZ-1 v1.6
+third-patch absorption tightening). Empirical delta -1 from
+projection, within al-Hujurat T05 CHANGELOG-math gate
+assertion (c) projection-drift tolerance of +/- 4 tests
+absorbed without halt.
+
+Per-task delta-against-substrate (new fixtures added minus
+fixtures retired; T00 step 4.1 records current count for
+each fixture file before T01 implementation begins per F-NA-4
+v1.4 + F-PB-NZ-1 v1.6 + F-PC-NZ-1 v1.6 absorption methodology):
+
+- T01 (``docs/SAFETY_INVARIANTS.md`` extension; docs-only): +0
+- T02 (``tests/test_gate11_dispatch_f22_corrective.py`` modify;
+  8 -> 10 fixtures): +2 deterministic per F-PB-NZ-6 v1.6
+- T03 (``tests/test_onnx_signature_canonicalization.py`` NEW):
+  +5
+- T04 (``tests/test_gate11_onnx_verification.py`` NEW): +5
+- T05 (``tests/test_gate11_checker_set_hash_v0_13_0_pinning.py``
+  NEW; 4 prescribed + 1 diagnostic for F-CW-NZ-2 substrate-
+  convention parity): +5
+- T06 (``tests/test_gate11_onnx_limits.py`` NEW; conservative
+  selection within +4 to +8 range per F-NA-8 implementer-
+  latitude allowance): +4
+- T07 (``docs/onnx-attestation-boundary.md`` NEW; docs-only):
+  +0
+- T08 (README + SECURITY.md + ``docs/gate11-symmetry.md``;
+  docs-only): +0
+- T09 (``tests/test_gate11_verify_dispatch.py`` modify;
+  9 -> 11 fixtures): +2 per F-NA-4 v1.4
+- T10 (``tests/test_gate11_onnx_smoke_test_fixture_inventory.py``
+  NEW): +3
+
+Sum: 0 + 2 + 5 + 5 + 5 + 4 + 0 + 0 + 2 + 3 = +26 (matches
+empirical -1 drift from +27 projection within tolerance).
+
+Baseline + delta:
+
+- v0.12.0 baseline: 642 (per ``### Tests`` block CHANGELOG
+  v0.12.0 entry; canonical full-extras profile
+  ``[dev,rust,go,onnx,onnx-runtime,onnx-profile,gate11,gate11-rust]``;
+  Round 39 chain log §7 corrected substrate-of-record +
+  §0.5.3 v1.5 mechanical-verification preamble)
+- v0.13.0 ship: 668 (empirical pytest --collect-only -q)
+- Projection drift: -1 (within +/- 4 tolerance; assertion
+  (c) PASS)
+
+### Four-substrate symmetry (with honest asymmetries)
+
+After v0.13.0, the gate11 substrate covers Python, Rust, Go,
+and ONNX. The four-substrate symmetry is preserved at
+identity policy, trusted_root threading, checker_set_hash
+form, identity-extraction, and CLI dispatch. Asymmetries
+where ONNX is structurally different (signature
+canonicalization graph-shape vs type-shape; ONNX-specific
+opset/dim_param checks via CASM-V-070/071) are named in
+``docs/gate11-symmetry.md`` and pinned as four-place limits
+in ``tests/test_gate11_onnx_limits.py``.
+
+Phase G11.4 Tasdiq al-Bayan is the next phase; it will
+exercise the symmetry as a unified test matrix (4 signers x
+4 verifiers = 16 cells) and pin the asymmetries as cross-
+substrate verification corpus entries.
+
+---
+
 ## [0.12.0] - 2026-05-11
 
 ### Substrate extension (al-Mursalat / G11.2)

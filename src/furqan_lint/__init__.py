@@ -1,6 +1,6 @@
 """furqan-lint: structural-honesty checks for Python."""
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 # Explicit public surface declaration. The implicit surface (anything
 # not starting with an underscore at module level) is fragile: any
