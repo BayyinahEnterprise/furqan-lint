@@ -18,7 +18,6 @@ Per Tasdiq al-Bayan T04 spec: 1 meta-test (the drift detection)
 
 from __future__ import annotations
 
-import inspect
 import re
 from pathlib import Path
 

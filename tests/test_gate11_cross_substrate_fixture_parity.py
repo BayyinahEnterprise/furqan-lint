@@ -65,16 +65,14 @@ def test_build_helper_produces_parallel_identity_files() -> None:
         / "SHARED_IDENTITY"
     )
     assert identity_path.exists(), (
-        "T03 substrate-parity violation: SHARED_IDENTITY file "
-        "missing from concern directory"
+        "T03 substrate-parity violation: SHARED_IDENTITY file " "missing from concern directory"
     )
     # The identity is the canonical BayyinahEnterprise GitHub
     # Actions OIDC SAN pattern (matches the smoke-test convention
     # at gate11-*-smoke-test CI jobs from prior phases):
     content = identity_path.read_text(encoding="utf-8")
     assert "BayyinahEnterprise" in content, (
-        "T03 brand-canonical violation: identity does not name "
-        "BayyinahEnterprise"
+        "T03 brand-canonical violation: identity does not name " "BayyinahEnterprise"
     )
     assert "furqan-lint" in content
 

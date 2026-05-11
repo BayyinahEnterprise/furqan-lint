@@ -27,7 +27,6 @@ an-Naziat T01 + T06 + T07 ship, not the dispatch prompt's stale
 from __future__ import annotations
 
 import dataclasses
-import inspect
 
 import pytest
 
@@ -221,11 +220,7 @@ def test_onnx_neurogolf_sidecar_attestation_boundary() -> None:
     # explicitly:
     from pathlib import Path
 
-    boundary_doc = (
-        Path(__file__).parent.parent
-        / "docs"
-        / "onnx-attestation-boundary.md"
-    )
+    boundary_doc = Path(__file__).parent.parent / "docs" / "onnx-attestation-boundary.md"
     if boundary_doc.exists():
         content = boundary_doc.read_text(encoding="utf-8")
         # The doc names "NeuroGolf" (Class C section + decision

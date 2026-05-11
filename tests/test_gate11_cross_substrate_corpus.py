@@ -59,12 +59,6 @@ from furqan_lint.gate11 import (
 from furqan_lint.gate11.manifest_schema import (
     SUPPORTED_LANGUAGES,
 )
-from furqan_lint.gate11.onnx_signature_canonicalization import canonicalize_bytes
-from furqan_lint.gate11.manifest_schema import (
-    OnnxIdentitySection,
-    ValueInfoSummary,
-)
-
 
 # ---------------------------------------------------------------------------
 # Substrate matrix per Tasdiq al-Bayan T02 specification
@@ -134,12 +128,12 @@ class TestUniversalParity:
         # allow_any_identity / expected_identity so the verify_bundle
         # call propagates the refuse-without-policy default when
         # caller args lacks these attributes.
-        assert 'allow_any_identity' in source, (
+        assert "allow_any_identity" in source, (
             f"{substrate}: _verify_* missing allow_any_identity "
             "propagation; C-1 refuse-without-policy default chain "
             "regression"
         )
-        assert 'expected_identity' in source, (
+        assert "expected_identity" in source, (
             f"{substrate}: _verify_* missing expected_identity "
             "propagation; CASM-V-035 enforcement layer broken"
         )
@@ -153,10 +147,10 @@ class TestUniversalParity:
         """
         handler = _VERIFY_HANDLERS[substrate]
         source = inspect.getsource(handler)
-        assert 'expected_identity' in source
+        assert "expected_identity" in source
         # The six-kwarg pattern means expected_identity is one of
         # the explicit kwargs (not buried in **kwargs):
-        assert 'expected_identity=' in source, (
+        assert "expected_identity=" in source, (
             f"{substrate}: _verify_* not using kwarg-explicit pattern; "
             "F-PB-NZ-2 v1.6 six-kwarg convention regression"
         )
@@ -175,11 +169,11 @@ class TestUniversalParity:
         # Substrate convention: all four substrates compose a Verifier
         # and delegate to verify_bundle (which contains the H-5
         # closure logic at the central class).
-        assert 'Verifier' in source, (
+        assert "Verifier" in source, (
             f"{substrate}: _verify_* not composing Verifier; H-5 "
             "central-class closure inheritance broken"
         )
-        assert 'verify_bundle' in source, (
+        assert "verify_bundle" in source, (
             f"{substrate}: _verify_* not calling verify_bundle; "
             "CASM-V-036 central-class layer not reachable"
         )
@@ -197,7 +191,7 @@ class TestUniversalParity:
             f"{substrate}: _verify_* missing args.trust_config "
             "getattr pattern; F-RN-1 v1.5 absorption regression"
         )
-        assert 'or TrustConfig()' in source, (
+        assert "or TrustConfig()" in source, (
             f"{substrate}: _verify_* missing 'or TrustConfig()' "
             "default; F-RN-1 v1.5 absorption regression"
         )
@@ -210,7 +204,7 @@ class TestUniversalParity:
         """
         handler = _VERIFY_HANDLERS[substrate]
         source = inspect.getsource(handler)
-        assert 'force_refresh' in source, (
+        assert "force_refresh" in source, (
             f"{substrate}: _verify_* missing force_refresh "
             "propagation; TUF refresh path not threaded"
         )
@@ -239,12 +233,11 @@ class TestUniversalParity:
         # whitelist (mirrors test_schema_accepts_language_<substrate>
         # in test_gate11_dispatch_f22_corrective.py).
         assert substrate in SUPPORTED_LANGUAGES, (
-            f"{substrate}: not in SUPPORTED_LANGUAGES whitelist; "
-            "schema-layer parity broken"
+            f"{substrate}: not in SUPPORTED_LANGUAGES whitelist; " "schema-layer parity broken"
         )
         # The schema source explicitly enumerates the Form A prefix:
         schema_source = inspect.getsource(Manifest.from_dict)
-        assert 'sha256:' in schema_source, (
+        assert "sha256:" in schema_source, (
             "Form A checker_set_hash pattern absent from schema "
             "validation; H-6 propagation-defense regression"
         )
@@ -259,7 +252,7 @@ class TestUniversalParity:
 
         assert substrate in SUPPORTED_LANGUAGES
         schema_source = inspect.getsource(Manifest.from_dict)
-        assert 'placeholder:sha256:' in schema_source, (
+        assert "placeholder:sha256:" in schema_source, (
             "Form B placeholder pattern absent from schema "
             "validation; Naskh-Discipline placeholder convention "
             "regression"
@@ -275,7 +268,9 @@ class TestUniversalParity:
         """
         verify_source = inspect.getsource(verification.verify)
         # Lazy-import line:
-        expected_import = f"from furqan_lint.gate11.{substrate}_verification import _verify_{substrate}"
+        expected_import = (
+            f"from furqan_lint.gate11.{substrate}_verification import _verify_{substrate}"
+        )
         assert expected_import in verify_source, (
             f"{substrate}: lazy-import line missing in verify() body; "
             "function-local _LANGUAGE_DISPATCH four-entry closure "
@@ -328,9 +323,7 @@ class TestSourceCodeParity:
             module = go_signature_canonicalization
         else:
             module = module_map[substrate]
-        assert module is not None, (
-            f"{substrate}: signature canonicalization module missing"
-        )
+        assert module is not None, f"{substrate}: signature canonicalization module missing"
         # The H-4 closure discipline documents recursive type
         # canonicalization (rules 1-5 Python; 6-8 Go; rust_signature
         # mirrors python_signature). Source-inspection of the
@@ -338,7 +331,7 @@ class TestSourceCodeParity:
         # helper confirms the rule presence.
         mod_source = inspect.getsource(module)
         # Look for the rule-numbering convention in the docstring:
-        has_rule_doc = ('rule' in mod_source.lower()) or ('canonical' in mod_source.lower())
+        has_rule_doc = ("rule" in mod_source.lower()) or ("canonical" in mod_source.lower())
         assert has_rule_doc, (
             f"{substrate}: canonicalization module missing rule "
             "documentation; H-4 closure regression"
@@ -374,16 +367,14 @@ class TestOnnxAsymmetry:
         """
         from pathlib import Path
 
-        safety_invariants_path = (
-            Path(__file__).parent.parent / "SAFETY_INVARIANTS.md"
-        )
-        content = safety_invariants_path.read_text(encoding='utf-8')
-        assert 'CASM-V-070' in content, (
+        safety_invariants_path = Path(__file__).parent.parent / "SAFETY_INVARIANTS.md"
+        content = safety_invariants_path.read_text(encoding="utf-8")
+        assert "CASM-V-070" in content, (
             "CASM-V-070 (opset-policy-mismatch) not pinned in "
             "SAFETY_INVARIANTS.md; an-Naziat T01 substrate "
             "regression"
         )
-        assert 'opset' in content.lower()
+        assert "opset" in content.lower()
         # F-TAB-2: substrate-actual is 070, not 033 (which is used
         # for signature-verification-failure at v0.10.0+ baseline):
         # Reverse-check via the prompt's stale-vs-substrate divergence.
@@ -399,12 +390,12 @@ class TestOnnxAsymmetry:
         """
         # The canonicalization rule for ir_version is rule 12:
         canon_source = inspect.getsource(onnx_signature_canonicalization)
-        assert 'ir_version' in canon_source, (
+        assert "ir_version" in canon_source, (
             "ir_version not handled in onnx_signature_canonicalization; "
             "rule 12 substrate regression"
         )
         # Rule numbering 9-12 includes ir_version preservation:
-        assert 'rule 12' in canon_source.lower() or 'ir_version' in canon_source
+        assert "rule 12" in canon_source.lower() or "ir_version" in canon_source
 
     def test_dim_param_violation_uses_casm_v_071(self) -> None:
         """CASM-V-071 is the substrate-actual code for ONNX
@@ -416,17 +407,15 @@ class TestOnnxAsymmetry:
         """
         from pathlib import Path
 
-        safety_invariants_path = (
-            Path(__file__).parent.parent / "SAFETY_INVARIANTS.md"
-        )
-        content = safety_invariants_path.read_text(encoding='utf-8')
-        assert 'CASM-V-071' in content, (
+        safety_invariants_path = Path(__file__).parent.parent / "SAFETY_INVARIANTS.md"
+        content = safety_invariants_path.read_text(encoding="utf-8")
+        assert "CASM-V-071" in content, (
             "CASM-V-071 (dim-param-violation) not pinned in "
             "SAFETY_INVARIANTS.md; an-Naziat T01 substrate "
             "regression"
         )
         canon_source = inspect.getsource(onnx_signature_canonicalization)
-        assert 'dim_param' in canon_source, (
+        assert "dim_param" in canon_source, (
             "dim_param not handled in onnx_signature_canonicalization; "
             "rule 10 substrate regression"
         )

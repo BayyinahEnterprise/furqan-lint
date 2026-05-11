@@ -31,8 +31,14 @@ from __future__ import annotations
 from pathlib import Path
 
 _CONCERN_ROOT = Path(__file__).parent
-_SHARED_IDENTITY = "https://github.com/BayyinahEnterprise/furqan-lint/.github/workflows/ci.yml@refs/heads/main"
-_SHARED_POLICY = '{"expected_identity": "' + _SHARED_IDENTITY + '", "expected_issuer": "https://token.actions.githubusercontent.com"}'
+_SHARED_IDENTITY = (
+    "https://github.com/BayyinahEnterprise/furqan-lint/.github/workflows/ci.yml@refs/heads/main"
+)
+_SHARED_POLICY = (
+    '{"expected_identity": "'
+    + _SHARED_IDENTITY
+    + '", "expected_issuer": "https://token.actions.githubusercontent.com"}'
+)
 
 _PYTHON_TEMPLATE = '''"""Cross-substrate parity fixture for concern: {concern}."""
 
@@ -42,21 +48,21 @@ def add(a: int, b: int) -> int:
     return a + b
 '''
 
-_RUST_TEMPLATE = '''//! Cross-substrate parity fixture for concern: {concern}
+_RUST_TEMPLATE = """//! Cross-substrate parity fixture for concern: {concern}
 
 pub fn add(a: i64, b: i64) -> i64 {{
     a + b
 }}
-'''
+"""
 
-_GO_TEMPLATE = '''// Cross-substrate parity fixture for concern: {concern}
+_GO_TEMPLATE = """// Cross-substrate parity fixture for concern: {concern}
 package fixture
 
 // Add returns the sum of two integers.
 func Add(a int, b int) int {{
 \treturn a + b
 }}
-'''
+"""
 
 
 def build_cross_substrate_fixtures(concern_name: str) -> dict[str, Path]:
@@ -110,7 +116,6 @@ def build_cross_substrate_fixtures(concern_name: str) -> dict[str, Path]:
     if not onnx_path.exists():
         try:
             import onnx
-
             from tests.fixtures.onnx.builders import make_relu_model
 
             model = make_relu_model(opset_version=14)
