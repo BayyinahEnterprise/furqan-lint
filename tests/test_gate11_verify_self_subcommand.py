@@ -34,8 +34,7 @@ def test_verify_self_subcommand_routed_by_dispatch_manifest() -> None:
     needing to actually exercise the network-dependent flow)."""
     source = inspect.getsource(dispatch_manifest)
     assert '"verify-self"' in source, (
-        "T05 substrate-of-record violation: dispatch_manifest "
-        "missing 'verify-self' branch"
+        "T05 substrate-of-record violation: dispatch_manifest " "missing 'verify-self' branch"
     )
     assert "cmd_manifest_verify_self" in source, (
         "T05 substrate-of-record violation: dispatch_manifest does "
@@ -83,9 +82,7 @@ def test_verify_self_default_uses_installed_version() -> None:
     )
 
 
-def test_verify_self_manifest_not_found_raises_casm_v_072(
-    monkeypatch, capsys
-) -> None:
+def test_verify_self_manifest_not_found_raises_casm_v_072(monkeypatch, capsys) -> None:
     """T05 closure + §5.1 step 4 failure mode #2 closure (manifest-
     not-found): when the convention-based URL returns 404 / network
     error, cmd_manifest_verify_self exits 1 with CASM-V-072
@@ -108,27 +105,19 @@ def test_verify_self_manifest_not_found_raises_casm_v_072(
 
     monkeypatch.setattr(urllib.request, "urlretrieve", _raise_404)
 
-    exit_code = cmd_manifest_verify_self(
-        ["--version", "1.0.0"]
-    )
+    exit_code = cmd_manifest_verify_self(["--version", "1.0.0"])
     captured = capsys.readouterr()
-    assert exit_code == 1, (
-        "T05 closure: manifest-not-found should exit 1; got "
-        f"{exit_code}"
-    )
+    assert exit_code == 1, "T05 closure: manifest-not-found should exit 1; got " f"{exit_code}"
     assert "CASM-V-072" in captured.err, (
         f"T05 substrate-actual violation: expected CASM-V-072 in "
         f"stderr; got {captured.err[:200]!r}"
     )
     assert "manifest-not-found" in captured.err, (
-        "T05 sub-condition naming violation: stderr does not name "
-        "the sub-condition explicitly"
+        "T05 sub-condition naming violation: stderr does not name " "the sub-condition explicitly"
     )
 
 
-def test_verify_self_explicit_version_overrides_installed(
-    monkeypatch, tmp_path
-) -> None:
+def test_verify_self_explicit_version_overrides_installed(monkeypatch, tmp_path) -> None:
     """T05 closure: with --version 0.14.0, the subcommand uses
     that specific version's convention-based URL (not the
     installed version). Structural-honesty test: capture the
@@ -140,7 +129,7 @@ def test_verify_self_explicit_version_overrides_installed(
 
     def _capture_url(url, local_path):
         captured_urls.append(url)
-        Path(local_path).write_bytes(b"")  # noqa: PTH123
+        Path(local_path).write_bytes(b"")
         raise OSError("test stub: not really downloading")
 
     from pathlib import Path
@@ -156,6 +145,6 @@ def test_verify_self_explicit_version_overrides_installed(
         f"T05 substrate-of-record violation: --version 0.14.0 did "
         f"not produce v0.14.0 URL; attempted URLs: {captured_urls!r}"
     )
-    assert any("self_manifest.json" in url for url in captured_urls), (
-        f"T05 closure: should attempt to download self_manifest.json"
-    )
+    assert any(
+        "self_manifest.json" in url for url in captured_urls
+    ), "T05 closure: should attempt to download self_manifest.json"

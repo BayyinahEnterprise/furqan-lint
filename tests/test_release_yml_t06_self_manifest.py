@@ -30,12 +30,11 @@ def test_release_yml_t06_step_generates_self_manifest() -> None:
     assert _RELEASE_YML.exists(), "release.yml workflow missing"
     content = _RELEASE_YML.read_text(encoding="utf-8")
     assert "Sign and upload self-attestation manifest" in content, (
-        "release.yml T06 step (Sign and upload self-attestation) "
-        "missing"
+        "release.yml T06 step (Sign and upload self-attestation) " "missing"
     )
-    assert "python -m furqan_lint.gate11.self_manifest" in content, (
-        "release.yml T06 step does not invoke self_manifest CLI"
-    )
+    assert (
+        "python -m furqan_lint.gate11.self_manifest" in content
+    ), "release.yml T06 step does not invoke self_manifest CLI"
     assert "--version" in content
     assert "--output self_manifest.json" in content
 
@@ -45,12 +44,11 @@ def test_release_yml_t06_step_signs_via_sigstore() -> None:
     signing flow with bundle output. Mirror of the existing PyPI
     Trusted Publishing flow's id-token: write permission."""
     content = _RELEASE_YML.read_text(encoding="utf-8")
-    assert "python -m sigstore sign" in content, (
-        "release.yml T06 step does not invoke sigstore signing"
-    )
+    assert (
+        "python -m sigstore sign" in content
+    ), "release.yml T06 step does not invoke sigstore signing"
     assert "--bundle self_manifest.bundle" in content, (
-        "release.yml T06 step does not produce Sigstore bundle "
-        "artifact"
+        "release.yml T06 step does not produce Sigstore bundle " "artifact"
     )
     # The id-token: write permission is granted at the publish job
     # level (line 81); T06 step inherits this:
@@ -68,10 +66,8 @@ def test_release_yml_t06_step_uploads_release_assets() -> None:
     (and .bundle)."""
     content = _RELEASE_YML.read_text(encoding="utf-8")
     assert 'gh release upload "v${VERSION}"' in content or "gh release upload" in content, (
-        "release.yml T06 step does not upload assets via gh "
-        "release upload"
+        "release.yml T06 step does not upload assets via gh " "release upload"
     )
     assert "self_manifest.json self_manifest.bundle" in content, (
-        "release.yml T06 step does not upload both manifest JSON "
-        "+ Sigstore bundle"
+        "release.yml T06 step does not upload both manifest JSON " "+ Sigstore bundle"
     )

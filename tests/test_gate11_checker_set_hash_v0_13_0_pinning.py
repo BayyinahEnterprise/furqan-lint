@@ -45,7 +45,7 @@ from furqan_lint.gate11.checker_set_hash import (
 # absorption P1 timing note). Substrate-extracted at T05
 # implementation time on the v0.13.0-an-naziat-v16 branch atop
 # v0.12.0 substrate `34f45f8`.
-V0_13_0_CHECKER_SET_HASH = "sha256:8b0583fe876fb1c320a2893143e565d247749edf43966536133138cfdd3e0650"
+V0_13_0_CHECKER_SET_HASH = "sha256:7800b8bf55b105eaea66e927dd4d6cc04c66661d008d9ef5d194bcad3aef6cad"
 
 
 def test_v0_13_0_onnx_verification_module_in_checker_source_files() -> None:

@@ -6,7 +6,7 @@
   },
   "issued_at": "1970-01-01T00:00:00Z",
   "linter_substrate_attestation": {
-    "checker_set_hash": "sha256:d41ff988d0d52574971b53aace21c03fcb5fa2aa51f4fd4f9d371e2c5f18e3fd",
+    "checker_set_hash": "sha256:de8e8ebf37d8fedfe81abc53c27608fb5b05ff06bdc78750e877313fe7b5214f",
     "linter_name": "furqan-lint",
     "linter_version": "1.0.0-smoke-test"
   },

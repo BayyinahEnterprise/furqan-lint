@@ -533,7 +533,7 @@ def cmd_check_gate11(directory: Path, opts: dict[str, object]) -> int:
     return overall
 
 
-def cmd_manifest_verify_self(args: list[str]) -> int:
+def cmd_manifest_verify_self(args: list[str]) -> int:  # noqa: PLR0915
     """``furqan-lint manifest verify-self [--version V]`` -- al-Basirah T05.
 
     Verifies furqan-lint's own gate11 self-attestation manifest.
@@ -628,29 +628,26 @@ def cmd_manifest_verify_self(args: list[str]) -> int:
     )
 
     installed_hash = compute_self_checker_set_hash()
-    manifest_hash = _manifest.linter_substrate_attestation.get(
-        "checker_set_hash"
-    )
+    manifest_hash = _manifest.linter_substrate_attestation.get("checker_set_hash")
     # The manifest's hash is over the substrate AT RELEASE TIME; the
     # installed-hash is computed over the substrate of the currently-
     # installed furqan-lint. Drift between these is CASM-V-072 sub-
     # condition (b).
-    if manifest_hash != installed_hash:
-        # Drift detected -- this is sub-condition (b) for the
-        # particular case where the installed substrate diverges
-        # from what the manifest attests. For self-verification
-        # against a different version (--version override), this
-        # is expected; only fail when verifying against installed
-        # version.
-        if requested_version == _md.version("furqan-lint"):
-            print(
-                f"CASM-V-072: self-attestation-failure sub-condition "
-                f"(b) checker-set-hash-drift: manifest claims "
-                f"{manifest_hash!r}, installed pinned source list "
-                f"computes {installed_hash!r}",
-                file=sys.stderr,
-            )
-            return 1
+    # Drift detected -- this is sub-condition (b) for the
+    # particular case where the installed substrate diverges
+    # from what the manifest attests. For self-verification
+    # against a different version (--version override), this
+    # is expected; only fail when verifying against installed
+    # version.
+    if manifest_hash != installed_hash and requested_version == _md.version("furqan-lint"):
+        print(
+            f"CASM-V-072: self-attestation-failure sub-condition "
+            f"(b) checker-set-hash-drift: manifest claims "
+            f"{manifest_hash!r}, installed pinned source list "
+            f"computes {installed_hash!r}",
+            file=sys.stderr,
+        )
+        return 1
 
     # Route through the verify_bundle six-kwarg pattern via the
     # function-local _LANGUAGE_DISPATCH in verification.verify;

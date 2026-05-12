@@ -40,8 +40,7 @@ def test_self_smoke_test_fixture_manifest_present() -> None:
     release time)."""
     manifest_path = _FIXTURE_DIR / "self_manifest_smoke_v1_0.json"
     assert manifest_path.exists(), (
-        f"T07 substrate-of-record violation: fixture self-manifest "
-        f"missing at {manifest_path}"
+        f"T07 substrate-of-record violation: fixture self-manifest " f"missing at {manifest_path}"
     )
     from furqan_lint.gate11.manifest_schema import Manifest
 
@@ -64,8 +63,7 @@ def test_self_smoke_test_fixture_bundle_present() -> None:
     runtime, not by this static-fixture test)."""
     bundle_path = _FIXTURE_DIR / "self_manifest_smoke_v1_0.bundle"
     assert bundle_path.exists(), (
-        f"T07 substrate-of-record violation: fixture bundle stub "
-        f"missing at {bundle_path}"
+        f"T07 substrate-of-record violation: fixture bundle stub " f"missing at {bundle_path}"
     )
     # Bundle stub is non-empty (production bundle would be a
     # binary Sigstore Bundle protobuf-serialized JSON; the stub

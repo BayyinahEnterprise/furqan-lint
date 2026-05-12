@@ -120,8 +120,7 @@ def test_self_manifest_changes_when_checker_changes(tmp_path, monkeypatch) -> No
     substitute.write_text("# byte-different content for substrate-attestation test\n")
 
     substituted = tuple(
-        substitute if p.name == "self_manifest.py" else p
-        for p in PINNED_CHECKER_SOURCES_SELF
+        substitute if p.name == "self_manifest.py" else p for p in PINNED_CHECKER_SOURCES_SELF
     )
     monkeypatch.setattr(pin_mod, "PINNED_CHECKER_SOURCES_SELF", substituted)
 
