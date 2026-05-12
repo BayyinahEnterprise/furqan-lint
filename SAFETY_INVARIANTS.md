@@ -2,7 +2,7 @@
 
 ## Phase G11.A -- al-Fatiha
 ## Universal Safety Invariants for Sigstore-CASM Gate 11
-## v1.0_second_revision_amended_3
+## v1.0_second_revision_amended_4
 
 > "All praise is due to Allah, Lord of the worlds. The Most
 > Merciful, the Especially Merciful. Sovereign of the Day of
@@ -269,8 +269,9 @@ defined in Phase G11.0 MUST be implemented identically across
 all substrates. The error code namespace `CASM-V-001` through
 `CASM-V-064` (plus the Phase-specific extensions
 `CASM-V-070` and `CASM-V-071` allocated at Phase G11.3
-an-Naziat v0.13.0 for ONNX-specific failure modes) is
-universal across substrates.
+an-Naziat v0.13.0 for ONNX-specific failure modes;
+`CASM-V-072` allocated at Phase G12.0 al-Basirah v1.0.0
+for self-attestation failure) is universal across substrates.
 
 The nine steps:
 
@@ -324,6 +325,29 @@ The nine steps:
    produce divergent canonical strings when opsets or
    dim_params drift) plus explicit pre-canonicalization
    consistency checks in `gate11/onnx_verification.py`.
+
+   For self-attestation verification of furqan-lint's own
+   releases via `furqan-lint manifest verify-self` (Phase
+   G12.0 al-Basirah v1.0.0+), this step additionally
+   surfaces `CASM-V-072` (self-attestation-failure) on three
+   sub-conditions: (a) manifest-not-found (the convention-
+   based URL returns 404 or the network fetch fails);
+   (b) checker-set-hash-drift (the manifest's
+   checker_set_hash claim does not match the computed
+   sha256 over the installed pinned source list at
+   `gate11/_pinned_checker_sources_self.py`); (c)
+   signature-verification-unexpected (the underlying
+   Sigstore verification fails with a mode not already
+   covered by CASM-V-030..036). The error message names
+   which sub-condition fired. Exit code 1.
+
+   NOTE: The prompt-cited error code `CASM-V-040` for
+   self-attestation-failure conflicted with the existing
+   universal-namespace allocation at step 7 (module_root_hash
+   mismatch, in use since v0.10.0 baseline); per
+   substrate-of-record discipline (F-BA-substrate-conflict-1
+   pattern; mirror of F-TAB-2 v0.14.0 closure), v1.0.0
+   allocates the next-available code `CASM-V-072` instead.
 9. Check `chain_pointer` integrity against the previous bundle
    when supplied (`CASM-V-060` on hard mismatch; `CASM-V-061`
    ADVISORY when no previous bundle is locally accessible)
