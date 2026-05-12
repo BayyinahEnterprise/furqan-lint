@@ -146,3 +146,55 @@ jobs:
             --title "v${VERSION}" \
             --notes-file "${NOTES_FILE}" \
             --verify-tag
+
+      - name: Sign and upload self-attestation manifest (al-Basirah T06)
+        # Phase G12.0 (al-Basirah / v1.0.0+) T03: generates a gate11
+        # self-manifest for the released furqan-lint version, signs it
+        # via Sigstore (ambient OIDC; id-token: write permission
+        # already granted to this job for the gh release step + PyPI
+        # Trusted Publishing), and uploads both the manifest JSON and
+        # the Sigstore bundle as GitHub Release assets attached to the
+        # release object created in the previous step.
+        #
+        # The published assets are discoverable via convention-based
+        # URL (per al-Basirah T04):
+        #   https://github.com/BayyinahEnterprise/furqan-lint/releases/download/v${VERSION}/self_manifest.json
+        #   https://github.com/BayyinahEnterprise/furqan-lint/releases/download/v${VERSION}/self_manifest.bundle
+        #
+        # The furqan-lint manifest verify-self subcommand (al-Basirah
+        # T05) derives the URLs from the installed package version,
+        # downloads, and verifies via the function-local
+        # _LANGUAGE_DISPATCH -> _verify_python path per
+        # al-Mursalat T04 + an-Naziat F-NA-3 substrate-actual.
+        #
+        # §5.1 step 4 failure mode #1 (OIDC token timing): if this
+        # step fails due to OIDC token expiration between the PyPI
+        # publish + gh release create steps and this signing step,
+        # the workflow exits non-zero. The wheel is already on PyPI
+        # (Trusted Publishing happens earlier); operator manual
+        # remediation is to re-run the workflow (idempotent on
+        # existing-version-on-PyPI; signing step retries with fresh
+        # OIDC token).
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          # Install furqan-lint from the just-published wheel so the
+          # self-manifest substrate matches what PyPI shipped (NOT the
+          # source checkout). gate11 + sigstore extras for signing.
+          pip install --force-reinstall "furqan-lint[gate11]==${VERSION}"
+          # Generate the self-manifest:
+          python -m furqan_lint.gate11.self_manifest \
+            --version "${VERSION}" \
+            --output self_manifest.json
+          # Sign via Sigstore (ambient OIDC):
+          pip install sigstore
+          python -m sigstore sign \
+            --bundle self_manifest.bundle \
+            self_manifest.json
+          # Upload both as Release assets:
+          gh release upload "v${VERSION}" \
+            self_manifest.json self_manifest.bundle \
+            --clobber
+          echo "Self-manifest signed + uploaded as Release assets for v${VERSION}"
