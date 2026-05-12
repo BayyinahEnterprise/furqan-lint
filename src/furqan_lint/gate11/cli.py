@@ -533,12 +533,186 @@ def cmd_check_gate11(directory: Path, opts: dict[str, object]) -> int:
     return overall
 
 
+def cmd_manifest_verify_self(args: list[str]) -> int:
+    """``furqan-lint manifest verify-self [--version V]`` -- al-Basirah T05.
+
+    Verifies furqan-lint's own gate11 self-attestation manifest.
+    Downloads the signed self-manifest + Sigstore bundle from the
+    convention-based GitHub Release URL derived from the version
+    (default: the installed furqan-lint version), then verifies
+    via the function-local _LANGUAGE_DISPATCH -> _verify_python
+    path per al-Mursalat T04 + an-Naziat F-NA-3 substrate-actual.
+
+    Recursive closure of the structural-honesty thesis: the
+    verifier verifies the verifier's own release.
+
+    Per F-BA-substrate-conflict-1 v1.0.0 closure: failure surfaces
+    CASM-V-072 (substrate-actual; NOT prompt-cited 040 which was
+    in-use at v0.10.0+ baseline) with three sub-conditions
+    named:
+
+        (a) manifest-not-found (convention-based URL 404 or
+            network fetch failure)
+        (b) checker-set-hash-drift (manifest's claim differs from
+            installed pinned source list)
+        (c) signature-verification-unexpected (Sigstore failure
+            not covered by CASM-V-030..036)
+    """
+    import argparse as _argparse
+    import importlib.metadata as _md
+    import json as _json
+    import tempfile as _tempfile
+    import urllib.error as _urllib_error
+    import urllib.request as _urllib_request
+
+    positional, opts = _parse_options(args)
+    # Parse --version (optional override of installed version):
+    requested_version: str | None = None
+    i = 0
+    rest = list(positional)
+    while i < len(rest):
+        if rest[i] == "--version" and i + 1 < len(rest):
+            requested_version = rest[i + 1]
+            del rest[i : i + 2]
+            continue
+        i += 1
+    if requested_version is None:
+        try:
+            requested_version = _md.version("furqan-lint")
+        except _md.PackageNotFoundError:
+            print(
+                "furqan-lint package metadata not found; pass --version "
+                "explicitly to verify a specific release",
+                file=sys.stderr,
+            )
+            return 1
+
+    base_url = (
+        "https://github.com/BayyinahEnterprise/furqan-lint/"
+        f"releases/download/v{requested_version}"
+    )
+    manifest_url = f"{base_url}/self_manifest.json"
+    bundle_url = f"{base_url}/self_manifest.bundle"
+
+    tmp_dir = Path(_tempfile.mkdtemp(prefix="furqan_self_attest_"))
+    manifest_local = tmp_dir / "self_manifest.json"
+    bundle_local = tmp_dir / "self_manifest.bundle"
+
+    try:
+        _urllib_request.urlretrieve(manifest_url, manifest_local)
+        _urllib_request.urlretrieve(bundle_url, bundle_local)
+    except (_urllib_error.HTTPError, _urllib_error.URLError, OSError) as e:
+        # CASM-V-072 sub-condition (a): manifest-not-found
+        print(
+            f"CASM-V-072: self-attestation-failure sub-condition "
+            f"(a) manifest-not-found at expected URL {manifest_url}: {e}",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Parse manifest:
+    try:
+        manifest_data = _json.loads(manifest_local.read_text(encoding="utf-8"))
+        _manifest = Manifest.from_dict(manifest_data)
+    except (ValueError, KeyError, CasmSchemaError) as e:
+        print(
+            f"CASM-V-072: self-attestation-failure sub-condition "
+            f"(a) manifest-not-parseable: {e}",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Verify checker_set_hash matches the installed pinned source list:
+    from furqan_lint.gate11.self_manifest import (
+        compute_self_checker_set_hash,
+    )
+
+    installed_hash = compute_self_checker_set_hash()
+    manifest_hash = _manifest.linter_substrate_attestation.get(
+        "checker_set_hash"
+    )
+    # The manifest's hash is over the substrate AT RELEASE TIME; the
+    # installed-hash is computed over the substrate of the currently-
+    # installed furqan-lint. Drift between these is CASM-V-072 sub-
+    # condition (b).
+    if manifest_hash != installed_hash:
+        # Drift detected -- this is sub-condition (b) for the
+        # particular case where the installed substrate diverges
+        # from what the manifest attests. For self-verification
+        # against a different version (--version override), this
+        # is expected; only fail when verifying against installed
+        # version.
+        if requested_version == _md.version("furqan-lint"):
+            print(
+                f"CASM-V-072: self-attestation-failure sub-condition "
+                f"(b) checker-set-hash-drift: manifest claims "
+                f"{manifest_hash!r}, installed pinned source list "
+                f"computes {installed_hash!r}",
+                file=sys.stderr,
+            )
+            return 1
+
+    # Route through the verify_bundle six-kwarg pattern via the
+    # function-local _LANGUAGE_DISPATCH in verification.verify;
+    # manifest.module_identity['language'] == 'python' so dispatch
+    # routes to _verify_python per al-Mursalat T04 + an-Naziat F-NA-3:
+    trust_config = _trust_config_from_path(
+        opts["trust_config_path"]  # type: ignore[arg-type]
+    )
+    _namespace = _argparse.Namespace(
+        bundle_path=bundle_local,
+        module_path=manifest_local,
+        trust_config=trust_config,
+        trust_config_path=opts["trust_config_path"],
+        expected_identity=opts["expected_identity"],
+        expected_issuer=opts["expected_issuer"],
+        allow_any_identity=bool(opts["allow_any_identity"]),
+        force_refresh=bool(opts["force_refresh"]),
+    )
+
+    from furqan_lint.gate11 import verification as _verification
+
+    try:
+        result = _verification.verify(_manifest, _namespace)
+    except CasmIndeterminateError as e:
+        print(f"INDETERMINATE: {e}", file=sys.stderr)
+        return 2
+    except CasmVerificationError as e:
+        # Per F-BA standing rule: surface as CASM-V-072 sub-condition
+        # (c) when the underlying failure is not already a typed
+        # CASM-V-030..036 identity-path error. Pass-through
+        # otherwise.
+        if e.code in {
+            "CASM-V-030",
+            "CASM-V-031",
+            "CASM-V-032",
+            "CASM-V-033",
+            "CASM-V-034",
+            "CASM-V-035",
+            "CASM-V-036",
+        }:
+            print(f"{e.code}: {e}", file=sys.stderr)
+            return 1
+        print(
+            f"CASM-V-072: self-attestation-failure sub-condition "
+            f"(c) signature-verification-unexpected ({e.code}): {e}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"CASM-OK  furqan-lint@{requested_version} self-attestation")
+    print(f"  signed_by: {result.signed_by}")
+    if result.manifest is not None:
+        print(f"  signed_at: {result.manifest.issued_at}")
+    return 0
+
+
 def dispatch_manifest(args: list[str]) -> int:
     """Top-level dispatcher invoked from furqan_lint.cli.main()
     when args[0] == "manifest"."""
     if not args:
         print(
-            "usage: furqan-lint manifest <init|verify|update> ...",
+            "usage: furqan-lint manifest <init|verify|verify-self|update> ...",
             file=sys.stderr,
         )
         return 2
@@ -548,6 +722,8 @@ def dispatch_manifest(args: list[str]) -> int:
         return cmd_manifest_init(rest)
     if sub == "verify":
         return cmd_manifest_verify(rest)
+    if sub == "verify-self":
+        return cmd_manifest_verify_self(rest)
     if sub == "update":
         return cmd_manifest_update(rest)
     print(f"unknown manifest action: {sub}", file=sys.stderr)
@@ -559,5 +735,6 @@ __all__ = (
     "cmd_manifest_init",
     "cmd_manifest_update",
     "cmd_manifest_verify",
+    "cmd_manifest_verify_self",
     "dispatch_manifest",
 )
