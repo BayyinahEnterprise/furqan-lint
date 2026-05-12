@@ -392,4 +392,68 @@ repository, the corresponding allowlist constant in
 the change recorded in CHANGELOG.md under the "Tooling"
 section of the next patch release.
 
+## Self-attestation discovery (Phase G12.0 al-Basirah, v1.0.0+)
+
+From v1.0.0 onward, each furqan-lint release ships a signed
+gate11 self-manifest as a GitHub Release asset, in addition to
+the PyPI wheel and sdist. The release.yml T06 step generates
+the self-manifest via ``python -m furqan_lint.gate11.self_manifest``,
+signs it via Sigstore ambient OIDC, and uploads both
+``self_manifest.json`` and ``self_manifest.bundle`` as Release
+assets attached to ``v${VERSION}``.
+
+### Convention-based URL
+
+The published assets are discoverable from the version number
+alone via convention-based URL:
+
+  ``https://github.com/BayyinahEnterprise/furqan-lint/releases/download/v${VERSION}/self_manifest.json``
+  ``https://github.com/BayyinahEnterprise/furqan-lint/releases/download/v${VERSION}/self_manifest.bundle``
+
+The ``furqan-lint manifest verify-self`` subcommand (al-Basirah
+T05) derives these URLs from the installed package version (via
+``importlib.metadata.version("furqan-lint")``), downloads, and
+verifies via the function-local ``_LANGUAGE_DISPATCH`` ->
+``_verify_python`` path per al-Mursalat T04 + an-Naziat F-NA-3
+substrate-actual.
+
+### Operator runbook: post-tag verification
+
+After a v1.x.0 release ships:
+
+1. Wait for release.yml to complete all steps (PyPI Trusted
+   Publishing + gh release create + T06 self-manifest sign +
+   upload).
+2. Verify the Release object has both assets attached:
+   ```bash
+   gh release view "v${VERSION}" --json assets --jq '.assets[].name'
+   # Expected output (one per line):
+   # self_manifest.bundle
+   # self_manifest.json
+   ```
+3. Verify self-attestation succeeds against the published
+   assets with the canonical signing identity:
+   ```bash
+   pip install --upgrade furqan-lint
+   furqan-lint manifest verify-self      --expected-identity "https://github.com/BayyinahEnterprise/furqan-lint/.github/workflows/release.yml@refs/tags/v${VERSION}"      --expected-issuer "https://token.actions.githubusercontent.com"
+   ```
+4. If verify-self fails with CASM-V-072 sub-condition
+   ``manifest-not-found``: re-run release.yml (idempotent on
+   existing-version-on-PyPI; T06 retries with fresh OIDC token).
+   If fails with sub-condition ``checker-set-hash-drift``:
+   investigate pinned-source-list drift between release-time
+   substrate and installed-substrate; this is a Naskh Discipline
+   event requiring CHANGELOG entry. If fails with sub-condition
+   ``signature-verification-unexpected``: investigate Sigstore
+   bundle integrity per the upstream Sigstore project guidance.
+
+### PyPI metadata fallback (deferred to v1.1+)
+
+If convention-based URL fails (e.g., for a non-tagged release
+that nonetheless has a self-manifest, or if GitHub Release
+asset hosting moves), the PyPI project metadata's ``urls``
+field can list the manifest URL explicitly. v1.0 ships with
+convention-based URL only; PyPI metadata fallback is deferred
+to v1.1+ if a real-world need surfaces.
+
 End of release-checklist.md.
