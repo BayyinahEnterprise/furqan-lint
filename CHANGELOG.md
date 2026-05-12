@@ -19,6 +19,179 @@ introduced this convention.
 
 ---
 
+## [1.0.0] - 2026-05-11
+
+### Self-attestation (al-Basirah / G12.0; canonical mushaf chain closing)
+
+Phase G12.0 al-Basirah ships v1.0 self-attestation: furqan-lint
+signs its own releases with gate11, publishes the signed
+self-manifest as a GitHub Release asset, and exposes verification
+through the new `furqan-lint manifest verify-self` subcommand.
+The structural-honesty thesis closes on itself: the tool that
+catches drift in others' code attests its own.
+
+This release closes the canonical mushaf chain that began at
+G10.5 al-Mubin (v0.11.1) and proceeded through at-Tawbah
+(v0.11.2), al-Hujurat (v0.11.3), as-Saff (v0.11.8), al-Mursalat
+(v0.12.0), an-Naziat (v0.13.0), and Tasdiq al-Bayan (v0.14.0).
+After v1.0, the project enters operational steady-state: v1.x
+patches as needed for correctives, but no further canonical
+substrate-chain phases.
+
+#### Closures
+
+- T01 (`SAFETY_INVARIANTS.md` Section 8 extension): CASM-V-072
+  (self-attestation-failure) allocated with three named
+  sub-conditions (manifest-not-found; checker-set-hash-drift;
+  signature-verification-unexpected). Per F-BA-substrate-
+  conflict-1 v1.0.0 closure: substrate-actual is CASM-V-072
+  (NOT prompt-cited 040 which is in-use at v0.10.0+ baseline
+  for module_root_hash mismatch per Invariant 6 step 7).
+  Document stamp bump to v1.0_second_revision_amended_4.
+- T02 (`gate11/self_manifest.py` + `gate11/_pinned_checker_sources_self.py`
+  NEW): self-manifest generation for furqan-lint Python wheel;
+  Form A checker_set_hash over PINNED_CHECKER_SOURCES_SELF
+  tuple (24 entries: 4 top-level checker substrate + 20
+  gate11/ substrate including two new self-attestation modules
+  per §5.1 step 4 failure mode #3 mechanical-enforcement
+  closure). CLI entry point `python -m
+  furqan_lint.gate11.self_manifest --version V --output PATH`
+  invoked from release.yml T06.
+- T03 (`.github/workflows/release.yml` T06 step NEW): Sigstore
+  signing of self-manifest via ambient OIDC; uploads
+  self_manifest.json + self_manifest.bundle as GitHub Release
+  assets attached to v${VERSION}. Per §5.1 step 4 failure
+  mode #1: if OIDC token expires between PyPI publish + signing
+  step, workflow exits non-zero with re-run idempotency.
+- T04 (`docs/release-checklist.md` Self-attestation discovery
+  section): convention-based URL discipline documented; operator
+  runbook for post-tag verification + CASM-V-072 sub-condition
+  remediation; PyPI metadata fallback deferred to v1.1+.
+- T05 (`gate11/cli.py` `cmd_manifest_verify_self` NEW): Relying-
+  Party verification subcommand. Default uses
+  importlib.metadata.version('furqan-lint') for installed
+  version; --version override supported. Derives URL from
+  convention; downloads manifest + bundle; verifies
+  checker_set_hash matches installed pinned source list;
+  routes through `verification.verify` (function-local
+  `_LANGUAGE_DISPATCH` per al-Mursalat T04 + an-Naziat F-NA-3)
+  to `_verify_python`. Surfaces CASM-V-072 with named
+  sub-condition on failure paths.
+- T06 (README + SECURITY.md + new docs/gate11-self-attestation.md
+  + docs/gate11-symmetry.md row): documentation parity. New
+  docs/gate11-self-attestation.md (145 lines) with Relying-
+  Party verification + what-is-attested + what-is-NOT-attested
+  + CASM-V-072 sub-conditions + trust-model sections. Symmetry
+  table extended with self-attestation row (Python v1.0+;
+  Rust N/A; Go DEFERRED per §5.1 step 4 failure mode #4 of
+  al-Basirah dispatch prompt; ONNX N/A).
+- T07 (`.github/workflows/ci.yml` gate11-self-smoke-test job +
+  fixtures): fifth gate11 smoke-test CI job parallel to four
+  prior gate11 smoke tests. Exercises self_manifest generation
+  + Sigstore signing + Manifest schema validation. Fixture
+  identity differs from production release identity per §5.1
+  step 4 failure mode #5; closure of #5 requires post-ship
+  external-party verification.
+
+#### Honest asymmetries (per docs/gate11-symmetry.md self-attestation row)
+
+The self-attestation row marks three N/A-or-deferred cells:
+- **Python**: v1.0+ substrate-actual self-attestation surface.
+- **Rust**: N/A (furqan-lint does not ship Rust source as a
+  separate crate; the Rust verifier substrate at
+  gate11/rust_verification.py IS in the pinned source list).
+- **Go**: DEFERRED (goast Go binary reproducible-build
+  attestation pending; v1.x candidate per §5.1 step 4 failure
+  mode #4 closure if Go ecosystem reproducible-build tooling
+  matures).
+- **ONNX**: N/A (furqan-lint does not ship ONNX models).
+
+#### Findings absorbed pre-dispatch + Co-work-surfaced
+
+Pre-dispatch (Perplexity Mode A LIGHT-tier rotation audit):
+- F-BA-1/2/3/4 absorbed in single patch per the dispatch
+  prompt's audit ledger (carried forward from prompt body;
+  details in dispatch prompt §0.5).
+
+Co-work-surfaced during T01-T08 implementation:
+- F-BA-substrate-conflict-1 LOW (T01 substrate-vs-prompt
+  CASM-V code divergence): dispatch prompt T01 cited
+  CASM-V-040 for self-attestation-failure. Substrate-actual
+  CASM-V-040 is already allocated for module_root_hash
+  mismatch (step 7 of 9-step verification flow per Invariant
+  6 line 309; in-use since v0.10.0 baseline). Disposition:
+  SUBSTRATE-ACTUAL-OVERRIDES-PROMPT (mirror of F-TAB-2
+  v0.14.0 pattern); v1.0.0 allocates CASM-V-072 instead
+  (next-available code at v0.14.0 substrate). Patch #1 usage
+  of LIGHT-tier 2-patch cap; remaining capacity for one more
+  substrate-truth surfacing before escalation-to-STANDARD.
+
+#### Test count delta (per al-Hujurat T05 CHANGELOG-math gate)
+
+Per-task delta-against-substrate (per F-NA-4 v1.4 absorption):
+- T01 docs-only: +0
+- T02 (`tests/test_gate11_self_manifest.py` NEW): +5
+- T03 (`tests/test_release_yml_t06_self_manifest.py` NEW): +3
+- T04 docs-only: +0
+- T05 (`tests/test_gate11_verify_self_subcommand.py` NEW): +5
+- T06 docs-only: +0
+- T07 (`tests/test_gate11_self_smoke_test_fixture_inventory.py`
+  NEW): +3
+- T08 docs-only: +0
+
+Sum: 0 + 5 + 3 + 0 + 5 + 0 + 3 + 0 = +16. Working hypothesis was
++17 per dispatch prompt §0.5 framing; empirical -1 drift
+within al-Hujurat T05 CHANGELOG-math gate assertion (c)
++/- 4 projection-drift tolerance (absorbed without halt).
+
+Baseline + delta:
+- v0.14.0 baseline: 716 (per CHANGELOG v0.14.0 entry; ship
+  record §9; canonical full-extras profile)
+- v1.0.0 ship: 732 (empirical pytest --collect-only -q;
+  -1 drift from +17 working hypothesis)
+- Projection drift: -1 (within +/- 4 tolerance; assertion
+  (c) PASS)
+
+#### Round 42+ audit notes
+
+The pre-registered ranked list of next-most-likely failure
+modes at substrate layer L (release.yml + gate11/ + cli.py)
+is in the al-Basirah dispatch prompt's §5.1 step 4 section
+(durable in Git from this commit). Round 42+ audits evaluate
+observed subsequent failure modes against the ranked list per
+the §2.4 falsification block of the Predictive Modeling
+Discipline v1.1.
+
+Under LIGHT-tier calibration, Round 42 is NOT pre-committed;
+project lead decides post-v1.0.0 ship whether to schedule
+Round 42 Mode A based on actual ship signal.
+
+#### What v1.0 does NOT do
+
+See al-Basirah dispatch prompt's "What this phase does NOT
+do" section for the full list. Notable scope exclusions:
+no new substrate languages; no expansion of attestation to
+non-source artifacts; no v2.0 horizon work; Go-binary
+reproducible-build attestation deferred to v1.x candidate;
+no modification of the four prior verifier substrates
+(Acceptance §16 binding gate: `git diff v0.14.0..v1.0.0 --
+src/furqan_lint/gate11/{verification,rust_verification,
+go_verification,onnx_verification}.py` returns empty).
+
+#### Mushaf chain closing
+
+After v1.0, the canonical mushaf chain is closed. The chain:
+G10.5 al-Mubin -> at-Tawbah -> al-Hujurat -> as-Saff ->
+al-Mursalat -> an-Naziat -> Tasdiq al-Bayan -> al-Basirah.
+Subsequent work modes: v1.x patches (existing release-tooling
+pipeline; no new mushaf-chain phases); v1.x candidate closures
+from this phase's deferrals (Go-binary reproducible-build);
+v2.0+ horizon work (out of canonical chain; separate chartered
+scope). The chain closes when its self-witnessing capability
+is operational.
+
+---
+
 ## [0.14.0] - 2026-05-11
 
 ### Verification corpus (Tasdiq al-Bayan / G11.4)
