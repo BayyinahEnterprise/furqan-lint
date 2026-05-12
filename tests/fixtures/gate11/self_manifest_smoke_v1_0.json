@@ -1,0 +1,26 @@
+{
+  "casm_version": "1.0",
+  "chain": {
+    "chain_position": 1,
+    "previous_manifest_hash": null
+  },
+  "issued_at": "1970-01-01T00:00:00Z",
+  "linter_substrate_attestation": {
+    "checker_set_hash": "sha256:d41ff988d0d52574971b53aace21c03fcb5fa2aa51f4fd4f9d371e2c5f18e3fd",
+    "linter_name": "furqan-lint",
+    "linter_version": "1.0.0-smoke-test"
+  },
+  "module_identity": {
+    "language": "python",
+    "module_path": "furqan-lint@1.0.0-smoke-test",
+    "module_root_hash": "sha256:a06d9e900fc7b1922024d2070a4c31af5f369eb19e44a92e8b3b0061b553cce5"
+  },
+  "public_surface": {
+    "extraction_method": "ast.module-public-surface@v1.0",
+    "extraction_substrate": "furqan-lint@1.0.0-smoke-test",
+    "names": []
+  },
+  "trust_root": {
+    "trust_root_id": "sigstore-public-good"
+  }
+}
