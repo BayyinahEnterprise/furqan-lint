@@ -190,3 +190,49 @@ an audit signal: it is an explicit opt-in to ``UnsafeNoOp()``
 policy whose presence in CI logs is the substrate-side
 visibility that the Sulayman-Naml ADVISORY pattern (Phase
 G11.A Strategy 7) provides.
+
+## Sigstore-CASM Gate 11 self-attestation (v1.0)
+
+The Phase G12.0 al-Basirah self-attestation flow extends the
+gate11 substrate to furqan-lint's own releases. From v1.0+,
+each release ships a signed gate11 self-manifest as a GitHub
+Release asset, in addition to the PyPI wheel and sdist.
+Relying Parties verifying furqan-lint releases SHOULD invoke:
+
+```bash
+furqan-lint manifest verify-self --expected-identity <pattern>
+```
+
+where `<pattern>` matches the BayyinahEnterprise GitHub
+Actions release workflow's Sigstore-OIDC signing identity
+(canonical convention) or the project lead's personal
+signing identity per local-build attestation.
+
+The self-attestation surface adds one new CASM-V code:
+**CASM-V-072 (self-attestation-failure)** with three named
+sub-conditions: (a) manifest-not-found; (b) checker-set-
+hash-drift; (c) signature-verification-unexpected. Per
+F-BA-substrate-conflict-1 v1.0.0 closure: substrate-actual
+code is CASM-V-072 (NOT prompt-cited 040 which is in-use
+at v0.10.0+ baseline for module_root_hash mismatch per
+Invariant 6 step 7).
+
+The Newman 2022 N2 typosquatting disclosure applies
+identically to self-attestation: the convention-based URL
+discipline (per docs/release-checklist.md Self-attestation
+discovery section) anchors the published-manifest location
+at the canonical BayyinahEnterprise GitHub repo; Relying
+Parties verifying any other URL pattern are operating
+outside the substrate-of-record.
+
+### Trust model
+
+Self-attestation does not eliminate the need for external
+trust. It locates the trust at the Sigstore Certificate
+Transparency log layer: a Relying Party trusts that
+Sigstore's CT log is honestly maintained and that the
+project lead's (or BayyinahEnterprise organization's)
+signing identity is correctly attested at that layer. The
+recursion bottoms out at this trust anchor outside the
+project. See `docs/gate11-self-attestation.md` for the
+full trust-model documentation.

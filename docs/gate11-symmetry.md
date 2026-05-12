@@ -36,6 +36,7 @@ The parity table:
 | CLI dispatch by manifest-declared language | v0.12.0+ | v0.12.0+ | v0.12.0+ | v0.13.0+ |
 | Opset-policy-mismatch (CASM-V-070) | N/A | N/A | N/A | v0.13.0+ |
 | Dim-param-violation (CASM-V-071) | N/A | N/A | N/A | v0.13.0+ |
+| Self-attestation (verify-self subcommand; CASM-V-072) | v1.0+ | N/A (no Rust source shipped) | DEFERRED (goast Go binary reproducible-build pending; v1.x candidate) | N/A (no ONNX models shipped) |
 
 The dispatch surface symmetry was closed at v0.12.0
 al-Mursalat for the source-code substrates: the CLI's

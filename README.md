@@ -273,9 +273,37 @@ The CLI grows two opt-in entry points and one flag:
 ```bash
 furqan-lint manifest init <module.py>     # OIDC sign; emit .furqan.manifest.sigstore
 furqan-lint manifest verify <module.py>   # 9-step CASM-V verification
+furqan-lint manifest verify-self          # v1.0+ verify furqan-lint's own gate11 self-manifest
 furqan-lint manifest update <module.py>   # additive-only re-sign; refuses removals
 furqan-lint check --gate11 <path>         # run normal checks + verify any CASM bundles found
 ```
+
+#### Self-attestation (v1.0+; Phase G12.0 al-Basirah)
+
+From v1.0 onward, furqan-lint signs its own releases with
+gate11. The structural-honesty thesis closes on itself: the
+tool that catches drift in others' code attests its own.
+Relying Parties verify via:
+
+```bash
+furqan-lint manifest verify-self \
+  --expected-identity "<pattern>" \
+  --expected-issuer "https://token.actions.githubusercontent.com"
+```
+
+Signed self-manifests publish as GitHub Release assets at
+`https://github.com/BayyinahEnterprise/furqan-lint/releases/download/v${VERSION}/self_manifest.json`
+(+ corresponding `.bundle`). The `verify-self` subcommand
+derives the URL from the installed package version and
+dispatches verification through the function-local
+`_LANGUAGE_DISPATCH` -> `_verify_python` path per
+al-Mursalat T04 + an-Naziat F-NA-3 substrate-actual.
+
+CASM-V-072 (self-attestation-failure) surfaces on three
+sub-conditions: (a) manifest-not-found; (b) checker-set-
+hash-drift; (c) signature-verification-unexpected. See
+`docs/gate11-self-attestation.md` for the full trust-model
+and remediation guidance.
 
 `furqan-lint check` without `--gate11` produces the same
 diagnostics as in v0.9.4. Gate 11 only activates when the user
