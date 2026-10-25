@@ -148,7 +148,9 @@ def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
     shapes (a nested ``return x`` before the rebind or the raise), and
     the verification-round shapes (a guard exit that is caught,
     suppressed or overridden by ``finally``; a fallback replaced by
-    tuple unpacking or a ``match`` capture)."""
+    tuple unpacking or a ``match`` capture), and the round-two shapes
+    (a late-binding closure, a global rebound after the guard,
+    ``locals()``)."""
     module = translate_file(failing_dir / "optional_collapse_still_reported.py")
     diags = check_python_module(module)
     s = _by_checker(diags, "status_coverage")
@@ -175,6 +177,11 @@ def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
             "finally_overrides_fallback",
             "tuple_rebind_to_none",
             "match_capture_rebind",
+            "late_closure_continue",
+            "late_closure_positive",
+            "closure_return_fallback",
+            "global_rebound_after_guard",
+            "locals_after_guard",
         ]
     )
     named = sorted(name for name in expected if any(f"function '{name}'" in str(d) for d in s))

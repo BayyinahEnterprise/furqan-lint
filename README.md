@@ -755,7 +755,11 @@ than silent.
   a `with` block, are not trusted, because the exit can be caught,
   suppressed or overridden there; and only a plain `x = <literal>`
   counts as a rebind (tuple unpacking, `match` captures and other
-  binding forms are treated as possibly None). A guard further down,
+  binding forms are treated as possibly None). A name read by a
+  nested `lambda` / `def` / `class` (a closure reads the variable
+  when it runs, not when it is created), a `global` or `nonlocal`
+  name, and every name in a function that calls `locals()` / `vars()`
+  / `eval()` / `exec()` are never narrowed by a guard. A guard further down,
   a None branch with a nested `if` or loop before its exit, a guard
   inside such a `try` even when its exception escapes, and
   `assert x is not None` (stripped by `python -O`), are not seen, so
@@ -763,6 +767,13 @@ than silent.
   Membership (`in`) and ordering comparisons are never treated as
   handling None because they can raise on it. Pinned as
   `tests/fixtures/documented_limits/optional_guard_not_adjacent.py`.
+- **Checks stop at function boundaries.** The body of a nested
+  function is not checked by D11 or D24 (only top-level functions and
+  class methods are), a `nonlocal` rebind made by a nested function is
+  not followed, and a decorator that swallows the guard's `raise`
+  (the decorator form of `with contextlib.suppress`) is not seen.
+  Each can return None from a `-> str` function silently. Pinned as
+  `tests/fixtures/documented_limits/guard_escapes_function_boundary.py`.
 - **Comparisons are assumed to be bool.** A producer call used as an
   operand of `==` / `!=` / `is` / `is not` is withheld from D11. `is`
   always yields a bool, but `==` / `!=` call `__eq__` / `__ne__`, which

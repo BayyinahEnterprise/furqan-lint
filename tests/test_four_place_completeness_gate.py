@@ -93,6 +93,7 @@ _README_TOPIC_KEYWORDS: dict[str, tuple[str, ...] | None] = {
     "raise_terminal_remaining_false_positives": ("Raise shapes D24 still misreads",),
     "none_procedure_returning_value": ("carries no value contract",),
     "comparison_assumed_bool": ("Comparisons are assumed to be bool",),
+    "guard_escapes_function_boundary": ("Checks stop at function boundaries",),
 }
 
 

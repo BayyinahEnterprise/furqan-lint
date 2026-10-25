@@ -276,3 +276,19 @@ def test_comparison_assumed_bool_passes_silently() -> None:
     result = _run_check("comparison_assumed_bool.py")
     assert result.returncode == 0
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Checks stop at function boundaries (v1.0.1)
+# ---------------------------------------------------------------------------
+
+
+def test_guard_escapes_function_boundary_passes_silently() -> None:
+    """A nested function's body is not checked, a ``nonlocal`` rebind
+    from a nested function is not followed, and a decorator that
+    swallows the guard's raise is not seen. All three return None from
+    ``-> str`` and furqan-lint is silent. Documented in README
+    "Remaining limitations"."""
+    result = _run_check("guard_escapes_function_boundary.py")
+    assert result.returncode == 0
+    assert "PASS" in result.stdout

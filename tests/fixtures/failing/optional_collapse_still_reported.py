@@ -2,13 +2,14 @@
 
 v1.0.1 true-positive guard for the narrowing fix. Each function below
 receives ``str | None`` and returns a bare ``str`` or ``bool`` without
-explicitly handling None where it was received. Expected: twenty-one D11
+explicitly handling None where it was received. Expected: twenty-six D11
 diagnostics, one per function.
 """
 
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from typing import Optional
 
 
@@ -181,4 +182,62 @@ def match_capture_rebind(uid: int) -> str:
         match None:
             case name:
                 pass
+    return name
+
+
+# v1.0.1 verification round two: a closure reads the variable when it
+# runs, not when it is created, and a global can be rebound by any
+# call. Each must keep firing.
+
+
+def late_closure_continue(uids: list[int]) -> str:
+    getters: list[Callable[[], str]] = []
+    for uid in uids:
+        name = find_name(uid)
+        if name is None:
+            continue
+        getters.append(lambda: name)  # reads the last binding, maybe None
+    return getters[0]()
+
+
+def late_closure_positive(uids: list[int]) -> str:
+    getter: Callable[[], str] = lambda: ""  # noqa: E731
+    for uid in uids:
+        name = find_name(uid)
+        if name is not None:
+            getter = lambda: name  # noqa: E731
+    return getter()
+
+
+def closure_return_fallback(uid: int) -> str:
+    def fallback() -> str:
+        return name  # reads the guarded name, which is None here
+
+    name = find_name(uid)
+    if name is None:
+        return fallback()
+    return name
+
+
+_CURRENT: Optional[str] = None
+
+
+def _clear() -> None:
+    global _CURRENT
+    _CURRENT = None
+
+
+def global_rebound_after_guard(uid: int) -> str:
+    global _CURRENT
+    _CURRENT = find_name(uid)
+    if _CURRENT is None:
+        _CURRENT = "default"
+    _clear()  # rebinds the global to None after the guard
+    return _CURRENT
+
+
+def locals_after_guard(uid: int) -> str:
+    name = find_name(uid)
+    if name is None:
+        return str(locals()["name"])  # dynamic scope access: not trusted
     return name

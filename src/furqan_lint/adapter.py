@@ -974,6 +974,7 @@ def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
     out: set[int] = set()
     loads = _name_loads(fn)
     unsafe = _exception_sensitive_ids(fn)
+    blocked = _unguardable_names(fn)
 
     for n in _own_nodes(fn):
         if (
@@ -988,7 +989,7 @@ def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
                 if isinstance(operand, ast.Call):
                     out.add(id(operand))
         if isinstance(n, ast.If) and id(n) not in unsafe:
-            walrus = _walrus_guard_call(n, loads)
+            walrus = _walrus_guard_call(n, loads, blocked)
             if walrus is not None:
                 out.add(id(walrus))
         for block in _stmt_blocks(n):
@@ -997,6 +998,8 @@ def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
                 if bound is None:
                     continue
                 var, call = bound
+                if var in blocked:
+                    continue  # read by a closure, or global / dynamic
                 if id(block[i + 1]) in unsafe:
                     continue  # the guard's exit may be caught or overridden
                 in_loop = isinstance(n, ast.For | ast.AsyncFor | ast.While) and block is n.body
@@ -1196,6 +1199,48 @@ def _stores(target: ast.AST, var: str) -> bool:
     )
 
 
+_DYNAMIC_SCOPE_CALLS = frozenset({"locals", "vars", "eval", "exec"})
+
+
+def _unguardable_names(fn: ast.AST) -> frozenset[str]:
+    """Names a guard cannot vouch for. Returns every name for a
+    function that calls ``locals`` / ``vars`` / ``eval`` / ``exec``.
+
+    * Names read inside a nested ``lambda`` / ``def`` / ``class``: a
+      closure reads the variable when it runs, not when it is created,
+      so a later binding to None (the next loop pass, a later
+      assignment) reaches the caller through it. v1.0.1 verification
+      round two: late-binding closures in loops leaked.
+    * Names declared ``global`` or ``nonlocal``: any call can rebind
+      them after the guard."""
+    names: set[str] = set()
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Global | ast.Nonlocal):
+            names.update(n.names)
+        if (
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name)
+            and n.func.id in _DYNAMIC_SCOPE_CALLS
+        ):
+            return _EVERY_NAME
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Lambda | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) and (
+            n is not fn
+        ):
+            names.update(
+                x.id for x in ast.walk(n) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)
+            )
+    return frozenset(names)
+
+
+class _EveryName(frozenset):  # type: ignore[type-arg]
+    def __contains__(self, item: object) -> bool:
+        return True
+
+
+_EVERY_NAME: frozenset[str] = _EveryName()
+
+
 def _exception_sensitive_ids(fn: ast.AST) -> set[int]:
     """``id()`` of every node inside a ``try`` that has handlers or a
     ``finally``, or inside a ``with`` block. There, a ``raise`` or
@@ -1254,7 +1299,11 @@ def _guards(
     return False
 
 
-def _walrus_guard_call(node: ast.If, loads: dict[str, list[ast.Name]]) -> ast.Call | None:
+def _walrus_guard_call(
+    node: ast.If,
+    loads: dict[str, list[ast.Name]],
+    blocked: frozenset[str] = frozenset(),
+) -> ast.Call | None:
     test = node.test
     target: ast.NamedExpr | None = None
     if (
@@ -1276,6 +1325,8 @@ def _walrus_guard_call(node: ast.If, loads: dict[str, list[ast.Name]]) -> ast.Ca
     if not (isinstance(target.target, ast.Name) and isinstance(target.value, ast.Call)):
         return None
     var = target.target.id
+    if var in blocked:
+        return None
     if is_none_branch:
         return target.value if _ends_path(node.body, var) else None
     uses = loads.get(var, [])

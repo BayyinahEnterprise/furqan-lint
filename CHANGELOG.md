@@ -36,8 +36,8 @@ fix to catch a fix that widens into a false negative, and pins the
 fourth shape and the edges of each fix as documented limits. An
 independent review of the first cut found five such widenings in
 the D11 narrowing, the external v1.0.1 audit found a sixth (F-01)
-plus an invalid test specimen (F-02), and a fresh-context
-verification of the audit fixes found six more. All are closed
+plus an invalid test specimen (F-02), and two fresh-context
+verification rounds of the audit fixes found eight more. All are closed
 below and each has a guard case.
 Self-check on `src/`: 12 diagnostics to 1 error plus 1
 informational S2 note. The error is the documented
@@ -87,13 +87,16 @@ fixtures report the same diagnostics on both.
   the name) up to its exit or rebind, so the exit or rebind is
   reached on every path. Guards inside a `try` with handlers or a
   `finally`, or inside a `with` block, are not trusted, and only a
-  plain `x = <non-None literal>` counts as a rebind. `continue` /
+  plain `x = <non-None literal>` counts as a rebind. Names read by a
+  nested closure, `global` / `nonlocal` names, and every name in a
+  function that calls `locals` / `vars` / `eval` / `exec` are never
+  narrowed by a guard. `continue` /
   `break` count only when every read stays in the rest of the same
   loop body.
   Membership (`in`, `not in`) and ordering comparisons stay visible
   because they can raise on None (`None in "abc"` raises
   `TypeError`). Clean fixture: `optional_narrowed_at_call_site`.
-  Guard fixture: `optional_collapse_still_reported`, twenty-one
+  Guard fixture: `optional_collapse_still_reported`, twenty-six
   functions that still fire: `leaky`, `late_guard`, `ordered`,
   `guard_without_exit`, `has_letter_a`, `in_alphabet`; the
   review-round shapes `break_leaks`, `walrus_continue_leaks`,
@@ -103,7 +106,10 @@ fixtures report the same diagnostics on both.
   `walrus_nested_return_before_raise`; and the verification-round
   shapes `caught_raise_leaks`, `caught_walrus_raise_leaks`,
   `caught_exit_leaks`, `finally_overrides_fallback`,
-  `tuple_rebind_to_none`, `match_capture_rebind`.
+  `tuple_rebind_to_none`, `match_capture_rebind`; and the round-two
+  shapes `late_closure_continue`, `late_closure_positive`,
+  `closure_return_fallback`, `global_rebound_after_guard`,
+  `locals_after_guard`.
 
 ### Audit corrections (external v1.0.1 audit, 2026-10-25)
 
@@ -132,7 +138,7 @@ fixtures report the same diagnostics on both.
   and executed before translation (`f(0)` returns None, `f(1)`
   returns 1), and pins that neither D24 nor R3 reports it. New gate
   `test_every_python_fixture_compiles` compiles every Python file
-  under `tests/fixtures/` (64 at this release), and
+  under `tests/fixtures/` (65 at this release), and
   `tests/conftest.py` now compiles every inline source string a test
   hands to `translate_source`, so an invalid inline specimen fails
   loudly (pinned by `test_inline_specimens_are_compiled_before_translation`).
@@ -153,6 +159,21 @@ fixtures report the same diagnostics on both.
   pinned as `guard_inside_try`; and the self-check gains one
   informational S2 note (`check_shape_coverage`, a generator whose
   guard sits inside a `try`), exit status unchanged.
+- **Verification round two (two further D11 false negatives).** A
+  second fresh-context check confirmed every earlier fix and found a
+  late-binding closure leak: a guard in a loop (`continue` on None,
+  or `if x is not None: getter = lambda: x`) passed the "reads stay
+  in the block" test syntactically, but the closure runs after the
+  loop and reads the last binding, which may be None. Names read by
+  any nested `lambda` / `def` / `class` are now never narrowed by a
+  guard. The same round showed a `global` rebound by a call after
+  the guard, and a None branch returning through `locals()`; `global`
+  / `nonlocal` names and functions using `locals` / `vars` / `eval`
+  / `exec` are now never narrowed either. Three further shapes are
+  pinned as the documented limit `guard_escapes_function_boundary`:
+  nested function bodies are not checked at all (pre-existing, newly
+  documented), a `nonlocal` rebind from a nested function, and a
+  decorator that swallows the guard's `raise`.
 
 ### Limitations introduced
 
@@ -181,6 +202,10 @@ fixtures report the same diagnostics on both.
   `try` / `except*` is not translated, so D24 never sees returns
   in its `try` body, even when the function falls through (pinned
   inline with a compilable specimen, Python 3.11+).
+- `guard_escapes_function_boundary`: nested function bodies are not
+  checked by D11 or D24 (pre-existing), a `nonlocal` rebind from a
+  nested function is not followed, and a decorator that swallows a
+  guard's `raise` is not seen.
 - `comparison_assumed_bool`: a producer call used as an `==` /
   `!=` operand is assumed to yield a bool; an `__eq__` that returns
   its argument hands the None back and D11 is silent.
@@ -237,7 +262,7 @@ v1.1.0, as a deliberate hash change with its own CHANGELOG entry.
 
 ### Tests
 
-Test count: 732 (v1.0.0) -> 751 (v1.0.1). Net delta: +19.
+Test count: 732 (v1.0.0) -> 752 (v1.0.1). Net delta: +20.
 
 - `tests/test_checks.py`: +11 (raise-terminal pass, raise-branch
   guard, no double report with R3 (run with the source tree so R3
@@ -245,7 +270,7 @@ Test count: 732 (v1.0.0) -> 751 (v1.0.1). Net delta: +19.
   generator and procedure contract, procedure advisory, audit F-01
   via module API, audit F-01 via CLI, fixture compile gate, inline
   specimen compile gate).
-- `tests/test_documented_limits.py`: +8 (one per new documented
+- `tests/test_documented_limits.py`: +9 (one per new documented
   limit fixture, plus the inline `except*` pin).
 - `tests/test_action.py`: two tests rewritten in place, no count
   change.

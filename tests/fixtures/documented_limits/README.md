@@ -104,6 +104,11 @@ drift, a v0.6.1-style corrective is required.
   result. An `__eq__` that returns its argument hands the None back and
   D11 is silent. README registers this under "Comparisons are assumed
   to be bool."
+- **`guard_escapes_function_boundary.py`.** (v1.0.1) Nested function
+  bodies are not checked by D11 or D24, a `nonlocal` rebind from a
+  nested function is not followed, and a decorator that swallows the
+  guard's `raise` is not seen. README registers this under "Checks
+  stop at function boundaries."
 
 ## How to retire a fixture
 
