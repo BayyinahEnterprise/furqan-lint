@@ -11,6 +11,8 @@ Each function below can return None from a function declaring
 * ``swallowed``: a decorator whose ``__exit__`` returns True swallows
   the guard's ``raise``, so the guard does not end the path. This is
   the decorator form of the ``with contextlib.suppress`` limit.
+* ``computed_locals``: ``locals`` reached through ``getattr`` with a
+  built string is not recognised as dynamic scope access.
 
 Pinned so that crossing function boundaries is a deliberate, recorded
 change.
@@ -18,6 +20,7 @@ change.
 
 from __future__ import annotations
 
+import builtins
 import contextlib
 from typing import Optional
 
@@ -58,3 +61,14 @@ def swallowed(uid: int) -> str:
     if name is None:
         raise KeyError(uid)
     return name
+
+
+def computed_locals(uid: int) -> str:
+    # Dynamic scope reached through a computed name: guard narrowing is
+    # disabled only for direct references to ``locals`` / ``vars`` /
+    # ``eval`` / ``exec`` / frame attributes, not for ``getattr`` with
+    # a built string.
+    name = find_name(uid)
+    if name is not None:
+        print(name)
+    return getattr(builtins, "loc" + "als")()["name"]  # type: ignore[no-any-return]

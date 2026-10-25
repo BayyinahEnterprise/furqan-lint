@@ -774,8 +774,10 @@ than silent.
 - **Checks stop at function boundaries.** The body of a nested
   function is not checked by D11 or D24 (only top-level functions and
   class methods are), a `nonlocal` rebind made by a nested function is
-  not followed, and a decorator that swallows the guard's `raise`
-  (the decorator form of `with contextlib.suppress`) is not seen.
+  not followed, a decorator that swallows the guard's `raise` (the
+  decorator form of `with contextlib.suppress`) is not seen, and
+  `locals` reached through a computed name (`getattr(builtins,
+  "loc" + "als")`) is not recognised as dynamic scope access.
   Each can return None from a `-> str` function silently. Pinned as
   `tests/fixtures/documented_limits/guard_escapes_function_boundary.py`.
 - **Comparisons are assumed to be bool.** A producer call used as an
@@ -788,7 +790,9 @@ than silent.
   limit above: a `raise` swallowed by `with contextlib.suppress(...)`
   and `sys.exit()` on a local that merely shares the name `sys` (or
   `os`) are counted as ending the path, so D24 stays silent on
-  functions that can fall through. Pinned as
+  functions that can fall through. The same recognition decides
+  whether a D11 None-guard ends its branch, so D11 is silent on that
+  shape too. Pinned as
   `tests/fixtures/documented_limits/terminal_recognition_false_negatives.py`.
 - **Raise shapes D24 still misreads.** `for ... else: raise`, a
   `while True:` loop whose exits are `return` and `raise`, and
