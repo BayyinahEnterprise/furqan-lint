@@ -220,3 +220,17 @@ def test_go_methods_are_not_mistaken_for_top_level_functions(tmp_path: Path) -> 
     names = {e["name"]: e["kind"] for e in extract_public_surface_go(src)}
     assert "Do" not in names
     assert names["S.Do"] == "function"
+
+
+@needs_go
+def test_go_manifest_init_reports_unparseable_source(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """v1.0.2: the Go builder raises instead of returning None; the CLI
+    still exits 1 with a message, not a traceback."""
+    from furqan_lint.gate11.cli import cmd_manifest_init
+
+    src = tmp_path / "broken.go"
+    src.write_text("package broken\n\nfunc (\n")
+    assert cmd_manifest_init([str(src)]) == 1
+    assert "Go parse error" in capsys.readouterr().err
