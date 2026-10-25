@@ -141,25 +141,23 @@ class Verifier:
         language = manifest.module_identity.get("language")
         # Phase G11.0.2 (v0.11.3) F22 corrective: align this
         # dispatch whitelist with Manifest.from_dict's whitelist.
-        # Pre-v0.11.3 the schema accepted ('python', 'rust') but
-        # the verifier dispatch site rejected anything other than
-        # 'python', so a rust manifest reaching this step raised
-        # CASM-V-001 -- the dispatch surface contradicted the
-        # documented schema surface. The gate11-rust-smoke-test
-        # CI job had been red since v0.11.0 (PR #20) for this
-        # reason. v0.11.3 closes the gap by accepting rust here
-        # too. Future Go (Phase G11.2) and ONNX (Phase G11.3)
-        # additions will extend this whitelist when their
-        # verifiers ship; until then, manifests with those
-        # languages still fail-closed at this step with a clear
-        # CASM-V-001 error rather than silently passing into a
-        # missing verifier.
-        if language not in ("python", "rust", "go"):
+        # The whitelist has been extended at each successive
+        # gate11 substrate phase: rust at v0.11.3 (G11.0.2 F22
+        # corrective); go at v0.12.0 (G11.2 al-Mursalat T01
+        # generalization); onnx at v0.13.0 (G11.3 an-Naziat T02
+        # closing the canonical mushaf chain). Post-an-Naziat
+        # the dispatch surface is closed-form: no further Phase
+        # G11.x language extensions are anticipated; Phase G11.4
+        # Tasdiq al-Bayan operates against this surface as a
+        # drift-detection invariant rather than adding entries.
+        if language not in ("python", "rust", "go", "onnx"):
             raise CasmVerificationError(
                 "CASM-V-001",
-                f"v1.0 supports language in (python, rust, go); "
-                f"got {language!r}. ONNX support ships in Phase "
-                f"G11.3.",
+                f"v1.0 supports language in "
+                f"(python, rust, go, onnx); got {language!r}. "
+                f"No further Phase G11.x dispatch entries are "
+                f"anticipated post-an-Naziat (Phase G11.4 "
+                f"operates as a drift-detection invariant).",
             )
 
     # Step 4
@@ -586,13 +584,17 @@ def verify(manifest: Any, args: Any) -> VerificationResult:
     """
     # Lazy import to avoid module-level circular import:
     # python_verification / rust_verification / go_verification
-    # import Verifier from this module; we import their
-    # _verify_* handlers here at call time. al-Mursalat
-    # (v0.12.0) extends the function-local dispatch with a
-    # third lazy-import line for Go per F-RM-2 v1.4 absorption
-    # (function-local design preserved; not lifted to module
-    # level).
+    # / onnx_verification import Verifier from this module; we
+    # import their _verify_* handlers here at call time.
+    # an-Naziat (v0.13.0) extends the function-local dispatch
+    # with a fourth lazy-import line for ONNX per F-RM-2 v1.4
+    # absorption (function-local design preserved; not lifted
+    # to module level). The four-entry dispatch closes the
+    # canonical mushaf chain; Phase G11.4 Tasdiq al-Bayan
+    # operates against this exact dispatch surface as a
+    # drift-detection invariant rather than adding entries.
     from furqan_lint.gate11.go_verification import _verify_go
+    from furqan_lint.gate11.onnx_verification import _verify_onnx
     from furqan_lint.gate11.python_verification import _verify_python
     from furqan_lint.gate11.rust_verification import _verify_rust
 
@@ -600,6 +602,7 @@ def verify(manifest: Any, args: Any) -> VerificationResult:
         "python": _verify_python,
         "rust": _verify_rust,
         "go": _verify_go,
+        "onnx": _verify_onnx,
     }
 
     language = manifest.module_identity.get("language")
@@ -607,9 +610,11 @@ def verify(manifest: Any, args: Any) -> VerificationResult:
     if handler is None:
         raise CasmVerificationError(
             "CASM-V-001",
-            f"v1.0 supports language in (python, rust, go); "
-            f"got {language!r}. ONNX support ships in Phase "
-            f"G11.3.",
+            f"v1.0 supports language in "
+            f"(python, rust, go, onnx); got {language!r}. "
+            f"No further Phase G11.x dispatch entries are "
+            f"anticipated post-an-Naziat (Phase G11.4 "
+            f"operates as a drift-detection invariant).",
         )
     return handler(manifest, args)
 

@@ -19,6 +19,873 @@ introduced this convention.
 
 ---
 
+## [1.0.1] - 2026-10-25
+
+### Honesty corrective: false positives on furqan-lint's own source
+
+Run on its own `src/` at v1.0.0, furqan-lint reported 12
+diagnostics across 9 files (8 D24, 3 D11, 1 R3). 11 came from three
+shapes in the Python adapter: a `raise` read as a fall-through,
+generators and `-> None` procedures held to a value-return
+contract, and a None-guard at the call site read as a status
+collapse. The twelfth is a fourth shape, an Optional stored in a
+container. A linter whose job is to catch code that misreports
+itself cannot ship reports that misreport the code. v1.0.1 fixes
+the three shapes, adds a true-positive guard fixture beside each
+fix to catch a fix that widens into a false negative, and pins the
+fourth shape and the edges of each fix as documented limits. An
+independent review of the first cut found five such widenings in
+the D11 narrowing, the external v1.0.1 audit found a sixth (F-01)
+plus an invalid test specimen (F-02), and three fresh-context
+verification rounds of the audit fixes found eleven more. All are closed
+below and each has a guard case.
+Self-check on `src/`: 12 diagnostics to 1 error plus 1
+informational S2 note. The error is the documented
+`optional_stored_in_container` limit; the note is a generator whose
+guard sits inside a `try` (see the verification round below).
+
+Every fix was checked fail-before / pass-after: the clean fixtures
+below fail on v1.0.0 and pass on v1.0.1; the failing guard
+fixtures report the same diagnostics on both.
+
+### Fixed
+
+- **D24 raise-terminal false positive.** The adapter skipped
+  `raise` statements, so a function ending in `raise` (or in an
+  `if` / `else` whose last branch raises, or an `except` that
+  re-raises) looked like it fell through and D24 reported a
+  missing return on code that cannot fall through. `raise`,
+  `sys.exit(...)`, `os._exit(...)` and `os.abort()` now end a path.
+  This applies only in functions with at least one explicit
+  `return`; a function with none stays with R3 (zero-return), so
+  nothing is reported twice. Clean fixture:
+  `raise_terminal_paths`. Guard fixture:
+  `raise_branch_with_fall_through` (a raising branch beside a
+  branch that falls through still fires D24).
+- **No value-return contract for generators and `-> None`
+  procedures.** A function whose own body contains `yield` or
+  `yield from`, and a function annotated `-> None`, is now
+  translated with no return type. D24 and D11 no longer hold them
+  to a value-return contract, and R3 exempts generators. A `-> None`
+  procedure that calls an Optional producer now gets D11's
+  informational S2 advisory (exit 0) instead of an S1 error, the
+  shape upstream D11 already uses for functions with no declared
+  return. Generators that call an Optional producer get the same S2
+  advisory, for the same reason. Clean fixture: `generator_and_procedure_shapes`.
+- **D11 call-site narrowing.** D11 reported every call to an
+  Optional producer from a caller declaring a bare return type,
+  even when the caller handled None. A call is now withheld from
+  D11 when None is handled at the call site or on the next
+  statement: the left operand of an `or` whose last operand is a
+  literal that cannot be None; an operand of `==`, `!=`, `is` or
+  `is not`; a walrus guard (`if (x := f()) is None: raise ...`); or a
+  binding followed on the next statement by a None-guard that
+  raises, exits, returns without reading the name, rebinds the name
+  to a non-None literal, or encloses every later read of the name
+  (reads inside closures included). The None branch must be
+  straight-line (plain expressions and assignments that do not touch
+  the name) up to its exit or rebind, so the exit or rebind is
+  reached on every path. Guards inside a `try` with handlers or a
+  `finally`, or inside a `with` block, are not trusted, and only a
+  plain `x = <non-None literal>` counts as a rebind. Names read by a
+  nested closure, generator expression or `type` alias, `global` /
+  `nonlocal` names, and every name in a function that references
+  `locals` / `vars` / `eval` / `exec` or a frame are never narrowed
+  by a guard. `continue` /
+  `break` count only when every read stays in the rest of the same
+  loop body.
+  Membership (`in`, `not in`) and ordering comparisons stay visible
+  because they can raise on None (`None in "abc"` raises
+  `TypeError`). Clean fixture: `optional_narrowed_at_call_site`.
+  Guard fixture: `optional_collapse_still_reported`, thirty
+  functions that still fire: `leaky`, `late_guard`, `ordered`,
+  `guard_without_exit`, `has_letter_a`, `in_alphabet`; the
+  review-round shapes `break_leaks`, `walrus_continue_leaks`,
+  `returns_the_none`, `or_none_default`, `rebinds_to_none`,
+  `closure_reads_after_guard`; and the audit F-01 shapes
+  `nested_return_before_rebind`, `nested_return_before_raise`,
+  `walrus_nested_return_before_raise`; and the verification-round
+  shapes `caught_raise_leaks`, `caught_walrus_raise_leaks`,
+  `caught_exit_leaks`, `finally_overrides_fallback`,
+  `tuple_rebind_to_none`, `match_capture_rebind`; and the round-two
+  shapes `late_closure_continue`, `late_closure_positive`,
+  `closure_return_fallback`, `global_rebound_after_guard`,
+  `locals_after_guard`; and the round-three shapes
+  `late_genexp_continue`, `late_genexp_positive`,
+  `frame_locals_after_guard`, `uncalled_locals_alias`.
+
+### Audit corrections (external v1.0.1 audit, 2026-10-25)
+
+- **F-01 (HIGH), D11 false negative.** In the None branch of a
+  guard, `_rebinds` accepted any top-level non-None rebind and
+  `_ends_path` looked only at the branch's last statement. A nested
+  `if early: return name` placed before `name = "fallback"` (or
+  before a `raise`, or inside a walrus guard) returned the None
+  while D11 stayed silent. Both checks now require a straight-line
+  prefix: every statement before the exit or rebind is a plain
+  expression or assignment that does not touch the name, so the
+  exit or rebind is reached on every non-raising path. This is the
+  conservative correction the audit recommended; full
+  path-sensitive dominance analysis is not attempted. The audit's
+  reproduction is pinned verbatim through the module API with the
+  source tree, and the guard fixture is pinned through the CLI.
+  Clean siblings `label_after_log` and `shout_after_log` (a
+  straight-line log line, then the fallback or the raise) stay
+  silent. Cost: a None branch with a nested `if` before its exit is
+  now reported even when safe; pinned as `branch_before_exit` in
+  `optional_guard_not_adjacent`.
+- **F-02 (MEDIUM), invalid `except*` specimen.** The inline pin for
+  the `except*` blind spot put `return` inside an `except*` handler,
+  which `ast.parse` accepts but `compile` rejects. The specimen now
+  returns from the `try` body, passes in the handler, is compiled
+  and executed before translation (`f(0)` returns None, `f(1)`
+  returns 1), and pins that neither D24 nor R3 reports it. New gate
+  `test_every_python_fixture_compiles` compiles every Python file
+  under `tests/fixtures/` (65 at this release), and
+  `tests/conftest.py` now compiles every inline source string a test
+  hands to `translate_source`, so an invalid inline specimen fails
+  loudly (pinned by `test_inline_specimens_are_compiled_before_translation`).
+- **Verification round (six further D11 false negatives).** A
+  fresh-context check of the F-01 fix confirmed it and found six
+  older leaks, present since the first v1.0.1 cut, each executed to
+  prove the None reaches the caller: a guard's `raise` caught by an
+  enclosing `except` (plain and walrus forms), a guard's `sys.exit`
+  caught as `SystemExit`, a `finally: return name` overriding the
+  guard's fallback return, and a fallback replaced by tuple
+  unpacking (`name, _ = None, 0`) or a `match` capture. Guards inside
+  a `try` with handlers or `finally`, or inside a `with` block, are
+  no longer trusted, and every binding form except a plain
+  `name = <non-None literal>` counts as possibly None. A seventh
+  shape, an `__eq__` that returns its argument, is pinned as the
+  documented limit `comparison_assumed_bool`. Cost: a guard inside
+  such a `try` is now reported even when its exception escapes,
+  pinned as `guard_inside_try`; and the self-check gains one
+  informational S2 note (`check_shape_coverage`, a generator whose
+  guard sits inside a `try`), exit status unchanged.
+- **Verification round two (two further D11 false negatives).** A
+  second fresh-context check confirmed every earlier fix and found a
+  late-binding closure leak: a guard in a loop (`continue` on None,
+  or `if x is not None: getter = lambda: x`) passed the "reads stay
+  in the block" test syntactically, but the closure runs after the
+  loop and reads the last binding, which may be None. Names read by
+  any nested `lambda` / `def` / `class` are now never narrowed by a
+  guard. The same round showed a `global` rebound by a call after
+  the guard, and a None branch returning through `locals()`; `global`
+  / `nonlocal` names and functions using `locals` / `vars` / `eval`
+  / `exec` are now never narrowed either. Three further shapes are
+  pinned as the documented limit `guard_escapes_function_boundary`:
+  nested function bodies are not checked at all (pre-existing, newly
+  documented), a `nonlocal` rebind from a nested function, and a
+  decorator that swallows the guard's `raise`.
+- **Verification round three (three further D11 false negatives).**
+  A generator expression reads its element expression only when it
+  is iterated, so it is a late-binding scope like a lambda; on
+  Python 3.12+ a `type` alias value is lazy in the same way. Both are
+  now treated as closures. Reading locals through a frame
+  (`sys._getframe().f_locals`) or through an uncalled alias
+  (`peek = locals`) escaped the call-name check; any reference to
+  `locals` / `vars` / `eval` / `exec` or to a frame attribute now
+  disables guard narrowing for the whole function. Frames reached by
+  other routes (a traceback, a helper module) are documented in the
+  README, not detected.
+- **README states what a PASS means.** The `Remaining limitations`
+  section now opens by saying the checks are syntactic heuristics,
+  not a semantic proof, that D11 narrowing fails closed, and that the
+  limits list is the known boundary rather than a guarantee
+  (corrective re-audit, mandatory gate 4).
+- **Verification round four: no HIGH or MEDIUM finding.** A fourth
+  fresh-context round read every narrowing rule end to end and found
+  two LOW, contrived gaps, both pinned as documented limits: a guard
+  ending in `sys.exit` on a parameter named `sys` (D11 now named
+  alongside D24 in `terminal_recognition_false_negatives`), and
+  `locals` reached through `getattr` with a built string (added to
+  `guard_escapes_function_boundary`).
+
+### Limitations introduced
+
+- `optional_stored_in_container`: an Optional placed straight into
+  a container (`return {"name": find_name(uid)}`) keeps its None
+  arm, yet D11 still reports it. D11 does not follow values through
+  containers.
+- `exit_alias_not_terminal`: `from sys import exit`, bare `exit()`
+  / `quit()`, calls to user functions annotated `NoReturn`, and
+  `assert False` are not recognised as ending a path; D24 still
+  reports them.
+- `optional_guard_not_adjacent`: a None-guard that is not the
+  statement right after the binding, a None branch with a nested
+  `if` or loop before its exit (audit F-01 correction), a guard
+  inside a `try` with handlers or `finally` (verification round),
+  and
+  `assert x is not None` (stripped by `python -O`), are not seen;
+  D11 still reports them.
+- `terminal_recognition_false_negatives`: recognition is
+  syntactic, so a `raise` inside `with contextlib.suppress(...)` and
+  `sys.exit()` on a local named `sys` count as ending the path; D24
+  is silent although the function can fall through; D11 trusts the
+  same recognition for a None-guard's exit.
+- `raise_terminal_remaining_false_positives`: `for ... else: raise`,
+  `while True:` ending in `raise`, and `try` / `finally` with no
+  `except` still draw D24. Pre-existing and newly documented:
+  `try` / `except*` is not translated, so D24 never sees returns
+  in its `try` body, even when the function falls through (pinned
+  inline with a compilable specimen, Python 3.11+).
+- `guard_escapes_function_boundary`: nested function bodies are not
+  checked by D11 or D24 (pre-existing), a `nonlocal` rebind from a
+  nested function is not followed, a decorator that swallows a
+  guard's `raise` is not seen, and `locals` reached through a
+  computed name is not recognised.
+- `comparison_assumed_bool`: a producer call used as an `==` /
+  `!=` operand is assumed to yield a bool; an `__eq__` that returns
+  its argument hands the None back and D11 is silent.
+- `none_procedure_returning_value`: a `-> None` function that
+  returns a value is not reported. v1.0.0 sometimes reported it, but
+  only by accident, through D24's fall-through rule.
+
+Each is registered in the README `Remaining limitations` section,
+in `tests/fixtures/documented_limits/README.md`, and pinned in
+`tests/test_documented_limits.py`.
+
+### Release line reunited
+
+v0.13.0, v0.14.0 and v1.0.0 were tagged on branches that were
+never merged into `main`, and none of them reached PyPI, where the
+latest release was v0.12.0 (the version at the tip of `main`).
+v1.0.1 merges `main` into the v1.0.0 line, so the next published
+release carries everything since v0.12.0. The one conflict,
+`docs/g11.3-preflight.md`, was resolved by keeping both records:
+the v1.0.0 preflight stays at that path and `main`'s 2026-05-09
+halt record is preserved as
+`docs/g11.3-preflight-2026-05-09-halt-record.md`. Nothing was
+dropped.
+
+### Dependency source
+
+The GitHub Action (`action.yml`), the pre-commit hook
+(`.pre-commit-hooks.yaml`), the repository's own
+`.pre-commit-config.yaml`, and every CI job installed `furqan` from
+a git URL to `BayyinahEnterprise/furqan-programming-language`.
+That URL no longer answers an anonymous clone (git asks for
+credentials), so the Action and the hook could not install for
+anyone outside the organisation. furqan
+0.11.1 is on PyPI; all four now install `furqan>=0.11.1` from
+PyPI (nine CI install steps in all), and the README dependency
+section says so.
+`test_pre_commit_hook_installs_in_clean_venv` now installs exactly
+what `.pre-commit-hooks.yaml` declares instead of restating its own
+copy of the dependency, so the test and the hook cannot drift
+apart again.
+
+### Attestation note
+
+The Form A `checker_set_hash` carried by gate11 bundles is
+unchanged: no file edited here is in `_CHECKER_SOURCE_FILES`. The
+self-manifest hash over `PINNED_CHECKER_SOURCES_SELF` changes,
+because `zero_return.py` is in that list; it is computed at release
+time, so no literal needed updating. Neither list contains
+`adapter.py` or `runner.py`, which decide what every Python checker
+sees and where most of this release's behaviour change lives. Two
+installations that disagree on these fixes therefore produce the
+same hash. Adding both files to both lists is registered for
+v1.1.0, as a deliberate hash change with its own CHANGELOG entry.
+
+### Tests
+
+Test count: 732 (v1.0.0) -> 753 (v1.0.1). Net delta: +21.
+
+- `tests/test_checks.py`: +12 (raise-terminal pass, raise-branch
+  guard, no double report with R3 (run with the source tree so R3
+  actually executes), call-site narrowing pass, collapse guard,
+  generator and procedure contract, procedure advisory, audit F-01
+  via module API, audit F-01 via CLI, fixture compile gate, inline
+  specimen compile gate, `type` alias late scope on 3.12+).
+- `tests/test_documented_limits.py`: +9 (one per new documented
+  limit fixture, plus the inline `except*` pin).
+- `tests/test_action.py`: two tests rewritten in place, no count
+  change.
+
+---
+
+## [1.0.0] - 2026-05-11
+
+### Self-attestation (al-Basirah / G12.0; canonical mushaf chain closing)
+
+Phase G12.0 al-Basirah ships v1.0 self-attestation: furqan-lint
+signs its own releases with gate11, publishes the signed
+self-manifest as a GitHub Release asset, and exposes verification
+through the new `furqan-lint manifest verify-self` subcommand.
+The structural-honesty thesis closes on itself: the tool that
+catches drift in others' code attests its own.
+
+This release closes the canonical mushaf chain that began at
+G10.5 al-Mubin (v0.11.1) and proceeded through at-Tawbah
+(v0.11.2), al-Hujurat (v0.11.3), as-Saff (v0.11.8), al-Mursalat
+(v0.12.0), an-Naziat (v0.13.0), and Tasdiq al-Bayan (v0.14.0).
+After v1.0, the project enters operational steady-state: v1.x
+patches as needed for correctives, but no further canonical
+substrate-chain phases.
+
+#### Closures
+
+- T01 (`SAFETY_INVARIANTS.md` Section 8 extension): CASM-V-072
+  (self-attestation-failure) allocated with three named
+  sub-conditions (manifest-not-found; checker-set-hash-drift;
+  signature-verification-unexpected). Per F-BA-substrate-
+  conflict-1 v1.0.0 closure: substrate-actual is CASM-V-072
+  (NOT prompt-cited 040 which is in-use at v0.10.0+ baseline
+  for module_root_hash mismatch per Invariant 6 step 7).
+  Document stamp bump to v1.0_second_revision_amended_4.
+- T02 (`gate11/self_manifest.py` + `gate11/_pinned_checker_sources_self.py`
+  NEW): self-manifest generation for furqan-lint Python wheel;
+  Form A checker_set_hash over PINNED_CHECKER_SOURCES_SELF
+  tuple (24 entries: 4 top-level checker substrate + 20
+  gate11/ substrate including two new self-attestation modules
+  per §5.1 step 4 failure mode #3 mechanical-enforcement
+  closure). CLI entry point `python -m
+  furqan_lint.gate11.self_manifest --version V --output PATH`
+  invoked from release.yml T06.
+- T03 (`.github/workflows/release.yml` T06 step NEW): Sigstore
+  signing of self-manifest via ambient OIDC; uploads
+  self_manifest.json + self_manifest.bundle as GitHub Release
+  assets attached to v${VERSION}. Per §5.1 step 4 failure
+  mode #1: if OIDC token expires between PyPI publish + signing
+  step, workflow exits non-zero with re-run idempotency.
+- T04 (`docs/release-checklist.md` Self-attestation discovery
+  section): convention-based URL discipline documented; operator
+  runbook for post-tag verification + CASM-V-072 sub-condition
+  remediation; PyPI metadata fallback deferred to v1.1+.
+- T05 (`gate11/cli.py` `cmd_manifest_verify_self` NEW): Relying-
+  Party verification subcommand. Default uses
+  importlib.metadata.version('furqan-lint') for installed
+  version; --version override supported. Derives URL from
+  convention; downloads manifest + bundle; verifies
+  checker_set_hash matches installed pinned source list;
+  routes through `verification.verify` (function-local
+  `_LANGUAGE_DISPATCH` per al-Mursalat T04 + an-Naziat F-NA-3)
+  to `_verify_python`. Surfaces CASM-V-072 with named
+  sub-condition on failure paths.
+- T06 (README + SECURITY.md + new docs/gate11-self-attestation.md
+  + docs/gate11-symmetry.md row): documentation parity. New
+  docs/gate11-self-attestation.md (145 lines) with Relying-
+  Party verification + what-is-attested + what-is-NOT-attested
+  + CASM-V-072 sub-conditions + trust-model sections. Symmetry
+  table extended with self-attestation row (Python v1.0+;
+  Rust N/A; Go DEFERRED per §5.1 step 4 failure mode #4 of
+  al-Basirah dispatch prompt; ONNX N/A).
+- T07 (`.github/workflows/ci.yml` gate11-self-smoke-test job +
+  fixtures): fifth gate11 smoke-test CI job parallel to four
+  prior gate11 smoke tests. Exercises self_manifest generation
+  + Sigstore signing + Manifest schema validation. Fixture
+  identity differs from production release identity per §5.1
+  step 4 failure mode #5; closure of #5 requires post-ship
+  external-party verification.
+
+#### Honest asymmetries (per docs/gate11-symmetry.md self-attestation row)
+
+The self-attestation row marks three N/A-or-deferred cells:
+- **Python**: v1.0+ substrate-actual self-attestation surface.
+- **Rust**: N/A (furqan-lint does not ship Rust source as a
+  separate crate; the Rust verifier substrate at
+  gate11/rust_verification.py IS in the pinned source list).
+- **Go**: DEFERRED (goast Go binary reproducible-build
+  attestation pending; v1.x candidate per §5.1 step 4 failure
+  mode #4 closure if Go ecosystem reproducible-build tooling
+  matures).
+- **ONNX**: N/A (furqan-lint does not ship ONNX models).
+
+#### Findings absorbed pre-dispatch + Co-work-surfaced
+
+Pre-dispatch (Perplexity Mode A LIGHT-tier rotation audit):
+- F-BA-1/2/3/4 absorbed in single patch per the dispatch
+  prompt's audit ledger (carried forward from prompt body;
+  details in dispatch prompt §0.5).
+
+Co-work-surfaced during T01-T08 implementation:
+- F-BA-substrate-conflict-1 LOW (T01 substrate-vs-prompt
+  CASM-V code divergence): dispatch prompt T01 cited
+  CASM-V-040 for self-attestation-failure. Substrate-actual
+  CASM-V-040 is already allocated for module_root_hash
+  mismatch (step 7 of 9-step verification flow per Invariant
+  6 line 309; in-use since v0.10.0 baseline). Disposition:
+  SUBSTRATE-ACTUAL-OVERRIDES-PROMPT (mirror of F-TAB-2
+  v0.14.0 pattern); v1.0.0 allocates CASM-V-072 instead
+  (next-available code at v0.14.0 substrate). Patch #1 usage
+  of LIGHT-tier 2-patch cap; remaining capacity for one more
+  substrate-truth surfacing before escalation-to-STANDARD.
+
+#### Test count delta (per al-Hujurat T05 CHANGELOG-math gate)
+
+Per-task delta-against-substrate (per F-NA-4 v1.4 absorption):
+- T01 docs-only: +0
+- T02 (`tests/test_gate11_self_manifest.py` NEW): +5
+- T03 (`tests/test_release_yml_t06_self_manifest.py` NEW): +3
+- T04 docs-only: +0
+- T05 (`tests/test_gate11_verify_self_subcommand.py` NEW): +5
+- T06 docs-only: +0
+- T07 (`tests/test_gate11_self_smoke_test_fixture_inventory.py`
+  NEW): +3
+- T08 docs-only: +0
+
+Sum: 0 + 5 + 3 + 0 + 5 + 0 + 3 + 0 = +16. Working hypothesis was
++17 per dispatch prompt §0.5 framing; empirical -1 drift
+within al-Hujurat T05 CHANGELOG-math gate assertion (c)
++/- 4 projection-drift tolerance (absorbed without halt).
+
+Baseline + delta:
+- v0.14.0 baseline: 716 (per CHANGELOG v0.14.0 entry; ship
+  record §9; canonical full-extras profile)
+- v1.0.0 ship: 732 (empirical pytest --collect-only -q;
+  -1 drift from +17 working hypothesis)
+- Projection drift: -1 (within +/- 4 tolerance; assertion
+  (c) PASS)
+
+#### Round 42+ audit notes
+
+The pre-registered ranked list of next-most-likely failure
+modes at substrate layer L (release.yml + gate11/ + cli.py)
+is in the al-Basirah dispatch prompt's §5.1 step 4 section
+(durable in Git from this commit). Round 42+ audits evaluate
+observed subsequent failure modes against the ranked list per
+the §2.4 falsification block of the Predictive Modeling
+Discipline v1.1.
+
+Under LIGHT-tier calibration, Round 42 is NOT pre-committed;
+project lead decides post-v1.0.0 ship whether to schedule
+Round 42 Mode A based on actual ship signal.
+
+#### What v1.0 does NOT do
+
+See al-Basirah dispatch prompt's "What this phase does NOT
+do" section for the full list. Notable scope exclusions:
+no new substrate languages; no expansion of attestation to
+non-source artifacts; no v2.0 horizon work; Go-binary
+reproducible-build attestation deferred to v1.x candidate;
+no modification of the four prior verifier substrates
+(Acceptance §16 binding gate: `git diff v0.14.0..v1.0.0 --
+src/furqan_lint/gate11/{verification,rust_verification,
+go_verification,onnx_verification}.py` returns empty).
+
+#### Mushaf chain closing
+
+After v1.0, the canonical mushaf chain is closed. The chain:
+G10.5 al-Mubin -> at-Tawbah -> al-Hujurat -> as-Saff ->
+al-Mursalat -> an-Naziat -> Tasdiq al-Bayan -> al-Basirah.
+Subsequent work modes: v1.x patches (existing release-tooling
+pipeline; no new mushaf-chain phases); v1.x candidate closures
+from this phase's deferrals (Go-binary reproducible-build);
+v2.0+ horizon work (out of canonical chain; separate chartered
+scope). The chain closes when its self-witnessing capability
+is operational.
+
+---
+
+## [0.14.0] - 2026-05-11
+
+### Verification corpus (Tasdiq al-Bayan / G11.4)
+
+Phase G11.4 ships the cross-substrate verification corpus that
+exercises the four-substrate gate11 parity claim from
+`docs/gate11-symmetry.md`. The corpus is mechanical-not-
+aspirational: every parity claim is exercised by a
+parameterized test; every honest asymmetry is pinned as a
+positive verification of the documented difference.
+
+This release ships **no new substrate behavior**; all four
+verifiers (Python, Rust, Go, ONNX) are byte-stable from
+v0.13.0 (Acceptance §15 binding). The corpus is verification
+infrastructure that exercises the existing substrates.
+
+After v0.14.0, the four-substrate gate11 parity is no longer
+just documented; it is **mechanically enforced**. Any future
+change that breaks parity in one substrate but not others
+fails the corpus. Any future addition of a gate11 concern that
+should apply across substrates fails the drift-detection
+meta-test until added to both the symmetry table and the
+corpus parameterization.
+
+This is the verification surface v1.0 self-attestation will
+rely on. v1.0 is the successor phase
+(`docs/gate11-v1-self-attestation.md` documents the scope
+boundary).
+
+#### Closures
+
+- T01 (`SAFETY_INVARIANTS.md` verification): no-edit
+  verification commit confirming Section 8 completeness across
+  the four substrates (universal codes 001/007/032/035/036
+  reachable from all four; ONNX-specific 070/071 reachable
+  from ONNX substrate per Invariant 6 step 8 extension); each
+  CASM-V code reachable from at least one substrate, no
+  orphaned codes.
+- T02 (`tests/test_gate11_cross_substrate_corpus.py` NEW): 38
+  parameterized tests covering universal concerns (8 x 4
+  substrates), source-code concerns (1 x 3 source-code
+  substrates), and ONNX-specific concerns (3 x 1).
+  Structural-parity discipline: tests exercise substrate-
+  convention parity via source-inspection + structural pattern
+  presence (e.g., `getattr(args, "trust_config", None) or
+  TrustConfig()` pattern across all four `_verify_*`).
+  Behavioral verification of full sign+verify flows lives in
+  the per-substrate gate11-*-smoke-test CI jobs (NOT replaced
+  by this corpus).
+- T03 (`tests/fixtures/gate11/cross_substrate/_build.py` + 4
+  helper tests): structurally-parallel fixture sets across the
+  four substrates per concern; helper-built to ensure
+  cross-substrate parity by construction (single
+  `build_cross_substrate_fixtures(concern_name)` helper).
+- T04
+  (`tests/test_gate11_cross_substrate_drift_detection.py`
+  NEW; +2 tests): meta-test asserting corpus parameterization
+  matches the symmetry-table claims; self-test proving the
+  meta-test fires on synthetic-bad input. Drift detection is
+  the mechanical-enforcement layer for the corpus-as-contract
+  framing.
+- T05 (`tests/test_gate11_cross_substrate_onnx_asymmetry.py`
+  NEW; +4 tests): four ONNX honest asymmetries pinned as
+  POSITIVE asymmetry tests (binary substrate; dim_param
+  partial concreteness; intermediates excluded;
+  NeuroGolf sidecar boundary). Mechanical enforcement via
+  schema-shape constraints on `OnnxIdentitySection` plus
+  cross-reference to `docs/onnx-attestation-boundary.md`
+  Class A / B / C boundary decision flowchart.
+- T06 (`docs/gate11-symmetry.md` extended): corpus-as-contract
+  framing; title bump to "mechanically enforced from v0.14.0";
+  new sections for "How to add a new concern" and "How to
+  retire a concern" with explicit 4-5-step procedures
+  including drift-detection verification.
+- T07 (`docs/gate11-v1-self-attestation.md` NEW): v1.0 scope
+  documented as separate successor phase; structural-honesty
+  thesis closing on itself ("the tool that attests other
+  projects' supply-chain integrity attests its own"); four
+  enumerated corpus invariants v1.0 will depend on.
+
+#### Findings absorbed (LIGHT-tier audit + Co-work surfacing)
+
+Pre-dispatch (Perplexity Mode A rotation audit):
+
+- F-TAB-1 MEDIUM (fixture-path divergence): T03 fixture root
+  aligned to `tests/fixtures/gate11/cross_substrate/` per
+  repo convention (`tests/fixtures/gate11/` is the existing
+  gate11 fixture root at v0.13.0). Absorbed in same patch as
+  O-TAB-1 (single LIGHT-tier patch usage).
+- O-TAB-1 LOW (expected-output spec looseness in §0.5.3):
+  tightened to "empty stdout; exit code 0".
+
+Queued to PMD v1.2 backlog (NOT absorbed mid-cycle per LIGHT
+calibration discipline):
+
+- O-TAB-2 LOW: T-task example-test sufficiency threshold
+  heuristic.
+- O-TAB-3 LOW: Asymmetry-pin framing should explicitly
+  contrast against absence-of-equivalent in other substrates.
+
+Co-work-surfaced during T01-T08 implementation:
+
+- F-TAB-2 LOW (T02 CASM-V code substrate-vs-prompt divergence):
+  dispatch-locked v1.1 prompt T02 ONNX_CONCERNS list cited
+  stale `casm_v_033` / `casm_v_034` references. Substrate-
+  actual at v0.13.0 ship is CASM-V-070 (opset-policy-mismatch)
+  and CASM-V-071 (dim-param-violation) per an-Naziat T01
+  allocation. Additionally, CASM-V-033/034 are already in use
+  at v0.10.0+ baseline for signature-verification-failure /
+  signed-payload-tampering -- re-using them for ONNX-specific
+  concerns would conflict. Disposition: SUBSTRATE-ACTUAL-
+  OVERRIDES-PROMPT; corpus uses CASM-V-070/071 throughout.
+  Patch usage: this is patch #1 within the LIGHT-tier 2-patch
+  cap (Co-work-absorbed; remaining capacity for one more
+  substrate-truth surfacing before escalation-to-STANDARD).
+
+#### Test count delta (per al-Hujurat T05 CHANGELOG-math gate
++ F-NA-4 v1.4 absorption: delta-against-substrate per-fixture-file)
+
+Per-task delta-against-substrate:
+
+- T01 (`SAFETY_INVARIANTS.md` verification; docs-only): +0
+- T02 (`tests/test_gate11_cross_substrate_corpus.py` NEW): +38
+- T03 (`tests/test_gate11_cross_substrate_fixture_parity.py`
+  NEW; +4 helper tests): +4
+- T04 (`tests/test_gate11_cross_substrate_drift_detection.py`
+  NEW): +2
+- T05 (`tests/test_gate11_cross_substrate_onnx_asymmetry.py`
+  NEW): +4
+- T06 (`docs/gate11-symmetry.md` extended; docs-only): +0
+- T07 (`docs/gate11-v1-self-attestation.md` NEW; docs-only): +0
+- T08 (CHANGELOG; docs-only): +0
+
+Sum: 0 + 38 + 4 + 2 + 4 + 0 + 0 + 0 = +48 (exact match to
+T08 working hypothesis +48; ZERO drift from projection;
+assertion (c) projection-drift tolerance +/- 4 absorbed without
+incident).
+
+Baseline + delta:
+
+- v0.13.0 baseline: 668 (per `### Tests` block CHANGELOG
+  v0.13.0 entry; v0.13.0 §7-analog Capture 3; canonical
+  full-extras profile)
+- v0.14.0 ship: 716 (empirical pytest --collect-only -q;
+  matches working hypothesis 716 exactly)
+- Projection drift: 0 (perfect projection match per
+  al-Hujurat T05 CHANGELOG-math gate assertion (c) -- well
+  inside +/- 4 tolerance)
+
+#### Substrate byte-stability (Acceptance §15 binding)
+
+Per Acceptance §15: `git diff v0.13.0..v0.14.0 -- src/furqan_lint/gate11/`
+returns empty for verifier files. All four `_verify_*` facades
+plus `verification.py` _LANGUAGE_DISPATCH plus the
+`onnx_signature_canonicalization.py` graph-shape rules plus
+the manifest schema are byte-identical to v0.13.0. The corpus
+exercises the substrates as-is; no substrate modifications
+are part of v0.14.0.
+
+#### Mechanically-enforced four-substrate symmetry
+
+After v0.14.0, the four-substrate gate11 parity is mechanically
+enforced. The contract is the parity table at
+`docs/gate11-symmetry.md`; the mechanical-enforcement layer is
+the cross-substrate corpus
+(`tests/test_gate11_cross_substrate_corpus.py`) +
+drift-detection meta-test
+(`tests/test_gate11_cross_substrate_drift_detection.py`). Any
+future change that breaks parity fails the corpus; any future
+addition that bypasses corpus coverage fails the drift-
+detection meta-test.
+
+This is the verification surface v1.0 self-attestation will
+rely on. v1.0 is the successor phase; furqan-lint will sign
+its own releases with gate11, attesting its own structural
+integrity to its own Relying Parties.
+
+---
+
+## [0.13.0] - 2026-05-11
+
+### Substrate extension (an-Naziat / G11.3)
+
+Phase G11.3 extends gate11 substrate to ONNX, the fourth and
+final substrate in the canonical mushaf chain (Python G11.0
+v0.10.0, Rust G11.1 v0.11.0, Go G11.2 v0.12.0, ONNX G11.3
+v0.13.0). ONNX is structurally different from source-code
+substrates: the substrate is binary protobuf (ModelProto), not
+source code; the public surface is graph inputs/outputs, not
+named function/struct signatures; canonicalization is
+graph-shape rather than type-shape. an-Naziat names these
+asymmetries honestly as four-place documented limits rather
+than forcing a parallel to source-code substrates.
+
+The four-entry function-local ``_LANGUAGE_DISPATCH`` at
+v0.13.0 closes the canonical mushaf chain at the CLI surface;
+no further Phase G11.x dispatch entries are anticipated;
+Phase G11.4 Tasdiq al-Bayan (cross-substrate verification
+corpus) operates against this surface as a drift-detection
+invariant rather than adding entries.
+
+### Closures
+
+- SAFETY_INVARIANTS.md error-code namespace extension (T01):
+  CASM-V-070 (opset-policy-mismatch) and CASM-V-071
+  (dim-param-violation) allocated as universal-namespace
+  Phase-specific extensions. Invariant 6 step 3 updated to
+  reflect substrate-LIVE ONNX language; Invariant 6 step 8
+  extended with ONNX-specific consistency checks; document
+  stamp ``v1.0_second_revision_amended_3``.
+- ONNX manifest schema extension (T02):
+  ``SUPPORTED_LANGUAGES`` module-level constant +``"onnx"``;
+  ``ValueInfoSummary`` + ``OnnxIdentitySection`` dataclasses
+  for ``module_identity.onnx`` nested structure
+  (opset_imports, ir_version, inputs, outputs);
+  ``Verifier.step2_3_check_version_and_language`` whitelist
+  extended; CASM-V-001 error message updated for closed-form
+  dispatch surface.
+- ONNX signature canonicalization (T03):
+  ``gate11/onnx_signature_canonicalization.py`` with rules
+  9-12 continuing the H-4 closure rule numbering across
+  substrates (Python at-Tawbah T03: rules 1-5; Go al-Mursalat
+  T03: rules 6-8; ONNX an-Naziat T03: rules 9-12).
+  Graph-shape canonical bytes via RFC 8785 JCS.
+- ONNX verifier substrate (T04): ``gate11/onnx_verification.py``
+  with private ``_verify_onnx`` handler; six-kwarg
+  verify_bundle pattern mirroring as-Saff (v0.11.8)
+  ``_verify_python`` + al-Mursalat (v0.12.0) ``_verify_go``
+  per F-PB-NZ-2 v1.6 absorption.
+- ONNX pinned checker source list (T05): ``_CHECKER_SOURCE_FILES``
+  19 -> 21 entries (+2; both ``onnx_signature_canonicalization.py``
+  and ``onnx_verification.py`` pinned per F-CW-NZ-2 MEDIUM
+  substrate-convention parity precedent from al-Mursalat T05
+  and Phase G11.1 baseline; prompt v1.6 T05 specified +1 / 20
+  entries inserting only onnx_verification, but substrate-
+  convention precedent over-rode to preserve rust/go parity
+  at the gate11 substrate hash surface). v0.13.0 canonical
+  Form A hash literal pinned in
+  ``tests/test_gate11_checker_set_hash_v0_13_0_pinning.py``.
+- Four ONNX-specific four-place documented limits with
+  mechanical enforcement (T06): binary substrate, dim_param
+  partial concreteness (CASM-V-071 enforcement layer),
+  intermediates excluded from attestation surface, NeuroGolf
+  sidecar boundary (each pinning test exercises both
+  compliant and limit-violating cases per F-AN-6 ranked list
+  failure mode #4 closure).
+- NeuroGolf sidecar attestation-boundary documentation (T07):
+  ``docs/onnx-attestation-boundary.md`` with three boundary
+  classes (Inside attestation, Outside attestation but under
+  integrity, Outside attestation entirely) and decision
+  flowchart for new artifact types.
+- Four-substrate symmetry parity (T08): README + SECURITY.md
+  + ``docs/gate11-symmetry.md`` extended; honest-asymmetry
+  N/A markers for graph-shape vs type-shape canonicalization
+  and ONNX-specific CASM-V-070/071 codes; substrate-of-record
+  table extends to 21 entries.
+- CLI dispatch extended to ONNX (T09): function-local
+  ``_LANGUAGE_DISPATCH`` in ``verification.verify()`` extended
+  with fourth lazy-import + dict entry for ``_verify_onnx``;
+  CASM-V-001 error message updated to remove ``Phase G11.3``
+  next-phase callout (canonical mushaf chain is now closed).
+- gate11-onnx-smoke-test in CI (T10): fourth gate11 smoke
+  job parallel to gate11-smoke-test (G11.0), gate11-rust-
+  smoke-test (G11.1), gate11-go-smoke-test (G11.2 al-Mursalat
+  T08); uses ``make_relu_model`` (substrate-actual builder
+  per T00 step 5; NOT ``make_simple_relu_model`` per v1.6
+  prompt §5.1 reference).
+
+### Findings absorbed
+
+Audit chain v1.0 -> v1.6 (an-Naziat self-review absorption
+preserving F-AN-N v1.1 namespace + Round 39 chain layers):
+
+- F-AN-1 through F-AN-11 (v1.1 self-review): test-count
+  phrasing softened to actual v0.12.0 baseline subject to
+  T00 confirmation; T00 pre-flight verification gate added;
+  T04 sigstore API mirrored from v0.13.0-LIVE evidence;
+  CASM-V-NNN allocation evidence-based; LaTeX em-dash
+  exception added; successor field cross-references full
+  canonical chain.
+- F-PA-NZ-1 through F-PA-NZ-5 (v1.5 absorption): preamble-
+  to-body-site propagation discipline (PMD v1.2 candidate
+  #11); mechanical-verification preamble lock states (PMD
+  v1.2 candidate #12); inventory-table column auditability
+  scaffolding (PMD v1.2 candidate #13); single-vendor
+  rotation partial-violation as methodology data point
+  (PMD v1.2 candidate #14).
+- F-PB-NZ-1 through F-PB-NZ-8 (v1.6 first-patch absorption
+  per Perplexity Round 39.5-post-absorption): T11 CHANGELOG
+  template stale +29 per-task arithmetic corrected;
+  ``_verify_onnx`` six-kwarg signature mirror; §0.5.4 /
+  §0.5.6 verbatim grep output split; T05 inventory table
+  positive verification; T05 fixture #3 hash literal timing
+  note; T01/T02 row +2 deterministic tightening; PMD v1.2
+  candidate count reconciliation; v1.0 -> v1.1 historical
+  preservation cross-reference per §14.5 graceful-
+  degradation pattern.
+- F-PC-NZ-1 (v1.6 third-patch absorption per GPT-5 Session 3):
+  consumer-without-source absorption gap; T00 step 4.1
+  aggregate range tightened to +25 to +31; working hypothesis
+  +27 conservative selection within tightened range. PMD
+  v1.2 candidate #18.
+- F-PD-NZ-1, F-PD-NZ-2 (v1.6 fourth-patch absorption per
+  Gemini Round 39.5-triple-prime): both refuted via PMD #17
+  consumer-evidence rotation discipline; ledger-only
+  documentary. PMD v1.2 candidate #19.
+
+Cross-vendor convergence: four sessions (GPT-5 Session 1
+APPROVE-WITH-MEDIUM-AMENDMENTS; GPT-5 Session 2 HALT with
+F-PB-NZ-7 + 2 hallucinations + 1 misread; GPT-5 Session 3
+HALT with F-PC-NZ-1; Gemini APPROVE-WITH-LOW-AMENDMENTS,
+F-PD-NZ-1/2 refuted) converged on APPROVE-CLEAN-PENDING-
+LOCK-PROTOCOL substrate-truth. The v1.6 fourth-patch
+substrate is the canonical dispatch baseline.
+
+### Findings surfaced during T01-T11 implementation
+
+- F-CW-NZ-1 LOW (T00 dispatch envelope vs workspace artifact
+  set transparency): the locked file
+  ``PHASE_G11_3_AN_NAZIAT_v1_6_dispatch_locked.md`` was not
+  present in the workspace at dispatch time; the dispatch
+  envelope substrate parameters (tag bf02995, test count
+  642, working hypothesis +27, range +25 to +31) were
+  sufficient to execute. Disposition: PROCEED-WITH-DISPATCH-
+  ENVELOPE-PARAMS-INLINE.
+
+- F-CW-NZ-2 MEDIUM (T05 substrate-convention parity): prompt
+  v1.6 T05 specified pinning ONLY
+  ``gate11/onnx_verification.py`` (19 -> 20; +1), but
+  substrate-convention from al-Mursalat T05 + Phase G11.1
+  baseline pinned BOTH ``signature_canonicalization`` +
+  ``verification`` files for each substrate. ONNX parity
+  required pinning BOTH ``onnx_signature_canonicalization.py``
+  and ``onnx_verification.py`` (19 -> 21; +2). Disposition:
+  PROCEED-WITH-21-ENTRIES per substrate-convention precedent;
+  Round 40 post-ship audit can adjudicate prompt-vs-substrate
+  if convention precedent proves insufficient warrant.
+
+### Tests
+
+Test count: 642 (v0.12.0) -> 668 (v0.13.0). Net delta: +26.
+
+Projected delta per v1.6 prompt T00 step 4.1 working
+hypothesis: +27 (within +25 to +31 range per F-PC-NZ-1 v1.6
+third-patch absorption tightening). Empirical delta -1 from
+projection, within al-Hujurat T05 CHANGELOG-math gate
+assertion (c) projection-drift tolerance of +/- 4 tests
+absorbed without halt.
+
+Per-task delta-against-substrate (new fixtures added minus
+fixtures retired; T00 step 4.1 records current count for
+each fixture file before T01 implementation begins per F-NA-4
+v1.4 + F-PB-NZ-1 v1.6 + F-PC-NZ-1 v1.6 absorption methodology):
+
+- T01 (``docs/SAFETY_INVARIANTS.md`` extension; docs-only): +0
+- T02 (``tests/test_gate11_dispatch_f22_corrective.py`` modify;
+  8 -> 10 fixtures): +2 deterministic per F-PB-NZ-6 v1.6
+- T03 (``tests/test_onnx_signature_canonicalization.py`` NEW):
+  +5
+- T04 (``tests/test_gate11_onnx_verification.py`` NEW): +5
+- T05 (``tests/test_gate11_checker_set_hash_v0_13_0_pinning.py``
+  NEW; 4 prescribed + 1 diagnostic for F-CW-NZ-2 substrate-
+  convention parity): +5
+- T06 (``tests/test_gate11_onnx_limits.py`` NEW; conservative
+  selection within +4 to +8 range per F-NA-8 implementer-
+  latitude allowance): +4
+- T07 (``docs/onnx-attestation-boundary.md`` NEW; docs-only):
+  +0
+- T08 (README + SECURITY.md + ``docs/gate11-symmetry.md``;
+  docs-only): +0
+- T09 (``tests/test_gate11_verify_dispatch.py`` modify;
+  9 -> 11 fixtures): +2 per F-NA-4 v1.4
+- T10 (``tests/test_gate11_onnx_smoke_test_fixture_inventory.py``
+  NEW): +3
+
+Sum: 0 + 2 + 5 + 5 + 5 + 4 + 0 + 0 + 2 + 3 = +26 (matches
+empirical -1 drift from +27 projection within tolerance).
+
+Baseline + delta:
+
+- v0.12.0 baseline: 642 (per ``### Tests`` block CHANGELOG
+  v0.12.0 entry; canonical full-extras profile
+  ``[dev,rust,go,onnx,onnx-runtime,onnx-profile,gate11,gate11-rust]``;
+  Round 39 chain log §7 corrected substrate-of-record +
+  §0.5.3 v1.5 mechanical-verification preamble)
+- v0.13.0 ship: 668 (empirical pytest --collect-only -q)
+- Projection drift: -1 (within +/- 4 tolerance; assertion
+  (c) PASS)
+
+### Four-substrate symmetry (with honest asymmetries)
+
+After v0.13.0, the gate11 substrate covers Python, Rust, Go,
+and ONNX. The four-substrate symmetry is preserved at
+identity policy, trusted_root threading, checker_set_hash
+form, identity-extraction, and CLI dispatch. Asymmetries
+where ONNX is structurally different (signature
+canonicalization graph-shape vs type-shape; ONNX-specific
+opset/dim_param checks via CASM-V-070/071) are named in
+``docs/gate11-symmetry.md`` and pinned as four-place limits
+in ``tests/test_gate11_onnx_limits.py``.
+
+Phase G11.4 Tasdiq al-Bayan is the next phase; it will
+exercise the symmetry as a unified test matrix (4 signers x
+4 verifiers = 16 cells) and pin the asymmetries as cross-
+substrate verification corpus entries.
+
+---
+
 ## [0.12.0] - 2026-05-11
 
 ### Substrate extension (al-Mursalat / G11.2)

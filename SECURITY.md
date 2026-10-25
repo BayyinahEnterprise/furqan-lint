@@ -94,10 +94,11 @@ residual disclosures apply to any consumer running
    the legitimate maintainer". Relying Parties MUST configure
    `--expected-identity <pattern>` for the Python verifier
    (v0.11.2+; v0.11.5 al-Bayyina F24 corrective re-routed the
-   sigstore API path), the Rust verifier (v0.11.0+), and the
-   Go verifier (v0.12.0+ al-Mursalat); the default
-   `CASM-V-035` refuse-without-policy ensures verification
-   fails closed when no policy is configured.
+   sigstore API path), the Rust verifier (v0.11.0+), the
+   Go verifier (v0.12.0+ al-Mursalat), and the ONNX verifier
+   (v0.13.0+ an-Naziat); the default `CASM-V-035`
+   refuse-without-policy ensures verification fails closed
+   when no policy is configured.
    Use of `--allow-any-identity` is the explicit opt-in to
    `UnsafeNoOp` policy; presence in CI logs is itself a
    Sulayman-Naml ADVISORY signal per Phase G11.A Strategy 7.
@@ -138,6 +139,46 @@ mandatory disclosures (OIDC issuer compromise; typosquatting;
 Rekor privacy; log retention horizon) apply identically to
 Rust manifests.
 
+## Sigstore-CASM Gate 11 Go extension (v0.12.0)
+
+The Phase G11.2 al-Mursalat Go extension uses the same
+Sigstore substrate as the Python / Rust pipelines. The four
+mandatory disclosures apply identically to Go manifests. Go
+manifests additionally pin the goast source binary in the
+Form A checker_set_hash surface per F-PF-3 v1.7 SOURCE-PRESENT
+branch (a Relying Party detects substrate divergence in the
+Go AST emitter source code, not just the gate11/* verification
+modules).
+
+## Sigstore-CASM Gate 11 ONNX extension (v0.13.0)
+
+The Phase G11.3 an-Naziat ONNX extension uses the same
+Sigstore substrate as the source-code pipelines. The four
+mandatory disclosures apply identically to ONNX manifests.
+ONNX manifests carry two additional substrate-specific
+disclosures per the four-place documented-limit discipline:
+
+5. **Graph-shape vs type-shape canonicalization (honest
+   asymmetry).** ONNX gate11 canonicalization operates on
+   graph inputs/outputs (per
+   `onnx_signature_canonicalization.py` rules 9-12: ValueInfo
+   sort, dim_param preservation, opset sort, ir_version
+   integer), not on type expressions. Two CASM-V codes
+   specific to ONNX: `CASM-V-070` (opset-policy-mismatch)
+   and `CASM-V-071` (dim-param-violation). Both are exit-
+   code-1 hard fails enforced mechanically through divergent
+   canonical strings at the signature-verification step.
+
+6. **Attestation boundary excludes weights and NeuroGolf
+   sidecars.** ONNX attestation covers ModelProto topology
+   (opset_imports, ir_version, graph.input, graph.output,
+   graph.node) and excludes weight tensors (initializer; may
+   change with retraining without invalidating attestation)
+   plus NeuroGolf-convention sidecar metadata
+   (numpy_reference, probe-grid YAML, score-validity
+   thresholds). See `docs/onnx-attestation-boundary.md` for
+   the full boundary classification and decision flowchart.
+
 ### Identity policy enforcement
 
 Relying Parties MUST configure ``--expected-identity`` for
@@ -149,3 +190,49 @@ an audit signal: it is an explicit opt-in to ``UnsafeNoOp()``
 policy whose presence in CI logs is the substrate-side
 visibility that the Sulayman-Naml ADVISORY pattern (Phase
 G11.A Strategy 7) provides.
+
+## Sigstore-CASM Gate 11 self-attestation (v1.0)
+
+The Phase G12.0 al-Basirah self-attestation flow extends the
+gate11 substrate to furqan-lint's own releases. From v1.0+,
+each release ships a signed gate11 self-manifest as a GitHub
+Release asset, in addition to the PyPI wheel and sdist.
+Relying Parties verifying furqan-lint releases SHOULD invoke:
+
+```bash
+furqan-lint manifest verify-self --expected-identity <pattern>
+```
+
+where `<pattern>` matches the BayyinahEnterprise GitHub
+Actions release workflow's Sigstore-OIDC signing identity
+(canonical convention) or the project lead's personal
+signing identity per local-build attestation.
+
+The self-attestation surface adds one new CASM-V code:
+**CASM-V-072 (self-attestation-failure)** with three named
+sub-conditions: (a) manifest-not-found; (b) checker-set-
+hash-drift; (c) signature-verification-unexpected. Per
+F-BA-substrate-conflict-1 v1.0.0 closure: substrate-actual
+code is CASM-V-072 (NOT prompt-cited 040 which is in-use
+at v0.10.0+ baseline for module_root_hash mismatch per
+Invariant 6 step 7).
+
+The Newman 2022 N2 typosquatting disclosure applies
+identically to self-attestation: the convention-based URL
+discipline (per docs/release-checklist.md Self-attestation
+discovery section) anchors the published-manifest location
+at the canonical BayyinahEnterprise GitHub repo; Relying
+Parties verifying any other URL pattern are operating
+outside the substrate-of-record.
+
+### Trust model
+
+Self-attestation does not eliminate the need for external
+trust. It locates the trust at the Sigstore Certificate
+Transparency log layer: a Relying Party trusts that
+Sigstore's CT log is honestly maintained and that the
+project lead's (or BayyinahEnterprise organization's)
+signing identity is correctly attested at that layer. The
+recursion bottoms out at this trust anchor outside the
+project. See `docs/gate11-self-attestation.md` for the
+full trust-model documentation.

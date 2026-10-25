@@ -1,0 +1,1 @@
+{"_fixture_note": "Placeholder Sigstore bundle fixture; real bundle generated at release.yml T06 via ambient OIDC; this file documents the expected presence of a .bundle file alongside the manifest. Production bundle is binary Sigstore Bundle protobuf-serialized JSON; this fixture is a stub for inventory-pinning tests only.", "version": "1.0.0-smoke-test"}

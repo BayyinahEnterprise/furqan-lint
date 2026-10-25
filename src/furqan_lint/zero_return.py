@@ -27,6 +27,9 @@ Skipped (does not fire R3):
   with no ``break`` (provably non-returning; reaching the end of
   the body is unreachable). Non-canonical loops (``while 1:``,
   ``itertools.count()``) are NOT recognized in v0.6.0.
+- Generator functions (``yield`` / ``yield from`` in the body,
+  v1.0.1). The annotation describes what is yielded; reaching the end
+  of a generator ends iteration and is never a missing return.
 - Functions decorated with any of the names in
   ``_SKIP_DECORATORS`` (e.g., ``@abstractmethod``, ``@overload``).
   As of v0.6.1, decorator resolution follows module-level
@@ -44,6 +47,7 @@ from dataclasses import dataclass
 
 from furqan_lint.adapter import (
     _is_all_none_union,
+    _is_generator,
     _is_optional,
     _is_pipe_union_with_none,
     _is_union_with_none,
@@ -144,6 +148,11 @@ def _check_function(
 
     # 3. Decorator on the skip-list (with alias resolution): skip.
     if _has_skip_decorator(node, aliases):
+        return []
+
+    # 3b. Generator (v1.0.1): the annotation is the yield type, and
+    #     the end of the body ends iteration. Not a producer.
+    if _is_generator(node):
         return []
 
     # 4. Body is provably non-returning (raise-only or while True

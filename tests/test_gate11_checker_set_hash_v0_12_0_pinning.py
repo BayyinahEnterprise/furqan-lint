@@ -209,16 +209,27 @@ def test_checker_set_hash_changes_when_go_source_changes(
 
 
 def test_checker_set_hash_v0_12_0_canonical_interleaved_order() -> None:
-    """The v0.12.0 hash matches an explicit interleaved-order
-    re-computation per F-PA-3 Option (alpha).
+    """The hash matches an explicit interleaved-order re-computation
+    per F-PA-3 Option (alpha) + F-NA-5 v1.4 alphabetical-within-
+    section discipline.
 
-    Per F-PA-3 v1.8 absorption: the expected hash literal is
-    NOT computed against ``*V0_11_8_CHECKER_SOURCES + additions``
-    (end-append concatenation), which would conflict with
-    fixture #1's alphabetical-slot-between assertion. Instead,
-    enumerate the full 19-entry tuple in canonical interleaved
-    order and compute the hash; assert
+    Per F-PA-3 v1.8 absorption: the expected hash is NOT computed
+    against ``*V0_11_8_CHECKER_SOURCES + additions`` (end-append
+    concatenation), which would conflict with fixture #1's
+    alphabetical-slot-between assertion. Instead, enumerate the
+    full canonical interleaved order and compute the hash; assert
     ``compute_checker_set_hash`` returns the same value.
+
+    Per Naskh Discipline: this test originally pinned the v0.12.0
+    19-entry tuple at al-Mursalat ship. v0.13.0 an-Naziat T05
+    extended the tuple to 21 entries (adding both
+    ``onnx_signature_canonicalization.py`` at #10 and
+    ``onnx_verification.py`` at #11 per F-CW-NZ-2 substrate-
+    convention parity precedent; goast shifts to #21). The
+    canonical_order list below tracks the substrate-LIVE state
+    at v0.13.0 ship; the v0.12.0 19-entry historical record is
+    preserved in CHANGELOG v0.12.0 entry and docs/gate11-symmetry.md
+    substrate-of-record table.
     """
     canonical_order = (
         # Core section (v0.11.8 substrate):
@@ -226,7 +237,9 @@ def test_checker_set_hash_v0_12_0_canonical_interleaved_order() -> None:
         _PKG_ROOT / "cli.py",
         # gate11 section, alphabetical-within-section, with
         # al-Mursalat Go entries at canonical positions #6/#7
-        # per F-PA-3 Option (alpha):
+        # per F-PA-3 Option (alpha) and an-Naziat ONNX entries
+        # at positions #10/#11 per F-NA-5 v1.4 absorption +
+        # F-CW-NZ-2 substrate-convention parity:
         _PKG_ROOT / "gate11" / "__init__.py",
         _PKG_ROOT / "gate11" / "bundle.py",
         _PKG_ROOT / "gate11" / "cli.py",
@@ -234,6 +247,8 @@ def test_checker_set_hash_v0_12_0_canonical_interleaved_order() -> None:
         _PKG_ROOT / "gate11" / "go_verification.py",
         _PKG_ROOT / "gate11" / "manifest_schema.py",
         _PKG_ROOT / "gate11" / "module_canonicalization.py",
+        _PKG_ROOT / "gate11" / "onnx_signature_canonicalization.py",
+        _PKG_ROOT / "gate11" / "onnx_verification.py",
         _PKG_ROOT / "gate11" / "python_verification.py",
         _PKG_ROOT / "gate11" / "rust_manifest.py",
         _PKG_ROOT / "gate11" / "rust_signature_canonicalization.py",
@@ -245,7 +260,7 @@ def test_checker_set_hash_v0_12_0_canonical_interleaved_order() -> None:
         _PKG_ROOT / "gate11" / "verification.py",
         # go_adapter section (al-Mursalat T05 goast pin per
         # F-PF-3 v1.7 absorption + F6 v1.1 SOURCE-PRESENT
-        # branch):
+        # branch; shifted from #19 to #21 at v0.13.0):
         _PKG_ROOT / "go_adapter" / "cmd" / "goast" / "main.go",
     )
     # The order in the tuple constant must match this canonical

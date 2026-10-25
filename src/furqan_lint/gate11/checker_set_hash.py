@@ -58,6 +58,32 @@ _CHECKER_SOURCE_FILES: tuple[Path, ...] = (
     _PKG_ROOT / "gate11" / "go_verification.py",
     _PKG_ROOT / "gate11" / "manifest_schema.py",
     _PKG_ROOT / "gate11" / "module_canonicalization.py",
+    # an-Naziat T03 (v0.13.0): ONNX graph-shape canonicalization
+    # (rules 9-12 per the H-4 closure rule numbering continuation;
+    # type-shape vs graph-shape is the honest asymmetry documented
+    # in docs/gate11-symmetry.md). Alphabetical position #10 per
+    # F-PA-3 v1.8 + F-NA-5 v1.4 alphabetical-within-section
+    # discipline: "onnx_s" sorts between "module_canonicalization"
+    # and "onnx_v".
+    _PKG_ROOT / "gate11" / "onnx_signature_canonicalization.py",
+    # an-Naziat T04 (v0.13.0): ONNX verifier facade (private
+    # _verify_onnx handler dispatched via verification.verify's
+    # function-local _LANGUAGE_DISPATCH; T09 wires the dispatch
+    # entry). Alphabetical position #11: "onnx_v" sorts between
+    # "onnx_s" and "python_verification".
+    #
+    # Per substrate-convention parity (al-Mursalat T05 pinned
+    # BOTH gate11/go_signature_canonicalization.py at #6 AND
+    # gate11/go_verification.py at #7; Phase G11.1 baseline
+    # pinned BOTH rust_signature_canonicalization.py at #13 AND
+    # rust_verification.py at #16): an-Naziat T05 pins BOTH
+    # onnx files for honest-asymmetry parity. Total 19 -> 21
+    # entries (+2; prompt v1.6 T05 specified +1 inserting only
+    # onnx_verification.py; substrate-convention precedent
+    # over-rode the prompt's stated +1 figure to preserve the
+    # rust/go parity at the gate11 substrate hash surface;
+    # surfaced as F-CW-NZ-2 MEDIUM during T05 implementation).
+    _PKG_ROOT / "gate11" / "onnx_verification.py",
     # as-Saff T04(b) (v0.11.8): Python facade introduced; the
     # path-join idiom from as-Saff F-XR-3 absorption is reused
     # by al-Mursalat T05 below for the Go entries.

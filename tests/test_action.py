@@ -113,17 +113,23 @@ def test_pre_commit_hooks_yaml_entry_is_furqan_lint_check() -> None:
 @pytest.mark.unit
 def test_pre_commit_hooks_yaml_declares_furqan_dependency() -> None:
     """The pre-commit hook must declare ``furqan`` as an
-    ``additional_dependency`` because pyproject.toml's
-    ``furqan>=0.11.0`` constraint cannot be satisfied from PyPI
-    (only 0.10.1 is available there). Without this, ``pre-commit
-    install`` succeeds but the first hook run fails with an
-    unresolvable resolver error. Static test, no network.
+    ``additional_dependency`` with a floor that PyPI can satisfy.
+    Before v1.0.1 the declared dependency was a git URL to the
+    upstream language repository, written when only furqan 0.10.1
+    was on PyPI; that URL no longer answers an anonymous clone, so
+    the hook could not install for anyone outside the organisation. furqan
+    0.11.1 is on PyPI, and the hook pins the floor there. Static
+    test, no network.
     """
     data, _ = _load(".pre-commit-hooks.yaml")
     deps = data[0].get("additional_dependencies", [])
-    assert any("furqan" in d for d in deps), (
-        "Pre-commit hook missing furqan in additional_dependencies; "
-        "install will fail because furqan is not on PyPI"
+    assert any(d.replace(" ", "").startswith("furqan>=") for d in deps), (
+        "Pre-commit hook must declare a PyPI furqan floor in "
+        "additional_dependencies (for example furqan>=0.11.1)"
+    )
+    assert not any("git+" in d for d in deps), (
+        "Pre-commit hook must not depend on a git URL; consumers "
+        "outside the organisation cannot fetch it"
     )
 
 
@@ -136,7 +142,9 @@ def test_pre_commit_hook_installs_in_clean_venv(tmp_path) -> None:
 
     Recreates what pre-commit does internally: builds a venv,
     pip-installs the additional_dependencies plus the project,
-    asserts success.
+    asserts success. v1.0.1: the dependencies are read from
+    ``.pre-commit-hooks.yaml`` rather than restated here, so the
+    test exercises what the hook actually declares.
     """
     venv_dir = tmp_path / "venv"
     subprocess.run(
@@ -148,14 +156,10 @@ def test_pre_commit_hook_installs_in_clean_venv(tmp_path) -> None:
     if not pip.exists():
         # Windows path; skip rather than misdiagnose
         pytest.skip("non-posix venv layout")
+    data, _ = _load(".pre-commit-hooks.yaml")
+    declared = list(data[0].get("additional_dependencies", []))
     result = subprocess.run(
-        [
-            str(pip),
-            "install",
-            "furqan @ git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.1",
-            "-e",
-            str(REPO_ROOT),
-        ],
+        [str(pip), "install", *declared, "-e", str(REPO_ROOT)],
         capture_output=True,
         text=True,
         timeout=180,

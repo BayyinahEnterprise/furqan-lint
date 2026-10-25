@@ -6,6 +6,7 @@ or inline source and asserts the expected diagnostic shape.
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from pathlib import Path
@@ -54,6 +55,37 @@ def test_missing_return_path_fires_d24(failing_dir: Path) -> None:
 
 
 @pytest.mark.unit
+def test_raise_terminal_paths_pass_d24(clean_dir: Path) -> None:
+    """v1.0.1: ``raise`` / ``sys.exit`` / ``os._exit`` end a path;
+    they are not a fall-through (raise-terminal false positive)."""
+    module = translate_file(clean_dir / "raise_terminal_paths.py")
+    diags = check_python_module(module)
+    assert _by_checker(diags, "all_paths_return") == []
+
+
+@pytest.mark.unit
+def test_raise_branch_with_fall_through_still_fires_d24(failing_dir: Path) -> None:
+    """v1.0.1 true-positive guard: a raising branch must not mask a
+    sibling path that falls through."""
+    module = translate_file(failing_dir / "raise_branch_with_fall_through.py")
+    diags = check_python_module(module)
+    d24 = _by_checker(diags, "all_paths_return")
+    assert len(d24) == 1
+    assert "classify" in str(d24[0])
+
+
+@pytest.mark.unit
+def test_zero_return_function_with_raise_is_not_double_reported() -> None:
+    """v1.0.1: a function with no explicit ``return`` stays in R3's
+    jurisdiction; modelling ``raise`` as terminal must not make D24
+    report it as well."""
+    source = "def f(x: int) -> int:\n" "    if x:\n" "        raise ValueError(x)\n"
+    diags = check_python_module(translate_source(source), ast.parse(source))
+    assert _by_checker(diags, "all_paths_return") == []
+    assert len(_by_checker(diags, "zero_return_path")) == 1
+
+
+@pytest.mark.unit
 def test_nested_missing_return_fires_d24(failing_dir: Path) -> None:
     module = translate_file(failing_dir / "nested_missing_return.py")
     diags = check_python_module(module)
@@ -94,6 +126,105 @@ def test_optional_propagated_passes_d11(clean_dir: Path) -> None:
     module = translate_file(clean_dir / "optional_propagated.py")
     diags = check_python_module(module)
     assert _by_checker(diags, "status_coverage") == []
+
+
+@pytest.mark.unit
+def test_optional_narrowed_at_call_site_passes_d11(clean_dir: Path) -> None:
+    """v1.0.1: an explicitly handled None arm is not a status
+    collapse (None-guard, ``or`` default, rebind, walrus, ``==``)."""
+    module = translate_file(clean_dir / "optional_narrowed_at_call_site.py")
+    diags = check_python_module(module)
+    assert _by_checker(diags, "status_coverage") == []
+    assert _by_checker(diags, "all_paths_return") == []
+
+
+@pytest.mark.unit
+def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
+    """v1.0.1 true-positive guard: unhandled None arms still fire,
+    one diagnostic per function. Includes the review-round shapes that
+    resemble a guard but let None out (``break`` / ``continue`` out of
+    a loop, ``return x`` in the None branch, ``or None``, rebinding to
+    None, a closure read after the guard), the v1.0.1 audit F-01
+    shapes (a nested ``return x`` before the rebind or the raise), and
+    the verification-round shapes (a guard exit that is caught,
+    suppressed or overridden by ``finally``; a fallback replaced by
+    tuple unpacking or a ``match`` capture), and the round-two shapes
+    (a late-binding closure, a global rebound after the guard,
+    ``locals()``), and round three (a late generator expression, frame
+    access, an uncalled ``locals`` alias)."""
+    module = translate_file(failing_dir / "optional_collapse_still_reported.py")
+    diags = check_python_module(module)
+    s = _by_checker(diags, "status_coverage")
+    expected = sorted(
+        [
+            "leaky",
+            "late_guard",
+            "ordered",
+            "guard_without_exit",
+            "has_letter_a",
+            "in_alphabet",
+            "break_leaks",
+            "walrus_continue_leaks",
+            "returns_the_none",
+            "or_none_default",
+            "rebinds_to_none",
+            "closure_reads_after_guard",
+            "nested_return_before_rebind",
+            "nested_return_before_raise",
+            "walrus_nested_return_before_raise",
+            "caught_raise_leaks",
+            "caught_walrus_raise_leaks",
+            "caught_exit_leaks",
+            "finally_overrides_fallback",
+            "tuple_rebind_to_none",
+            "match_capture_rebind",
+            "late_closure_continue",
+            "late_closure_positive",
+            "closure_return_fallback",
+            "global_rebound_after_guard",
+            "locals_after_guard",
+            "late_genexp_continue",
+            "late_genexp_positive",
+            "frame_locals_after_guard",
+            "uncalled_locals_alias",
+        ]
+    )
+    named = sorted(name for name in expected if any(f"function '{name}'" in str(d) for d in s))
+    assert named == expected
+    assert len(s) == len(expected)
+
+
+@pytest.mark.unit
+def test_generators_and_procedures_have_no_return_contract(clean_dir: Path) -> None:
+    """v1.0.1: generators and ``-> None`` procedures are translated
+    without a value-return contract, so D24 and D11 stay silent."""
+    module = translate_file(clean_dir / "generator_and_procedure_shapes.py")
+    diags = check_python_module(module)
+    assert _by_checker(diags, "all_paths_return") == []
+    assert _by_checker(diags, "status_coverage") == []
+    by_name = {fn.name: fn for fn in module.functions}
+    for name in ("evens", "chained", "record"):
+        assert by_name[name].return_type is None
+
+
+@pytest.mark.unit
+def test_procedure_calling_optional_producer_is_advisory_not_error() -> None:
+    """v1.0.1: a ``-> None`` procedure that calls an Optional producer
+    cannot collapse a status into its return value. D11 used to report
+    an S1 error here; it now emits only its informational S2 advisory
+    (exit 0), the shape upstream designed for effectful functions."""
+    source = (
+        "from typing import Optional\n"
+        "def find_name(uid: int) -> Optional[str]:\n"
+        "    return 'alice' if uid == 1 else None\n"
+        "def log_name(uid: int) -> None:\n"
+        "    name = find_name(uid)\n"
+        "    print(name)\n"
+    )
+    s = _by_checker(check_python_module(translate_source(source)), "status_coverage")
+    assert len(s) == 1
+    assert not isinstance(s[0], Marad)
+    assert "S2" in str(s[0])
 
 
 @pytest.mark.unit
@@ -226,3 +357,104 @@ def test_class_methods_checked() -> None:
     module = translate_source(src, "<cls>")
     diags = check_python_module(module)
     assert any(isinstance(d, Marad) for _, d in diags)
+
+
+@pytest.mark.unit
+def test_audit_f01_nested_return_before_rebind_fires_d11_via_module_api() -> None:
+    """v1.0.1 audit F-01 reproduction, verbatim, through the module API
+    with the source tree supplied (all four checkers run). The None
+    branch rebinds ``name`` only after a nested ``return name``, so the
+    None escapes on the ``early`` path and D11 must report it."""
+    source = (
+        "from typing import Optional\n"
+        "\n"
+        "def find_name(uid: int) -> Optional[str]:\n"
+        "    return None\n"
+        "\n"
+        "def leak(uid: int, early: bool) -> str:\n"
+        "    name = find_name(uid)\n"
+        "    if name is None:\n"
+        "        if early:\n"
+        "            return name\n"
+        '        name = "fallback"\n'
+        "    return name\n"
+    )
+    namespace: dict = {}
+    exec(compile(source, "<f01>", "exec"), namespace)
+    assert namespace["leak"](1, True) is None  # the leak is real
+    diags = check_python_module(translate_source(source), ast.parse(source))
+    s = _by_checker(diags, "status_coverage")
+    assert len(s) == 1
+    assert isinstance(s[0], Marad)
+    assert "function 'leak'" in str(s[0])
+
+
+@pytest.mark.integration
+def test_audit_f01_guard_fixture_fires_through_cli(failing_dir: Path) -> None:
+    """The F-01 guard cases fire through the real CLI entry point."""
+    result = _run_cli("check", str(failing_dir / "optional_collapse_still_reported.py"))
+    assert result.returncode == 1
+    for name in (
+        "nested_return_before_rebind",
+        "nested_return_before_raise",
+        "walrus_nested_return_before_raise",
+    ):
+        assert f"[status_coverage] function '{name}'" in result.stdout
+
+
+@pytest.mark.unit
+def test_every_python_fixture_compiles() -> None:
+    """v1.0.1 audit F-02: every Python specimen the suite reasons about
+    must be valid, compilable Python, not merely parseable. ``ast.parse``
+    accepts some code that ``compile`` rejects (for example ``return``
+    inside ``except*``), and a verdict on code that cannot run is not
+    evidence about code that can."""
+    fixtures = sorted((REPO_ROOT / "tests" / "fixtures").rglob("*.py"))
+    assert fixtures
+    for path in fixtures:
+        compile(path.read_text(encoding="utf-8"), str(path), "exec")
+
+
+@pytest.mark.unit
+def test_inline_specimens_are_compiled_before_translation() -> None:
+    """v1.0.1 audit F-02 follow-up: ``tests/conftest.py`` routes every
+    inline ``translate_source`` call through ``compile``. Code that
+    ``ast.parse`` accepts but Python cannot run must be rejected, so an
+    invalid specimen like the original ``except*`` one fails loudly."""
+    import furqan_lint.adapter as adapter
+
+    parse_only = "def f(x: int) -> int:\n    return x\nreturn 1\n"
+    ast.parse(parse_only)  # the parser accepts it
+    with pytest.raises(SyntaxError):
+        adapter.translate_source(parse_only)
+    with pytest.raises(SyntaxError):
+        translate_source(parse_only)
+
+
+@pytest.mark.unit
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="type aliases need Python 3.12")
+def test_type_alias_late_scope_blocks_narrowing() -> None:
+    """v1.0.1 verification round three: a ``type`` alias value is
+    evaluated lazily, like a closure, so a guarded name it reads cannot
+    be narrowed. Inline because the syntax needs Python 3.12."""
+    source = (
+        "from typing import Optional\n"
+        "def find_name(uid: int) -> Optional[str]:\n"
+        "    return {1: 'a'}.get(uid)\n"
+        "def first_name(uids: list[int]) -> str:\n"
+        "    alias = None\n"
+        "    for uid in uids:\n"
+        "        x = find_name(uid)\n"
+        "        if x is None:\n"
+        "            continue\n"
+        "        type A = x\n"
+        "        alias = A\n"
+        "    return alias.__value__\n"
+    )
+    namespace: dict = {}
+    exec(compile(source, "<alias>", "exec"), namespace)
+    assert namespace["first_name"]([1, 2]) is None  # the leak is real
+    s = _by_checker(
+        check_python_module(translate_source(source), ast.parse(source)), "status_coverage"
+    )
+    assert any("function 'first_name'" in str(d) for d in s)

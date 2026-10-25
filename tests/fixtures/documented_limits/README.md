@@ -58,6 +58,57 @@ drift, a v0.6.1-style corrective is required.
   used as a closure-like return value, not part of the module's
   public contract. README registers this under "Local classes
   inside any function or method body."
+- **`optional_stored_in_container.py`.** (v1.0.1) A call to an
+  Optional producer whose result is placed straight into a container
+  (`return {"name": find_name(uid)}`, typed `dict[str, str | None]`)
+  keeps the None arm, yet D11 still reports it: D11 does not follow
+  values through containers. furqan-lint's own
+  `gate11/rust_signature_canonicalization._function_signature_dict`
+  is this shape, and it is the one diagnostic left when furqan-lint
+  checks its own `src/`. README registers this under "Optional
+  stored in a container."
+- **`exit_alias_not_terminal.py`.** (v1.0.1) D24 treats `raise`,
+  `sys.exit(...)`, `os._exit(...)` and `os.abort()` as ending a path.
+  `from sys import exit` aliases, bare `exit()` / `quit()`, calls to
+  user functions annotated `NoReturn`, and `assert False` still look
+  like a fall-through and are reported. The fix needs import alias tracking and `NoReturn`
+  resolution. README registers this under "Terminal-call
+  recognition."
+- **`optional_guard_not_adjacent.py`.** (v1.0.1) D11 withholds a call
+  only when None is handled at the call site or by a guard on the
+  very next statement whose branch is straight-line up to its exit
+  or rebind. A guard further down, a branch with a nested `if` before
+  its exit (the price of the v1.0.1 audit F-01 correction), a guard
+  inside a `try` with handlers or `finally` (its raise might be
+  caught), and `assert x is not None` are not seen; the assert is left visible on
+  purpose because `python -O` strips it. README registers this under "None handled
+  away from the call site."
+- **`terminal_recognition_false_negatives.py`.** (v1.0.1) Terminal
+  recognition is syntactic: a `raise` inside `with
+  contextlib.suppress(...)` and `sys.exit()` on a parameter named
+  `sys` count as ending the path, so D24 is silent although the
+  function can fall through. README registers this under "Terminal
+  recognition is syntactic."
+- **`raise_terminal_remaining_false_positives.py`.** (v1.0.1)
+  `for ... else: raise`, `while True:` ending in `raise`, and `try` /
+  `finally` with no `except` never fall through, yet D24 reports them.
+  The `except*` blind spot is pinned inline in
+  `tests/test_documented_limits.py`. README registers this under
+  "Raise shapes D24 still misreads."
+- **`none_procedure_returning_value.py`.** (v1.0.1) A `-> None`
+  function that returns a value passes: `-> None` is translated
+  without a return type and no checker compares values against it.
+  README registers this under "`-> None` carries no value contract."
+- **`comparison_assumed_bool.py`.** (v1.0.1) D11 withholds a producer
+  call used as an `==` / `!=` / `is` / `is not` operand, assuming a bool
+  result. An `__eq__` that returns its argument hands the None back and
+  D11 is silent. README registers this under "Comparisons are assumed
+  to be bool."
+- **`guard_escapes_function_boundary.py`.** (v1.0.1) Nested function
+  bodies are not checked by D11 or D24, a `nonlocal` rebind from a
+  nested function is not followed, and a decorator that swallows the
+  guard's `raise` is not seen. README registers this under "Checks
+  stop at function boundaries."
 
 ## How to retire a fixture
 

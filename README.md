@@ -41,20 +41,14 @@ pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile,gate11]"  # all adapt
 ### Install from a specific commit or tag
 
 ```bash
-pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v0.12.0"
+pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v1.0.1"
 ```
 
-Replace `v0.12.0` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
+Replace `v1.0.1` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
 
 ### Furqan dependency
 
-furqan-lint requires `furqan>=0.11.0`, the Furqan programming-language tooling. As of 2026-05-03 the PyPI release of `furqan` is at v0.10.1; install v0.11.7 directly from GitHub:
-
-```bash
-pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.7"
-```
-
-This GitHub-pin step will not be necessary once `furqan` v0.11.7 is published to PyPI.
+furqan-lint requires `furqan>=0.11.0`, the Furqan programming-language tooling. `furqan` 0.11.1 is published on PyPI, so `pip install furqan-lint` resolves it with no extra step. The GitHub Action, the pre-commit hook and CI install `furqan>=0.11.1` from PyPI as well.
 
 ### Rust support (opt-in)
 
@@ -273,9 +267,37 @@ The CLI grows two opt-in entry points and one flag:
 ```bash
 furqan-lint manifest init <module.py>     # OIDC sign; emit .furqan.manifest.sigstore
 furqan-lint manifest verify <module.py>   # 9-step CASM-V verification
+furqan-lint manifest verify-self          # v1.0+ verify furqan-lint's own gate11 self-manifest
 furqan-lint manifest update <module.py>   # additive-only re-sign; refuses removals
 furqan-lint check --gate11 <path>         # run normal checks + verify any CASM bundles found
 ```
+
+#### Self-attestation (v1.0+; Phase G12.0 al-Basirah)
+
+From v1.0 onward, furqan-lint signs its own releases with
+gate11. The structural-honesty thesis closes on itself: the
+tool that catches drift in others' code attests its own.
+Relying Parties verify via:
+
+```bash
+furqan-lint manifest verify-self \
+  --expected-identity "<pattern>" \
+  --expected-issuer "https://token.actions.githubusercontent.com"
+```
+
+Signed self-manifests publish as GitHub Release assets at
+`https://github.com/BayyinahEnterprise/furqan-lint/releases/download/v${VERSION}/self_manifest.json`
+(+ corresponding `.bundle`). The `verify-self` subcommand
+derives the URL from the installed package version and
+dispatches verification through the function-local
+`_LANGUAGE_DISPATCH` -> `_verify_python` path per
+al-Mursalat T04 + an-Naziat F-NA-3 substrate-actual.
+
+CASM-V-072 (self-attestation-failure) surfaces on three
+sub-conditions: (a) manifest-not-found; (b) checker-set-
+hash-drift; (c) signature-verification-unexpected. See
+`docs/gate11-self-attestation.md` for the full trust-model
+and remediation guidance.
 
 `furqan-lint check` without `--gate11` produces the same
 diagnostics as in v0.9.4. Gate 11 only activates when the user
@@ -283,7 +305,9 @@ opts in via the flag or the `manifest` subcommand.
 
 **Wire format.** Each manifest is a JSON document carrying
 `casm_version: "1.0"`, `language` (one of ``"python"`` (Phase
-G11.0), ``"rust"`` (Phase G11.1), ``"go"`` (Phase G11.2)),
+G11.0, v0.10.0), ``"rust"`` (Phase G11.1, v0.11.0), ``"go"``
+(Phase G11.2, v0.12.0), ``"onnx"`` (Phase G11.3, v0.13.0) --
+the canonical mushaf chain),
 `module_root_hash` (BOM-stripped, LF-normalized, UTF-8 SHA-256),
 `public_surface.names` (ASCII-sorted entries of kind
 `function` / `class` / `constant`, each with a canonical
@@ -300,8 +324,8 @@ documented under the `CASM-V-NNN` error namespace:
 2. Check `casm_version == "1.0"` (CASM-V-001).
 3. Check `language` is in the supported substrate set
    ``{python (Phase G11.0, v0.10.0), rust (Phase G11.1,
-   v0.11.0), go (Phase G11.2, v0.12.0)}`` (CASM-V-001);
-   ONNX (Phase G11.3) ships in v0.13.0 an-Naziat.
+   v0.11.0), go (Phase G11.2, v0.12.0), onnx (Phase G11.3,
+   v0.13.0)}`` (CASM-V-001) -- the complete mushaf chain.
 4. Load Sigstore trust root via TUF (CASM-V-020 ADVISORY on
    refresh failure with cache fallback; CASM-V-021 if no cache).
 5. Re-canonicalize the manifest (RFC 8785).
@@ -311,7 +335,13 @@ documented under the `CASM-V-NNN` error namespace:
    (CASM-V-040 on mismatch).
 8. Compare `public_surface.names` to the live extraction; if
    the live module uses dynamic `__all__`, the result is
-   indeterminate (CASM-V-INDETERMINATE) rather than a false pass.
+   indeterminate (CASM-V-INDETERMINATE) rather than a false
+   pass. For ``language=onnx`` manifests (v0.13.0+), this
+   step additionally enforces opset-policy consistency
+   (CASM-V-070 on `opset_imports` mismatch) and dim_param
+   consistency (CASM-V-071 on symbolic-vs-concrete drift),
+   per the graph-shape canonicalization rules 9-12 in
+   `gate11/onnx_signature_canonicalization.py`.
 9. Check `chain_pointer` integrity against the previous bundle
    when supplied (CASM-V-060 on hard mismatch; CASM-V-061
    ADVISORY when no previous bundle is locally accessible).
@@ -515,7 +545,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: BayyinahEnterprise/furqan-lint@v0.12.0
+      - uses: BayyinahEnterprise/furqan-lint@v1.0.1
         with:
           path: src/
 ```
@@ -535,7 +565,7 @@ Python files:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v0.12.0
+    rev: v1.0.1
     hooks:
       - id: furqan-lint
 ```
@@ -570,7 +600,7 @@ repos:
       - id: mypy
 
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v0.12.0
+    rev: v1.0.1
     hooks:
       - id: furqan-lint
 ```
@@ -658,6 +688,18 @@ and a test in `tests/test_documented_limits.py` pinning the current
 behaviour, so any change (in either direction) is intentional rather
 than silent.
 
+**What a PASS means.** furqan-lint's checks are syntactic heuristics
+over each function's AST, not a semantic proof. A PASS means no
+checker matched a known-bad shape; it does not mean the code is free
+of the defect class. In particular, D11's call-site narrowing (the
+rules that decide a producer's None was handled) is built to fail
+closed: when a rule cannot establish that the None is gone, the call
+stays visible and D11 reports. Four independent verification rounds
+in v1.0.1 tried to make D11 miss a None that execution proves reaches
+the caller; every leak found was fixed or is listed below. The list
+below is the known boundary, not a guarantee that nothing lies beyond
+it.
+
 - **`self.method()` calls.** The adapter resolves `self.foo()` to the
   bare method name `foo`, the same as a plain `foo()` call. This is
   not a bug today but will need revisiting if the adapter ever stores
@@ -699,6 +741,86 @@ than silent.
   regression demonstrates otherwise, extend the function walker to
   descend into local `ClassDef` bodies and call
   `_collect_class_methods`.
+- **Optional stored in a container.** D11 does not follow values
+  through containers. `return {"name": find_name(uid)}` keeps the None
+  arm in a `dict[str, str | None]`, yet D11 still reports the call.
+  Pinned as `tests/fixtures/documented_limits/optional_stored_in_container.py`.
+- **Terminal-call recognition.** D24 treats `raise`, `sys.exit(...)`,
+  `os._exit(...)` and `os.abort()` as ending a path, in functions that
+  contain at least one explicit `return` (functions with none stay
+  with R3). It does not recognise `from sys import exit` aliases, bare
+  `exit()` / `quit()`, calls to user functions annotated `NoReturn`,
+  or `assert False`; those paths are still reported. Pinned as
+  `tests/fixtures/documented_limits/exit_alias_not_terminal.py`.
+- **None handled away from the call site.** D11 withholds a call to
+  an Optional producer only when None is handled at the call site or
+  on the very next statement: an `or` whose last operand is a literal
+  that cannot be None; an `==` / `!=` / `is` / `is not` comparison; a
+  walrus guard; or a None-guard right after the binding that raises,
+  exits, returns without reading the name, rebinds the name to a
+  non-None literal, or encloses every later read (closures included).
+  The None branch must be straight-line (plain expressions and
+  assignments that do not touch the name) up to that exit or rebind,
+  so a nested `return x` cannot slip out first. `continue` / `break`
+  count only when every read stays in the rest of the same loop body.
+  Guards inside a `try` that has handlers or a `finally`, or inside
+  a `with` block, are not trusted, because the exit can be caught,
+  suppressed or overridden there; and only a plain `x = <literal>`
+  counts as a rebind (tuple unpacking, `match` captures and other
+  binding forms are treated as possibly None). A name read by a
+  nested `lambda` / `def` / `class`, a generator expression or a
+  `type` alias (these read the variable when they run, not when they
+  are created), a `global` or `nonlocal` name, and every name in a
+  function that references `locals` / `vars` / `eval` / `exec` or a
+  frame (`sys._getframe`, `inspect.currentframe`, `f_locals`) are
+  never narrowed by a guard. Other ways of reaching a frame (for
+  example through a traceback object or a helper in another module)
+  are not detected. A guard further down,
+  a None branch with a nested `if` or loop before its exit, a guard
+  inside such a `try` even when its exception escapes, and
+  `assert x is not None` (stripped by `python -O`), are not seen, so
+  D11 still reports them.
+  Membership (`in`) and ordering comparisons are never treated as
+  handling None because they can raise on it. Pinned as
+  `tests/fixtures/documented_limits/optional_guard_not_adjacent.py`.
+- **Checks stop at function boundaries.** The body of a nested
+  function is not checked by D11 or D24 (only top-level functions and
+  class methods are), a `nonlocal` rebind made by a nested function is
+  not followed, a decorator that swallows the guard's `raise` (the
+  decorator form of `with contextlib.suppress`) is not seen, and
+  `locals` reached through a computed name (`getattr(builtins,
+  "loc" + "als")`) is not recognised as dynamic scope access.
+  Each can return None from a `-> str` function silently. Pinned as
+  `tests/fixtures/documented_limits/guard_escapes_function_boundary.py`.
+- **Comparisons are assumed to be bool.** A producer call used as an
+  operand of `==` / `!=` / `is` / `is not` is withheld from D11. `is`
+  always yields a bool, but `==` / `!=` call `__eq__` / `__ne__`, which
+  a class may override to return its argument, handing the None back.
+  D11 is silent there. Pinned as
+  `tests/fixtures/documented_limits/comparison_assumed_bool.py`.
+- **Terminal recognition is syntactic.** The other direction of the
+  limit above: a `raise` swallowed by `with contextlib.suppress(...)`
+  and `sys.exit()` on a local that merely shares the name `sys` (or
+  `os`) are counted as ending the path, so D24 stays silent on
+  functions that can fall through. The same recognition decides
+  whether a D11 None-guard ends its branch, so D11 is silent on that
+  shape too. Pinned as
+  `tests/fixtures/documented_limits/terminal_recognition_false_negatives.py`.
+- **Raise shapes D24 still misreads.** `for ... else: raise`, a
+  `while True:` loop whose exits are `return` and `raise`, and
+  `try` / `finally` with no `except` never fall through, yet D24
+  reports them, because loop bodies, loop `else` and handler-less
+  `try` are translated as maybe-runs. Separately, `try` / `except*` is
+  not translated at all, so returns in its `try` body are invisible
+  and D24 never runs on such a function, even when it falls through. Pinned as
+  `tests/fixtures/documented_limits/raise_terminal_remaining_false_positives.py`
+  (the `except*` case is pinned inline in `tests/test_documented_limits.py`).
+- **`-> None` carries no value contract.** `-> None` functions are
+  translated without a return type, so one that returns a value is not
+  reported. No checker compares returned values against `-> None`; use
+  mypy for that. Pinned as
+  `tests/fixtures/documented_limits/none_procedure_returning_value.py`.
+
 ### Rust adapter (current as of v0.8.3)
 
 Each Rust limit has a fixture in
