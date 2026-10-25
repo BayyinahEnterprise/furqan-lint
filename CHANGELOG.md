@@ -65,9 +65,32 @@ checker source, so the Form A hash literal moves from
 (`V0_13_0_CHECKER_SET_HASH`, previous literal kept in a comment).
 `docs/gate11-self-attestation.md` documents the verification steps.
 
+### Added: the side-street map as a test gate
+
+`bench/sidestreets/` enumerates every function body up to N statements
+from a grammar of Python control flow, executes each on every decision
+path (a counterfactual rerun separates a None from the Optional
+producer from a literal None), and compares the truth with
+furqan-lint's D24 / D11 verdicts. Its horizon is declared in
+`bench/sidestreets/README.md`; programs that hit a bound count as
+truncated, never as agreeing.
+
+Evidence that it sees: on D11 up to 4 statements (17,053 programs) it
+reports 1,768 false negatives for the first v1.0.1 cut (`83ec189`), 32
+for `df7f99d` (the class the external audit reported as F-01) and 0 from
+`f7c7282` on; at 5 statements (423,099 programs) it reports 2 for
+`f7c7282`, the leak the first independent review round found by hand,
+and 0 for the release.
+
+`tests/test_side_street_map.py` holds the release to it: D11 has zero
+false negatives (size 3 in every run; size 4 in the CI `test-full` job,
+enabled by `FURQAN_LINT_SIDE_STREET_MAP=1`), every D24 false negative at
+size 4 is the documented `contextlib.suppress` limit, and a self-test
+shows the map reports leaks when the linter is made blind.
+
 ### Tests
 
-Test count: 762 (v1.0.1) -> 772 (v1.0.2). Net delta: +10.
+Test count: 762 (v1.0.1) -> 776 (v1.0.2). Net delta: +14.
 
 - `tests/test_gate11_verify_self_real_release.py`: +10 (new; published
   asset hashes, exact bytes and default identity, identity override,
@@ -76,6 +99,9 @@ Test count: 762 (v1.0.1) -> 772 (v1.0.2). Net delta: +10.
   controls).
 - `tests/test_gate11_verify_self_subcommand.py`: one test amended in
   place (Naskh), no count change.
+- `tests/test_side_street_map.py`: +4 (new; D11 size 3 and size 4 with
+  zero false negatives, D24 size 4 misses all documented, blind-linter
+  self-test).
 
 ---
 

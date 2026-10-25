@@ -178,6 +178,9 @@ jobs:
           pip install -e ".[dev,rust,go,onnx]"
 
       - name: Run tests
+        env:
+          # v1.0.2: the size-4 side-street map gate (~90s) runs here only.
+          FURQAN_LINT_SIDE_STREET_MAP: "1"
         run: python -m pytest -q
 
   test-onnx-runtime:
