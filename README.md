@@ -747,9 +747,13 @@ than silent.
   walrus guard; or a None-guard right after the binding that raises,
   exits, returns without reading the name, rebinds the name to a
   non-None literal, or encloses every later read (closures included).
-  `continue` / `break` count only when every read stays in the rest of
-  the same loop body. A guard further down, and `assert x is not None`
-  (stripped by `python -O`), are not seen, so D11 still reports them.
+  The None branch must be straight-line (plain expressions and
+  assignments that do not touch the name) up to that exit or rebind,
+  so a nested `return x` cannot slip out first. `continue` / `break`
+  count only when every read stays in the rest of the same loop body.
+  A guard further down, a None branch with a nested `if` or loop
+  before its exit, and `assert x is not None` (stripped by
+  `python -O`), are not seen, so D11 still reports them.
   Membership (`in`) and ordering comparisons are never treated as
   handling None because they can raise on it. Pinned as
   `tests/fixtures/documented_limits/optional_guard_not_adjacent.py`.
@@ -764,8 +768,8 @@ than silent.
   `try` / `finally` with no `except` never fall through, yet D24
   reports them, because loop bodies, loop `else` and handler-less
   `try` are translated as maybe-runs. Separately, `try` / `except*` is
-  not translated at all, so returns inside it are invisible and D24
-  never runs on such a function. Pinned as
+  not translated at all, so returns in its `try` body are invisible
+  and D24 never runs on such a function, even when it falls through. Pinned as
   `tests/fixtures/documented_limits/raise_terminal_remaining_false_positives.py`
   (the `except*` case is pinned inline in `tests/test_documented_limits.py`).
 - **`-> None` carries no value contract.** `-> None` functions are

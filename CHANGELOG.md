@@ -35,8 +35,9 @@ the three shapes, adds a true-positive guard fixture beside each
 fix to catch a fix that widens into a false negative, and pins the
 fourth shape and the edges of each fix as documented limits. An
 independent review of the first cut found five such widenings in
-the D11 narrowing; they are closed below and each now has a guard
-case.
+the D11 narrowing, and the external v1.0.1 audit found a sixth
+(F-01) plus an invalid test specimen (F-02). All are closed below
+and each has a guard case.
 Self-check on `src/`: 12 diagnostics to 1, and that one is the
 documented `optional_stored_in_container` limit.
 
@@ -78,17 +79,51 @@ fixtures report the same diagnostics on both.
   binding followed on the next statement by a None-guard that
   raises, exits, returns without reading the name, rebinds the name
   to a non-None literal, or encloses every later read of the name
-  (reads inside closures included). `continue` / `break` count only
-  when every read stays in the rest of the same loop body.
+  (reads inside closures included). The None branch must be
+  straight-line (plain expressions and assignments that do not touch
+  the name) up to its exit or rebind, so the exit or rebind is
+  reached on every path. `continue` / `break` count only when every
+  read stays in the rest of the same loop body.
   Membership (`in`, `not in`) and ordering comparisons stay visible
   because they can raise on None (`None in "abc"` raises
   `TypeError`). Clean fixture: `optional_narrowed_at_call_site`.
-  Guard fixture: `optional_collapse_still_reported`, twelve
+  Guard fixture: `optional_collapse_still_reported`, fifteen
   functions that still fire: `leaky`, `late_guard`, `ordered`,
-  `guard_without_exit`, `has_letter_a`, `in_alphabet`, and the
+  `guard_without_exit`, `has_letter_a`, `in_alphabet`; the
   review-round shapes `break_leaks`, `walrus_continue_leaks`,
   `returns_the_none`, `or_none_default`, `rebinds_to_none`,
-  `closure_reads_after_guard`.
+  `closure_reads_after_guard`; and the audit F-01 shapes
+  `nested_return_before_rebind`, `nested_return_before_raise`,
+  `walrus_nested_return_before_raise`.
+
+### Audit corrections (external v1.0.1 audit, 2026-10-25)
+
+- **F-01 (HIGH), D11 false negative.** In the None branch of a
+  guard, `_rebinds` accepted any top-level non-None rebind and
+  `_ends_path` looked only at the branch's last statement. A nested
+  `if early: return name` placed before `name = "fallback"` (or
+  before a `raise`, or inside a walrus guard) returned the None
+  while D11 stayed silent. Both checks now require a straight-line
+  prefix: every statement before the exit or rebind is a plain
+  expression or assignment that does not touch the name, so the
+  exit or rebind is reached on every non-raising path. This is the
+  conservative correction the audit recommended; full
+  path-sensitive dominance analysis is not attempted. The audit's
+  reproduction is pinned verbatim through the module API with the
+  source tree, and the guard fixture is pinned through the CLI.
+  Clean siblings `label_after_log` and `shout_after_log` (a
+  straight-line log line, then the fallback or the raise) stay
+  silent. Cost: a None branch with a nested `if` before its exit is
+  now reported even when safe; pinned as `branch_before_exit` in
+  `optional_guard_not_adjacent`.
+- **F-02 (MEDIUM), invalid `except*` specimen.** The inline pin for
+  the `except*` blind spot put `return` inside an `except*` handler,
+  which `ast.parse` accepts but `compile` rejects. The specimen now
+  returns from the `try` body, passes in the handler, is compiled
+  and executed before translation (`f(0)` returns None, `f(1)`
+  returns 1), and pins that neither D24 nor R3 reports it. New gate
+  `test_every_python_fixture_compiles` compiles every Python file
+  under `tests/fixtures/` (63 at this release).
 
 ### Limitations introduced
 
@@ -101,8 +136,10 @@ fixtures report the same diagnostics on both.
   `assert False` are not recognised as ending a path; D24 still
   reports them.
 - `optional_guard_not_adjacent`: a None-guard that is not the
-  statement right after the binding, and `assert x is not None`
-  (stripped by `python -O`), are not seen; D11 still reports them.
+  statement right after the binding, a None branch with a nested
+  `if` or loop before its exit (audit F-01 correction), and
+  `assert x is not None` (stripped by `python -O`), are not seen;
+  D11 still reports them.
 - `terminal_recognition_false_negatives`: recognition is
   syntactic, so a `raise` inside `with contextlib.suppress(...)` and
   `sys.exit()` on a local named `sys` count as ending the path; D24
@@ -111,7 +148,8 @@ fixtures report the same diagnostics on both.
   `while True:` ending in `raise`, and `try` / `finally` with no
   `except` still draw D24. Pre-existing and newly documented:
   `try` / `except*` is not translated, so D24 never sees returns
-  inside it (pinned inline, Python 3.11+).
+  in its `try` body, even when the function falls through (pinned
+  inline with a compilable specimen, Python 3.11+).
 - `none_procedure_returning_value`: a `-> None` function that
   returns a value is not reported. v1.0.0 sometimes reported it, but
   only by accident, through D24's fall-through rule.
@@ -165,13 +203,13 @@ v1.1.0, as a deliberate hash change with its own CHANGELOG entry.
 
 ### Tests
 
-Test count: 732 (v1.0.0) -> 746 (v1.0.1). Net delta: +14.
+Test count: 732 (v1.0.0) -> 749 (v1.0.1). Net delta: +17.
 
-- `tests/test_checks.py`: +7 (raise-terminal pass, raise-branch
+- `tests/test_checks.py`: +10 (raise-terminal pass, raise-branch
   guard, no double report with R3 (run with the source tree so R3
-  actually executes), call-site narrowing pass,
-  collapse guard, generator and procedure contract, procedure
-  advisory).
+  actually executes), call-site narrowing pass, collapse guard,
+  generator and procedure contract, procedure advisory, audit F-01
+  via module API, audit F-01 via CLI, fixture compile gate).
 - `tests/test_documented_limits.py`: +7 (one per new documented
   limit fixture, plus the inline `except*` pin).
 - `tests/test_action.py`: two tests rewritten in place, no count

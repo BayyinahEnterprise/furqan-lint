@@ -76,9 +76,11 @@ drift, a v0.6.1-style corrective is required.
   recognition."
 - **`optional_guard_not_adjacent.py`.** (v1.0.1) D11 withholds a call
   only when None is handled at the call site or by a guard on the
-  very next statement. A guard further down, and `assert x is not
-  None`, are not seen; the assert is left visible on purpose because
-  `python -O` strips it. README registers this under "None handled
+  very next statement whose branch is straight-line up to its exit
+  or rebind. A guard further down, a branch with a nested `if` before
+  its exit (the price of the v1.0.1 audit F-01 correction), and
+  `assert x is not None` are not seen; the assert is left visible on
+  purpose because `python -O` strips it. README registers this under "None handled
   away from the call site."
 - **`terminal_recognition_false_negatives.py`.** (v1.0.1) Terminal
   recognition is syntactic: a `raise` inside `with

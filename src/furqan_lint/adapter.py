@@ -1080,14 +1080,33 @@ def _is_name(node: ast.AST, var: str) -> bool:
     return isinstance(node, ast.Name) and node.id == var
 
 
+# Statements allowed before the exit or rebind in a None branch: they
+# cannot transfer control out of the branch except by raising, so the
+# exit or rebind that follows is reached on every non-raising path.
+_STRAIGHT_LINE = (ast.Expr, ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Pass)
+
+
+def _straight_prefix(stmts: list[ast.stmt], var: str) -> bool:
+    """Every statement is simple (no branch, loop, ``try``, ``with``,
+    ``return``, ``break`` or ``continue``) and none of them touches
+    ``var``. v1.0.1 audit F-01: without this, ``if x is None:`` whose
+    body is ``if early: return x`` followed by a raise or a rebind
+    leaked the None through the nested return."""
+    return all(isinstance(st, _STRAIGHT_LINE) and not _reads(st, var) for st in stmts)
+
+
 def _ends_path(body: list[ast.stmt], var: str, loop_exit_ok: bool = False) -> bool:
-    """The None branch's last statement leaves without leaking ``var``.
+    """The None branch leaves without leaking ``var``: a straight-line
+    prefix that never touches ``var`` (``_straight_prefix``), then an
+    exit as the last statement.
 
     ``return`` counts only when its value does not read ``var``
     (``if x is None: return x`` hands the None straight back).
     ``continue`` / ``break`` leave only the loop body, so they count
     only when every read of ``var`` is inside that loop body
     (``loop_exit_ok``)."""
+    if not _straight_prefix(body[:-1], var):
+        return False
     last = body[-1]
     if isinstance(last, ast.Return):
         return last.value is None or not _reads(last.value, var)
@@ -1122,8 +1141,9 @@ def _rebinds(body: list[ast.stmt], var: str) -> bool:
     """``var`` is rebound at the top level of the None branch to a
     value that cannot be None, and nothing in the branch binds it to
     anything else."""
-    if not any(_bound_name(stmt) == var for stmt in body):
-        return False
+    first = next((i for i, stmt in enumerate(body) if _bound_name(stmt) == var), None)
+    if first is None or not _straight_prefix(body[:first], var):
+        return False  # v1.0.1 audit F-01: the rebind must be reached on every path
     for n in ast.walk(ast.Module(body=body, type_ignores=[])):
         if not _binding_is_non_none(n, var):
             return False

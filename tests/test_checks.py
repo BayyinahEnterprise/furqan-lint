@@ -144,7 +144,8 @@ def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
     one diagnostic per function. Includes the review-round shapes that
     resemble a guard but let None out (``break`` / ``continue`` out of
     a loop, ``return x`` in the None branch, ``or None``, rebinding to
-    None, a closure read after the guard)."""
+    None, a closure read after the guard) and the v1.0.1 audit F-01
+    shapes (a nested ``return x`` before the rebind or the raise)."""
     module = translate_file(failing_dir / "optional_collapse_still_reported.py")
     diags = check_python_module(module)
     s = _by_checker(diags, "status_coverage")
@@ -162,6 +163,9 @@ def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
             "or_none_default",
             "rebinds_to_none",
             "closure_reads_after_guard",
+            "nested_return_before_rebind",
+            "nested_return_before_raise",
+            "walrus_nested_return_before_raise",
         ]
     )
     named = sorted(name for name in expected if any(f"function '{name}'" in str(d) for d in s))
@@ -332,3 +336,59 @@ def test_class_methods_checked() -> None:
     module = translate_source(src, "<cls>")
     diags = check_python_module(module)
     assert any(isinstance(d, Marad) for _, d in diags)
+
+
+@pytest.mark.unit
+def test_audit_f01_nested_return_before_rebind_fires_d11_via_module_api() -> None:
+    """v1.0.1 audit F-01 reproduction, verbatim, through the module API
+    with the source tree supplied (all four checkers run). The None
+    branch rebinds ``name`` only after a nested ``return name``, so the
+    None escapes on the ``early`` path and D11 must report it."""
+    source = (
+        "from typing import Optional\n"
+        "\n"
+        "def find_name(uid: int) -> Optional[str]:\n"
+        "    return None\n"
+        "\n"
+        "def leak(uid: int, early: bool) -> str:\n"
+        "    name = find_name(uid)\n"
+        "    if name is None:\n"
+        "        if early:\n"
+        "            return name\n"
+        '        name = "fallback"\n'
+        "    return name\n"
+    )
+    namespace: dict = {}
+    exec(compile(source, "<f01>", "exec"), namespace)
+    assert namespace["leak"](1, True) is None  # the leak is real
+    diags = check_python_module(translate_source(source), ast.parse(source))
+    s = _by_checker(diags, "status_coverage")
+    assert len(s) == 1
+    assert isinstance(s[0], Marad)
+    assert "function 'leak'" in str(s[0])
+
+
+@pytest.mark.integration
+def test_audit_f01_guard_fixture_fires_through_cli(failing_dir: Path) -> None:
+    """The F-01 guard cases fire through the real CLI entry point."""
+    result = _run_cli("check", str(failing_dir / "optional_collapse_still_reported.py"))
+    assert result.returncode == 1
+    for name in (
+        "nested_return_before_rebind",
+        "nested_return_before_raise",
+        "walrus_nested_return_before_raise",
+    ):
+        assert f"[status_coverage] function '{name}'" in result.stdout
+
+
+@pytest.mark.unit
+def test_every_python_fixture_compiles() -> None:
+    """v1.0.1 audit F-02: every Python specimen the suite reasons about
+    must be valid, compilable Python, not merely parseable. ``ast.parse``
+    accepts some code that ``compile`` rejects (for example ``return``
+    inside ``except*``), and a verdict on code that cannot run is not
+    evidence about code that can."""
+    fixtures = sorted((REPO_ROOT / "tests" / "fixtures").rglob("*.py"))
+    assert fixtures
+    for path in fixtures:
+        compile(path.read_text(encoding="utf-8"), str(path), "exec")

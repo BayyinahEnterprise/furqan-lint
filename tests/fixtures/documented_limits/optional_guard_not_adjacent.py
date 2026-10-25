@@ -3,7 +3,8 @@
 v1.0.1 withholds a call from D11 only when the None arm is handled at
 the call site: ``or`` default, ``==`` / ``is`` comparison, walrus
 guard, or a None-guard on the statement immediately after the
-binding. Each function below handles None correctly by another route,
+binding, where the guard's branch is straight-line up to its exit or
+rebind. Each function below handles None correctly by another route,
 and D11 still reports it. Pinned so that widening narrowing is a
 deliberate, recorded change.
 
@@ -31,4 +32,17 @@ def guard_two_lines_down(uid: int) -> str:
 def asserted(uid: int) -> str:
     name = find_name(uid)
     assert name is not None
+    return name
+
+
+def branch_before_exit(uid: int, verbose: bool) -> str:
+    # v1.0.1 audit F-01 consequence: the None branch must be
+    # straight-line up to its exit or rebind. A nested ``if`` that
+    # never touches ``name`` is safe here, but D11 cannot tell without
+    # control-flow analysis, so it stays visible.
+    name = find_name(uid)
+    if name is None:
+        if verbose:
+            print("missing", uid)
+        raise KeyError(uid)
     return name

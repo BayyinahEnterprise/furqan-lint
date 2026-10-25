@@ -2,7 +2,7 @@
 
 v1.0.1 true-positive guard for the narrowing fix. Each function below
 receives ``str | None`` and returns a bare ``str`` or ``bool`` without
-explicitly handling None where it was received. Expected: twelve D11
+explicitly handling None where it was received. Expected: fifteen D11
 diagnostics, one per function.
 """
 
@@ -90,3 +90,33 @@ def closure_reads_after_guard(uid: int) -> str:
     if name is not None:
         print(name)
     return (lambda: name)()
+
+
+# v1.0.1 audit F-01: a None branch that returns the None on a nested
+# path before its rebind or raise. Each must keep firing.
+
+
+def nested_return_before_rebind(uid: int, early: bool) -> str:
+    name = find_name(uid)
+    if name is None:
+        if early:
+            return name  # returns None before the fallback is assigned
+        name = "fallback"
+    return name
+
+
+def nested_return_before_raise(uid: int, early: bool) -> str:
+    name = find_name(uid)
+    if name is None:
+        if early:
+            return name
+        raise KeyError(uid)
+    return name
+
+
+def walrus_nested_return_before_raise(uid: int, early: bool) -> str:
+    if (name := find_name(uid)) is None:
+        if early:
+            return name
+        raise KeyError(uid)
+    return name

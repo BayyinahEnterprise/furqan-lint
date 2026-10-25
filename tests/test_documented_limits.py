@@ -171,14 +171,16 @@ def test_exit_alias_not_terminal_still_fires_d24() -> None:
 
 def test_optional_guard_not_adjacent_still_fires_d11() -> None:
     """A None-guard that is not the statement right after the binding,
-    and ``assert x is not None`` (stripped by ``python -O``), are not
-    seen as handling None, so D11 still reports both. Documented in
+    ``assert x is not None`` (stripped by ``python -O``), and a None
+    branch with a nested ``if`` before its exit (v1.0.1 audit F-01
+    consequence) are not seen as handling None, so D11 still reports
+    all three. Documented in
     README "Remaining limitations"."""
     result = _run_check("optional_guard_not_adjacent.py")
     assert result.returncode == 1
-    for name in ("guard_two_lines_down", "asserted"):
+    for name in ("guard_two_lines_down", "asserted", "branch_before_exit"):
         assert f"[status_coverage] function '{name}'" in result.stdout
-    assert result.stdout.count("[status_coverage]") == 2
+    assert result.stdout.count("[status_coverage]") == 3
 
 
 # ---------------------------------------------------------------------------
@@ -216,9 +218,17 @@ def test_raise_terminal_remaining_false_positives_still_fire_d24() -> None:
 @pytest.mark.skipif(sys.version_info < (3, 11), reason="except* needs Python 3.11")
 def test_try_star_hides_missing_return_from_d24() -> None:
     """``try`` / ``except*`` is not translated, so a ``return`` inside
-    it is invisible and D24 never runs on the function, even when a
-    path falls through. Pre-existing; documented in README "Remaining
-    limitations" next to the raise-terminal limits."""
+    its ``try`` body is invisible and D24 never runs on the function,
+    even though a path falls through. Pre-existing; documented in
+    README "Remaining limitations" next to the raise-terminal limits.
+
+    v1.0.1 audit F-02: the specimen must be legal Python. ``return``,
+    ``break`` and ``continue`` are forbidden inside an ``except*``
+    handler, so the return sits in the ``try`` body and the handler
+    only passes. The test compiles and runs the specimen first, so it
+    pins behaviour on code that can actually execute."""
+    import ast as _ast
+
     from furqan_lint.adapter import translate_source
     from furqan_lint.runner import check_python_module
 
@@ -228,10 +238,15 @@ def test_try_star_hides_missing_return_from_d24() -> None:
         "        if x:\n"
         "            return 1\n"
         "    except* ValueError:\n"
-        "        return 2\n"
+        "        pass\n"
     )
-    names = [n for n, _ in check_python_module(translate_source(source))]
+    namespace: dict = {}
+    exec(compile(source, "<try-star>", "exec"), namespace)
+    assert namespace["f"](0) is None  # the fall-through is real
+    assert namespace["f"](1) == 1
+    names = [n for n, _ in check_python_module(translate_source(source), _ast.parse(source))]
     assert "all_paths_return" not in names
+    assert "zero_return_path" not in names
 
 
 # ---------------------------------------------------------------------------

@@ -57,3 +57,23 @@ def name_length(uid: int) -> int:
     if name is not None:
         return len(name)
     return 0
+
+
+# v1.0.1 audit F-01 clean siblings: a straight-line prefix that does
+# not touch the name, then the fallback or the raise, is still handled.
+
+
+def label_after_log(uid: int) -> str:
+    name = find_name(uid)
+    if name is None:
+        print("missing", uid)
+        name = "anonymous"
+    return name
+
+
+def shout_after_log(uid: int) -> str:
+    name = find_name(uid)
+    if name is None:
+        print("missing", uid)
+        raise KeyError(uid)
+    return name.upper()
