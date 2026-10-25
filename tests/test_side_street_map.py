@@ -61,6 +61,10 @@ def test_d24_map_size_4_false_negatives_are_documented() -> None:
     undocumented = [r for r in fn if "contextlib.suppress" not in r["src"]]
     assert fn, "expected the documented suppress limit to appear"
     assert not undocumented, "undocumented D24 misses, e.g.:\n" + _summary(undocumented)
+    # Ratchet (v1.0.2): R3 over-reports at size 4 fell from 564 to 222
+    # with the completion analysis. They may fall further, never rise.
+    r3_over = [r for r in records if r["cls"] == "FP_r3"]
+    assert len(r3_over) <= 222, f"R3 over-reports rose to {len(r3_over)}"
 
 
 @pytest.mark.unit

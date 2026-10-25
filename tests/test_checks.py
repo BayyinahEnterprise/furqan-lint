@@ -458,3 +458,14 @@ def test_type_alias_late_scope_blocks_narrowing() -> None:
         check_python_module(translate_source(source), ast.parse(source)), "status_coverage"
     )
     assert any("function 'first_name'" in str(d) for d in s)
+
+
+@pytest.mark.unit
+def test_r3_never_completing_bodies_pass(clean_dir: Path) -> None:
+    """v1.0.2: R3 stays silent on bodies where no path finishes
+    normally (ending in sys.exit / os._exit, raise-or-exit branches,
+    statements before an infinite loop, a finally that exits)."""
+    path = clean_dir / "r3_never_completing_bodies.py"
+    source = path.read_text(encoding="utf-8")
+    diags = check_python_module(translate_file(path), ast.parse(source))
+    assert _by_checker(diags, "zero_return_path") == []

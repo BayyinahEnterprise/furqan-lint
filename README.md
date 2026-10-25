@@ -793,6 +793,14 @@ it.
   "loc" + "als")`) is not recognised as dynamic scope access.
   Each can return None from a `-> str` function silently. Pinned as
   `tests/fixtures/documented_limits/guard_escapes_function_boundary.py`.
+- **R3 completion is conservative.** R3 (zero-return) stays silent
+  only when it can prove no path finishes normally: every path raises,
+  calls `sys.exit` / `os._exit` / `os.abort`, or loops in `while True`
+  without `break`. It does not try to prove that a `with` block's
+  context manager re-raises, that a `for` loop or an `except` handler
+  cannot fall through, or which loop a nested `break` leaves, so such
+  functions are still reported. Pinned as
+  `tests/fixtures/documented_limits/r3_conservative_completion.py`.
 - **Comparisons are assumed to be bool.** A producer call used as an
   operand of `==` / `!=` / `is` / `is not` is withheld from D11. `is`
   always yields a bool, but `==` / `!=` call `__eq__` / `__ne__`, which

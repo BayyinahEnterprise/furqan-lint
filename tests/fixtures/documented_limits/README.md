@@ -109,6 +109,11 @@ drift, a v0.6.1-style corrective is required.
   nested function is not followed, and a decorator that swallows the
   guard's `raise` is not seen. README registers this under "Checks
   stop at function boundaries."
+- **`r3_conservative_completion.py`.** (v1.0.2) R3's completion
+  analysis treats `with`, `for`, `except` handlers and nested-loop
+  `break` as possibly completing, so functions that never return
+  normally through those shapes are still reported. README registers
+  this under "R3 completion is conservative."
 
 ## How to retire a fixture
 
