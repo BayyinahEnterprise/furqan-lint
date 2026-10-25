@@ -248,10 +248,7 @@ def cmd_manifest_init(args: list[str]) -> int:
         elif module_path.suffix == ".go":
             # v1.0.1: .go previously fell through to the Python
             # builder and failed with a SyntaxError.
-            go_manifest = _build_go_manifest(module_path, trust_config, opts, previous=None)
-            if go_manifest is None:
-                return 1
-            manifest = go_manifest
+            manifest = _build_go_manifest(module_path, trust_config, opts, previous=None)
         else:
             manifest_dict = _build_manifest_dict(
                 module_path,
@@ -264,6 +261,8 @@ def cmd_manifest_init(args: list[str]) -> int:
     except DynamicAllError as e:
         print(f"INDETERMINATE: {e}", file=sys.stderr)
         return 2
+    except _GoManifestUnavailable:
+        return 1  # reason already printed
     except (ModuleCanonicalizationError, CasmSchemaError) as e:
         print(f"{e.code}: {e}", file=sys.stderr)
         return 1
@@ -289,17 +288,26 @@ def cmd_manifest_init(args: list[str]) -> int:
     return 0
 
 
+class _GoManifestUnavailable(Exception):
+    """The Go manifest could not be built; the reason was printed."""
+
+
 def _build_go_manifest(
     module_path: Path,
     trust_config: TrustConfig,
     opts: dict[str, object],
     previous: Manifest | None,
-) -> Manifest | None:
-    """Build a Go manifest, or print the reason and return None.
+) -> Manifest:
+    """Build a Go manifest, or print the reason and raise
+    ``_GoManifestUnavailable`` (the CLI exits 1 with a message, not a
+    traceback).
 
-    Missing goast (the ``[go]`` extra) and unparseable Go source are
-    reported, not raised, so the CLI exits 1 with a message instead of
-    a traceback."""
+    v1.0.2: this returned ``Manifest | None`` in v1.0.1. The callers
+    checked for None correctly, but inside a ``try`` block, where D11
+    deliberately does not trust a guard (documented limit
+    ``guard_inside_try``), so furqan-lint's self-check reported both
+    callers. Raising keeps the contract total: there is no None arm to
+    collapse."""
     from furqan_lint.gate11.go_verification import build_manifest_go
     from furqan_lint.go_adapter import GoExtrasNotInstalled, GoParseError
 
@@ -316,9 +324,10 @@ def _build_go_manifest(
         )
     except GoExtrasNotInstalled as e:
         print(f"Go Gate 11 support not installed: {e}", file=sys.stderr)
+        raise _GoManifestUnavailable from e
     except GoParseError as e:
         print(f"Go parse error: {e}", file=sys.stderr)
-    return None
+        raise _GoManifestUnavailable from e
 
 
 def cmd_manifest_verify(args: list[str]) -> int:
@@ -484,12 +493,9 @@ def cmd_manifest_update(args: list[str]) -> int:
                 print(f"INDETERMINATE: {e}", file=sys.stderr)
                 return 2
         elif module_path.suffix == ".go":
-            go_manifest = _build_go_manifest(
+            manifest = _build_go_manifest(
                 module_path, trust_config, opts, previous=existing.manifest
             )
-            if go_manifest is None:
-                return 1
-            manifest = go_manifest
         else:
             manifest_dict = _build_manifest_dict(
                 module_path,
@@ -502,6 +508,8 @@ def cmd_manifest_update(args: list[str]) -> int:
     except DynamicAllError as e:
         print(f"INDETERMINATE: {e}", file=sys.stderr)
         return 2
+    except _GoManifestUnavailable:
+        return 1  # reason already printed
     except (ModuleCanonicalizationError, CasmSchemaError) as e:
         print(f"{e.code}: {e}", file=sys.stderr)
         return 1
