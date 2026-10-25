@@ -92,6 +92,7 @@ _README_TOPIC_KEYWORDS: dict[str, tuple[str, ...] | None] = {
     "terminal_recognition_false_negatives": ("Terminal recognition is syntactic",),
     "raise_terminal_remaining_false_positives": ("Raise shapes D24 still misreads",),
     "none_procedure_returning_value": ("carries no value contract",),
+    "comparison_assumed_bool": ("Comparisons are assumed to be bool",),
 }
 
 

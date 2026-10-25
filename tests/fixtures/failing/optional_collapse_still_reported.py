@@ -2,12 +2,13 @@
 
 v1.0.1 true-positive guard for the narrowing fix. Each function below
 receives ``str | None`` and returns a bare ``str`` or ``bool`` without
-explicitly handling None where it was received. Expected: fifteen D11
+explicitly handling None where it was received. Expected: twenty-one D11
 diagnostics, one per function.
 """
 
 from __future__ import annotations
 
+import sys
 from typing import Optional
 
 
@@ -119,4 +120,65 @@ def walrus_nested_return_before_raise(uid: int, early: bool) -> str:
         if early:
             return name
         raise KeyError(uid)
+    return name
+
+
+# v1.0.1 verification round: the guard's exit is caught, suppressed or
+# overridden, or the fallback is replaced by a binding form that can
+# be None. Each must keep firing.
+
+
+def caught_raise_leaks(uid: int) -> str:
+    try:
+        name = find_name(uid)
+        if name is None:
+            raise ValueError("missing")
+    except ValueError:
+        return name  # the raise was caught; name is still None
+    return name
+
+
+def caught_walrus_raise_leaks(uid: int) -> str:
+    try:
+        if (name := find_name(uid)) is None:
+            raise KeyError(uid)
+    except KeyError:
+        return name
+    return name
+
+
+def caught_exit_leaks(uid: int) -> str:
+    try:
+        name = find_name(uid)
+        if name is None:
+            sys.exit(1)
+    except SystemExit:
+        pass
+    return name
+
+
+def finally_overrides_fallback(uid: int) -> str:
+    try:
+        name = find_name(uid)
+        if name is None:
+            return "fallback"
+    finally:
+        return name  # noqa: B012  overrides the fallback return
+
+
+def tuple_rebind_to_none(uid: int) -> str:
+    name = find_name(uid)
+    if name is None:
+        name = "fallback"
+        name, _ = None, 0
+    return name
+
+
+def match_capture_rebind(uid: int) -> str:
+    name = find_name(uid)
+    if name is None:
+        name = "fallback"
+        match None:
+            case name:
+                pass
     return name

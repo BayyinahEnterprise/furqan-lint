@@ -35,11 +35,14 @@ the three shapes, adds a true-positive guard fixture beside each
 fix to catch a fix that widens into a false negative, and pins the
 fourth shape and the edges of each fix as documented limits. An
 independent review of the first cut found five such widenings in
-the D11 narrowing, and the external v1.0.1 audit found a sixth
-(F-01) plus an invalid test specimen (F-02). All are closed below
-and each has a guard case.
-Self-check on `src/`: 12 diagnostics to 1, and that one is the
-documented `optional_stored_in_container` limit.
+the D11 narrowing, the external v1.0.1 audit found a sixth (F-01)
+plus an invalid test specimen (F-02), and a fresh-context
+verification of the audit fixes found six more. All are closed
+below and each has a guard case.
+Self-check on `src/`: 12 diagnostics to 1 error plus 1
+informational S2 note. The error is the documented
+`optional_stored_in_container` limit; the note is a generator whose
+guard sits inside a `try` (see the verification round below).
 
 Every fix was checked fail-before / pass-after: the clean fixtures
 below fail on v1.0.0 and pass on v1.0.1; the failing guard
@@ -82,19 +85,25 @@ fixtures report the same diagnostics on both.
   (reads inside closures included). The None branch must be
   straight-line (plain expressions and assignments that do not touch
   the name) up to its exit or rebind, so the exit or rebind is
-  reached on every path. `continue` / `break` count only when every
-  read stays in the rest of the same loop body.
+  reached on every path. Guards inside a `try` with handlers or a
+  `finally`, or inside a `with` block, are not trusted, and only a
+  plain `x = <non-None literal>` counts as a rebind. `continue` /
+  `break` count only when every read stays in the rest of the same
+  loop body.
   Membership (`in`, `not in`) and ordering comparisons stay visible
   because they can raise on None (`None in "abc"` raises
   `TypeError`). Clean fixture: `optional_narrowed_at_call_site`.
-  Guard fixture: `optional_collapse_still_reported`, fifteen
+  Guard fixture: `optional_collapse_still_reported`, twenty-one
   functions that still fire: `leaky`, `late_guard`, `ordered`,
   `guard_without_exit`, `has_letter_a`, `in_alphabet`; the
   review-round shapes `break_leaks`, `walrus_continue_leaks`,
   `returns_the_none`, `or_none_default`, `rebinds_to_none`,
   `closure_reads_after_guard`; and the audit F-01 shapes
   `nested_return_before_rebind`, `nested_return_before_raise`,
-  `walrus_nested_return_before_raise`.
+  `walrus_nested_return_before_raise`; and the verification-round
+  shapes `caught_raise_leaks`, `caught_walrus_raise_leaks`,
+  `caught_exit_leaks`, `finally_overrides_fallback`,
+  `tuple_rebind_to_none`, `match_capture_rebind`.
 
 ### Audit corrections (external v1.0.1 audit, 2026-10-25)
 
@@ -123,7 +132,27 @@ fixtures report the same diagnostics on both.
   and executed before translation (`f(0)` returns None, `f(1)`
   returns 1), and pins that neither D24 nor R3 reports it. New gate
   `test_every_python_fixture_compiles` compiles every Python file
-  under `tests/fixtures/` (63 at this release).
+  under `tests/fixtures/` (64 at this release), and
+  `tests/conftest.py` now compiles every inline source string a test
+  hands to `translate_source`, so an invalid inline specimen fails
+  loudly (pinned by `test_inline_specimens_are_compiled_before_translation`).
+- **Verification round (six further D11 false negatives).** A
+  fresh-context check of the F-01 fix confirmed it and found six
+  older leaks, present since the first v1.0.1 cut, each executed to
+  prove the None reaches the caller: a guard's `raise` caught by an
+  enclosing `except` (plain and walrus forms), a guard's `sys.exit`
+  caught as `SystemExit`, a `finally: return name` overriding the
+  guard's fallback return, and a fallback replaced by tuple
+  unpacking (`name, _ = None, 0`) or a `match` capture. Guards inside
+  a `try` with handlers or `finally`, or inside a `with` block, are
+  no longer trusted, and every binding form except a plain
+  `name = <non-None literal>` counts as possibly None. A seventh
+  shape, an `__eq__` that returns its argument, is pinned as the
+  documented limit `comparison_assumed_bool`. Cost: a guard inside
+  such a `try` is now reported even when its exception escapes,
+  pinned as `guard_inside_try`; and the self-check gains one
+  informational S2 note (`check_shape_coverage`, a generator whose
+  guard sits inside a `try`), exit status unchanged.
 
 ### Limitations introduced
 
@@ -137,7 +166,9 @@ fixtures report the same diagnostics on both.
   reports them.
 - `optional_guard_not_adjacent`: a None-guard that is not the
   statement right after the binding, a None branch with a nested
-  `if` or loop before its exit (audit F-01 correction), and
+  `if` or loop before its exit (audit F-01 correction), a guard
+  inside a `try` with handlers or `finally` (verification round),
+  and
   `assert x is not None` (stripped by `python -O`), are not seen;
   D11 still reports them.
 - `terminal_recognition_false_negatives`: recognition is
@@ -150,6 +181,9 @@ fixtures report the same diagnostics on both.
   `try` / `except*` is not translated, so D24 never sees returns
   in its `try` body, even when the function falls through (pinned
   inline with a compilable specimen, Python 3.11+).
+- `comparison_assumed_bool`: a producer call used as an `==` /
+  `!=` operand is assumed to yield a bool; an `__eq__` that returns
+  its argument hands the None back and D11 is silent.
 - `none_procedure_returning_value`: a `-> None` function that
   returns a value is not reported. v1.0.0 sometimes reported it, but
   only by accident, through D24's fall-through rule.
@@ -203,14 +237,15 @@ v1.1.0, as a deliberate hash change with its own CHANGELOG entry.
 
 ### Tests
 
-Test count: 732 (v1.0.0) -> 749 (v1.0.1). Net delta: +17.
+Test count: 732 (v1.0.0) -> 751 (v1.0.1). Net delta: +19.
 
-- `tests/test_checks.py`: +10 (raise-terminal pass, raise-branch
+- `tests/test_checks.py`: +11 (raise-terminal pass, raise-branch
   guard, no double report with R3 (run with the source tree so R3
   actually executes), call-site narrowing pass, collapse guard,
   generator and procedure contract, procedure advisory, audit F-01
-  via module API, audit F-01 via CLI, fixture compile gate).
-- `tests/test_documented_limits.py`: +7 (one per new documented
+  via module API, audit F-01 via CLI, fixture compile gate, inline
+  specimen compile gate).
+- `tests/test_documented_limits.py`: +8 (one per new documented
   limit fixture, plus the inline `except*` pin).
 - `tests/test_action.py`: two tests rewritten in place, no count
   change.

@@ -144,8 +144,11 @@ def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
     one diagnostic per function. Includes the review-round shapes that
     resemble a guard but let None out (``break`` / ``continue`` out of
     a loop, ``return x`` in the None branch, ``or None``, rebinding to
-    None, a closure read after the guard) and the v1.0.1 audit F-01
-    shapes (a nested ``return x`` before the rebind or the raise)."""
+    None, a closure read after the guard), the v1.0.1 audit F-01
+    shapes (a nested ``return x`` before the rebind or the raise), and
+    the verification-round shapes (a guard exit that is caught,
+    suppressed or overridden by ``finally``; a fallback replaced by
+    tuple unpacking or a ``match`` capture)."""
     module = translate_file(failing_dir / "optional_collapse_still_reported.py")
     diags = check_python_module(module)
     s = _by_checker(diags, "status_coverage")
@@ -166,6 +169,12 @@ def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
             "nested_return_before_rebind",
             "nested_return_before_raise",
             "walrus_nested_return_before_raise",
+            "caught_raise_leaks",
+            "caught_walrus_raise_leaks",
+            "caught_exit_leaks",
+            "finally_overrides_fallback",
+            "tuple_rebind_to_none",
+            "match_capture_rebind",
         ]
     )
     named = sorted(name for name in expected if any(f"function '{name}'" in str(d) for d in s))
@@ -392,3 +401,19 @@ def test_every_python_fixture_compiles() -> None:
     assert fixtures
     for path in fixtures:
         compile(path.read_text(encoding="utf-8"), str(path), "exec")
+
+
+@pytest.mark.unit
+def test_inline_specimens_are_compiled_before_translation() -> None:
+    """v1.0.1 audit F-02 follow-up: ``tests/conftest.py`` routes every
+    inline ``translate_source`` call through ``compile``. Code that
+    ``ast.parse`` accepts but Python cannot run must be rejected, so an
+    invalid specimen like the original ``except*`` one fails loudly."""
+    import furqan_lint.adapter as adapter
+
+    parse_only = "def f(x: int) -> int:\n    return x\nreturn 1\n"
+    ast.parse(parse_only)  # the parser accepts it
+    with pytest.raises(SyntaxError):
+        adapter.translate_source(parse_only)
+    with pytest.raises(SyntaxError):
+        translate_source(parse_only)

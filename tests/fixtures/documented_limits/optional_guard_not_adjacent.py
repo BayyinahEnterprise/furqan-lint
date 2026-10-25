@@ -46,3 +46,18 @@ def branch_before_exit(uid: int, verbose: bool) -> str:
             print("missing", uid)
         raise KeyError(uid)
     return name
+
+
+def guard_inside_try(uid: int) -> str:
+    # v1.0.1 verification-round consequence: inside a ``try`` with
+    # handlers or ``finally`` (or a ``with`` block) a guard's raise may
+    # be caught, so D11 does not trust it. Here only OSError is caught
+    # and the KeyError escapes, so the guard is safe, but D11 cannot
+    # tell without exception-flow analysis.
+    try:
+        name = find_name(uid)
+        if name is None:
+            raise KeyError(uid)
+        return name
+    except OSError:
+        return ""

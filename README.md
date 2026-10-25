@@ -751,12 +751,24 @@ than silent.
   assignments that do not touch the name) up to that exit or rebind,
   so a nested `return x` cannot slip out first. `continue` / `break`
   count only when every read stays in the rest of the same loop body.
-  A guard further down, a None branch with a nested `if` or loop
-  before its exit, and `assert x is not None` (stripped by
-  `python -O`), are not seen, so D11 still reports them.
+  Guards inside a `try` that has handlers or a `finally`, or inside
+  a `with` block, are not trusted, because the exit can be caught,
+  suppressed or overridden there; and only a plain `x = <literal>`
+  counts as a rebind (tuple unpacking, `match` captures and other
+  binding forms are treated as possibly None). A guard further down,
+  a None branch with a nested `if` or loop before its exit, a guard
+  inside such a `try` even when its exception escapes, and
+  `assert x is not None` (stripped by `python -O`), are not seen, so
+  D11 still reports them.
   Membership (`in`) and ordering comparisons are never treated as
   handling None because they can raise on it. Pinned as
   `tests/fixtures/documented_limits/optional_guard_not_adjacent.py`.
+- **Comparisons are assumed to be bool.** A producer call used as an
+  operand of `==` / `!=` / `is` / `is not` is withheld from D11. `is`
+  always yields a bool, but `==` / `!=` call `__eq__` / `__ne__`, which
+  a class may override to return its argument, handing the None back.
+  D11 is silent there. Pinned as
+  `tests/fixtures/documented_limits/comparison_assumed_bool.py`.
 - **Terminal recognition is syntactic.** The other direction of the
   limit above: a `raise` swallowed by `with contextlib.suppress(...)`
   and `sys.exit()` on a local that merely shares the name `sys` (or

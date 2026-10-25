@@ -173,14 +173,15 @@ def test_optional_guard_not_adjacent_still_fires_d11() -> None:
     """A None-guard that is not the statement right after the binding,
     ``assert x is not None`` (stripped by ``python -O``), and a None
     branch with a nested ``if`` before its exit (v1.0.1 audit F-01
-    consequence) are not seen as handling None, so D11 still reports
-    all three. Documented in
+    consequence), and a guard inside a ``try`` with handlers (its raise
+    might be caught) are not seen as handling None, so D11 still
+    reports all four. Documented in
     README "Remaining limitations"."""
     result = _run_check("optional_guard_not_adjacent.py")
     assert result.returncode == 1
-    for name in ("guard_two_lines_down", "asserted", "branch_before_exit"):
+    for name in ("guard_two_lines_down", "asserted", "branch_before_exit", "guard_inside_try"):
         assert f"[status_coverage] function '{name}'" in result.stdout
-    assert result.stdout.count("[status_coverage]") == 3
+    assert result.stdout.count("[status_coverage]") == 4
 
 
 # ---------------------------------------------------------------------------
@@ -259,5 +260,19 @@ def test_none_procedure_returning_value_passes_silently() -> None:
     checker compares returned values with ``-> None``. Documented in
     README "Remaining limitations"."""
     result = _run_check("none_procedure_returning_value.py")
+    assert result.returncode == 0
+    assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Comparisons are assumed to be bool (v1.0.1)
+# ---------------------------------------------------------------------------
+
+
+def test_comparison_assumed_bool_passes_silently() -> None:
+    """An ``__eq__`` that returns its argument hands the producer's
+    None back through ``==``; D11 assumes ``==`` yields a bool and is
+    silent. Documented in README "Remaining limitations"."""
+    result = _run_check("comparison_assumed_bool.py")
     assert result.returncode == 0
     assert "PASS" in result.stdout

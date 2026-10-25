@@ -973,6 +973,7 @@ def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
     """
     out: set[int] = set()
     loads = _name_loads(fn)
+    unsafe = _exception_sensitive_ids(fn)
 
     for n in _own_nodes(fn):
         if (
@@ -986,7 +987,7 @@ def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
             for operand in (n.left, *n.comparators):
                 if isinstance(operand, ast.Call):
                     out.add(id(operand))
-        if isinstance(n, ast.If):
+        if isinstance(n, ast.If) and id(n) not in unsafe:
             walrus = _walrus_guard_call(n, loads)
             if walrus is not None:
                 out.add(id(walrus))
@@ -996,6 +997,8 @@ def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
                 if bound is None:
                     continue
                 var, call = bound
+                if id(block[i + 1]) in unsafe:
+                    continue  # the guard's exit may be caught or overridden
                 in_loop = isinstance(n, ast.For | ast.AsyncFor | ast.While) and block is n.body
                 reads_stay_in_block = in_loop and all(
                     any(_inside(u, s) for s in block[i + 1 :]) for u in loads.get(var, [])
@@ -1151,18 +1154,63 @@ def _rebinds(body: list[ast.stmt], var: str) -> bool:
 
 
 def _binding_is_non_none(n: ast.AST, var: str) -> bool:
-    """False when ``n`` binds ``var`` to something that may be None."""
+    """False when ``n`` binds ``var`` to something that may be None.
+
+    Only a plain ``var = <non-None literal>`` (or annotated form)
+    counts as safe. Every other way of binding the name (tuple or
+    starred unpacking, ``for`` / ``with`` targets, walrus, augmented
+    assignment, ``match`` captures, ``except ... as``, imports,
+    ``global`` / ``nonlocal``, ``del``) is treated as possibly None.
+    v1.0.1 verification round: tuple unpacking and ``match``
+    captures had slipped through."""
     if isinstance(n, ast.Assign):
-        if any(_is_name(t, var) for t in n.targets):
-            return _non_none_expr(n.value)
-        return True
+        if any(_is_name(t, var) for t in n.targets) and not _non_none_expr(n.value):
+            return False
+        return not any(_stores(t, var) for t in n.targets if not isinstance(t, ast.Name))
     if isinstance(n, ast.AnnAssign):
         if _is_name(n.target, var):
             return n.value is not None and _non_none_expr(n.value)
-        return True
+        return not _stores(n.target, var)
     if isinstance(n, ast.AugAssign | ast.NamedExpr):
         return not _is_name(n.target, var)
+    if isinstance(n, ast.MatchAs | ast.MatchStar):
+        return n.name != var
+    if isinstance(n, ast.MatchMapping):
+        return n.rest != var
+    if isinstance(n, ast.ExceptHandler):
+        return n.name != var
+    if isinstance(n, ast.Import | ast.ImportFrom):
+        return all((a.asname or a.name.split(".")[0]) != var for a in n.names)
+    if isinstance(n, ast.Global | ast.Nonlocal):
+        return var not in n.names
+    if isinstance(n, ast.Delete):
+        return not any(_stores(t, var) or _is_name(t, var) for t in n.targets)
     return not _binds_target(n, var)
+
+
+def _stores(target: ast.AST, var: str) -> bool:
+    """``target`` (an unpacking pattern) stores into ``var``."""
+    return any(
+        isinstance(x, ast.Name) and x.id == var and isinstance(x.ctx, ast.Store | ast.Del)
+        for x in ast.walk(target)
+    )
+
+
+def _exception_sensitive_ids(fn: ast.AST) -> set[int]:
+    """``id()`` of every node inside a ``try`` that has handlers or a
+    ``finally``, or inside a ``with`` block. There, a ``raise`` or
+    ``sys.exit`` in a None branch can be caught or suppressed and a
+    ``finally`` can override the exit, so the guard does not prove the
+    None is gone. v1.0.1 verification round: four such leaks."""
+    out: set[int] = set()
+    for n in _own_nodes(fn):
+        sensitive = isinstance(n, ast.With | ast.AsyncWith) or (
+            isinstance(n, ast.Try | getattr(ast, "TryStar", ast.Try))
+            and bool(n.handlers or n.finalbody)
+        )
+        if sensitive:
+            out.update(id(d) for d in ast.walk(n) if d is not n)
+    return out
 
 
 def _binds_target(n: ast.AST, var: str) -> bool:

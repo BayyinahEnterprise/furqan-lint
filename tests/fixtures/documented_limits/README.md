@@ -78,8 +78,9 @@ drift, a v0.6.1-style corrective is required.
   only when None is handled at the call site or by a guard on the
   very next statement whose branch is straight-line up to its exit
   or rebind. A guard further down, a branch with a nested `if` before
-  its exit (the price of the v1.0.1 audit F-01 correction), and
-  `assert x is not None` are not seen; the assert is left visible on
+  its exit (the price of the v1.0.1 audit F-01 correction), a guard
+  inside a `try` with handlers or `finally` (its raise might be
+  caught), and `assert x is not None` are not seen; the assert is left visible on
   purpose because `python -O` strips it. README registers this under "None handled
   away from the call site."
 - **`terminal_recognition_false_negatives.py`.** (v1.0.1) Terminal
@@ -98,6 +99,11 @@ drift, a v0.6.1-style corrective is required.
   function that returns a value passes: `-> None` is translated
   without a return type and no checker compares values against it.
   README registers this under "`-> None` carries no value contract."
+- **`comparison_assumed_bool.py`.** (v1.0.1) D11 withholds a producer
+  call used as an `==` / `!=` / `is` / `is not` operand, assuming a bool
+  result. An `__eq__` that returns its argument hands the None back and
+  D11 is silent. README registers this under "Comparisons are assumed
+  to be bool."
 
 ## How to retire a fixture
 
