@@ -41,20 +41,14 @@ pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile,gate11]"  # all adapt
 ### Install from a specific commit or tag
 
 ```bash
-pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v1.0.0"
+pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v1.0.1"
 ```
 
-Replace `v1.0.0` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
+Replace `v1.0.1` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
 
 ### Furqan dependency
 
-furqan-lint requires `furqan>=0.11.0`, the Furqan programming-language tooling. As of 2026-05-03 the PyPI release of `furqan` is at v0.10.1; install v0.11.7 directly from GitHub:
-
-```bash
-pip install "git+https://github.com/BayyinahEnterprise/furqan-programming-language.git@v0.11.7"
-```
-
-This GitHub-pin step will not be necessary once `furqan` v0.11.7 is published to PyPI.
+furqan-lint requires `furqan>=0.11.0`, the Furqan programming-language tooling. `furqan` 0.11.1 is published on PyPI, so `pip install furqan-lint` resolves it with no extra step. The GitHub Action, the pre-commit hook and CI install `furqan>=0.11.1` from PyPI as well.
 
 ### Rust support (opt-in)
 
@@ -551,7 +545,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: BayyinahEnterprise/furqan-lint@v1.0.0
+      - uses: BayyinahEnterprise/furqan-lint@v1.0.1
         with:
           path: src/
 ```
@@ -571,7 +565,7 @@ Python files:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v1.0.0
+    rev: v1.0.1
     hooks:
       - id: furqan-lint
 ```
@@ -606,7 +600,7 @@ repos:
       - id: mypy
 
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v1.0.0
+    rev: v1.0.1
     hooks:
       - id: furqan-lint
 ```
@@ -735,6 +729,28 @@ than silent.
   regression demonstrates otherwise, extend the function walker to
   descend into local `ClassDef` bodies and call
   `_collect_class_methods`.
+- **Optional stored in a container.** D11 does not follow values
+  through containers. `return {"name": find_name(uid)}` keeps the None
+  arm in a `dict[str, str | None]`, yet D11 still reports the call.
+  Pinned as `tests/fixtures/documented_limits/optional_stored_in_container.py`.
+- **Terminal-call recognition.** D24 treats `raise`, `sys.exit(...)`,
+  `os._exit(...)` and `os.abort()` as ending a path, in functions that
+  contain at least one explicit `return` (functions with none stay
+  with R3). It does not recognise `from sys import exit` aliases, bare
+  `exit()` / `quit()`, calls to user functions annotated `NoReturn`,
+  or `assert False`; those paths are still reported. Pinned as
+  `tests/fixtures/documented_limits/exit_alias_not_terminal.py`.
+- **None handled away from the call site.** D11 withholds a call to
+  an Optional producer only when None is handled at the call site
+  (`or` default, `==` / `!=` / `is` / `is not` comparison, walrus
+  guard) or by a None-guard on the statement right after the binding
+  that ends the path, rebinds the name, or encloses every later read.
+  A guard further down, and `assert x is not None` (stripped by
+  `python -O`), are not seen, so D11 still reports them. Membership
+  (`in`) and ordering comparisons are never treated as handling None
+  because they can raise on it. Pinned as
+  `tests/fixtures/documented_limits/optional_guard_not_adjacent.py`.
+
 ### Rust adapter (current as of v0.8.3)
 
 Each Rust limit has a fixture in

@@ -19,6 +19,142 @@ introduced this convention.
 
 ---
 
+## [1.0.1] - 2026-10-25
+
+### Honesty corrective: false positives on furqan-lint's own source
+
+Run on its own `src/` at v1.0.0, furqan-lint reported 12
+diagnostics across 9 files (8 D24, 3 D11, 1 R3). 11 came from three
+shapes in the Python adapter: a `raise` read as a fall-through,
+generators and `-> None` procedures held to a value-return
+contract, and a None-guard at the call site read as a status
+collapse. The twelfth is a fourth shape, an Optional stored in a
+container. A linter whose job is to catch code that misreports
+itself cannot ship reports that misreport the code. v1.0.1 fixes
+the three shapes, adds a true-positive guard fixture beside each
+fix so the fix cannot widen into a false negative, and pins the
+fourth shape and the edges of each fix as documented limits.
+Self-check on `src/`: 12 diagnostics to 1, and that one is the
+documented `optional_stored_in_container` limit.
+
+Every fix was checked fail-before / pass-after: the clean fixtures
+below fail on v1.0.0 and pass on v1.0.1; the failing guard
+fixtures report the same diagnostics on both.
+
+### Fixed
+
+- **D24 raise-terminal false positive.** The adapter skipped
+  `raise` statements, so a function ending in `raise` (or
+  `else: raise`) looked like it fell through and D24 reported a
+  missing return on code that cannot fall through. `raise`,
+  `sys.exit(...)`, `os._exit(...)` and `os.abort()` now end a path.
+  This applies only in functions with at least one explicit
+  `return`; a function with none stays with R3 (zero-return), so
+  nothing is reported twice. Clean fixture:
+  `raise_terminal_paths`. Guard fixture:
+  `raise_branch_with_fall_through` (a raising branch beside a
+  branch that falls through still fires D24).
+- **No value-return contract for generators and `-> None`
+  procedures.** A function whose own body contains `yield` or
+  `yield from`, and a function annotated `-> None`, is now
+  translated with no return type. D24 and D11 no longer hold them
+  to a value-return contract, and R3 exempts generators. A `-> None`
+  procedure that calls an Optional producer now gets D11's
+  informational S2 advisory (exit 0) instead of an S1 error, the
+  shape upstream D11 already uses for functions with no declared
+  return. Clean fixture: `generator_and_procedure_shapes`.
+- **D11 call-site narrowing.** D11 reported every call to an
+  Optional producer from a caller declaring a bare return type,
+  even when the caller handled None. A call is now withheld from
+  D11 when None is handled at the call site: the left operand of
+  `or`; an operand of `==`, `!=`, `is` or `is not`; a walrus guard
+  (`if (x := f()) is None: <exit>`); or a binding followed on the
+  next statement by a None-guard that ends the path (`return`,
+  `raise`, `continue`, `break`, `sys.exit`), rebinds the name, or
+  encloses every later read. Membership (`in`, `not in`) and
+  ordering comparisons stay visible because they can raise on None
+  (`None in "abc"` raises `TypeError`). Clean fixture:
+  `optional_narrowed_at_call_site`. Guard fixture:
+  `optional_collapse_still_reported` (six functions that still
+  fire: `leaky`, `late_guard`, `ordered`, `guard_without_exit`,
+  `has_letter_a`, `in_alphabet`).
+
+### Limitations introduced
+
+- `optional_stored_in_container`: an Optional placed straight into
+  a container (`return {"name": find_name(uid)}`) keeps its None
+  arm, yet D11 still reports it. D11 does not follow values through
+  containers.
+- `exit_alias_not_terminal`: `from sys import exit`, bare `exit()`
+  / `quit()`, calls to user functions annotated `NoReturn`, and
+  `assert False` are not recognised as ending a path; D24 still
+  reports them.
+- `optional_guard_not_adjacent`: a None-guard that is not the
+  statement right after the binding, and `assert x is not None`
+  (stripped by `python -O`), are not seen; D11 still reports them.
+
+Each is registered in the README `Remaining limitations` section,
+in `tests/fixtures/documented_limits/README.md`, and pinned in
+`tests/test_documented_limits.py`.
+
+### Release line reunited
+
+v0.13.0, v0.14.0 and v1.0.0 were tagged on branches that were
+never merged into `main`, and none of them reached PyPI, where the
+latest release was v0.12.0 (the version at the tip of `main`).
+v1.0.1 merges `main` into the v1.0.0 line, so the next published
+release carries everything since v0.12.0. The one conflict,
+`docs/g11.3-preflight.md`, was resolved by keeping both records:
+the v1.0.0 preflight stays at that path and `main`'s 2026-05-09
+halt record is preserved as
+`docs/g11.3-preflight-2026-05-09-halt-record.md`. Nothing was
+dropped.
+
+### Dependency source
+
+The GitHub Action (`action.yml`), the pre-commit hook
+(`.pre-commit-hooks.yaml`), the repository's own
+`.pre-commit-config.yaml`, and every CI job installed `furqan` from
+a git URL to `BayyinahEnterprise/furqan-programming-language`.
+That URL no longer answers an anonymous clone (git asks for
+credentials), so the Action and the hook could not install for
+anyone outside the organisation. furqan
+0.11.1 is on PyPI; all four now install `furqan>=0.11.1` from
+PyPI (nine CI install steps in all), and the README dependency
+section says so.
+`test_pre_commit_hook_installs_in_clean_venv` now installs exactly
+what `.pre-commit-hooks.yaml` declares instead of restating its own
+copy of the dependency, so the test and the hook cannot drift
+apart again.
+
+### Attestation note
+
+The Form A `checker_set_hash` carried by gate11 bundles is
+unchanged: no file edited here is in `_CHECKER_SOURCE_FILES`. The
+self-manifest hash over `PINNED_CHECKER_SOURCES_SELF` changes,
+because `zero_return.py` is in that list; it is computed at release
+time, so no literal needed updating. Neither list contains
+`adapter.py` or `runner.py`, which decide what every Python checker
+sees and where most of this release's behaviour change lives. Two
+installations that disagree on these fixes therefore produce the
+same hash. Adding both files to both lists is registered for
+v1.1.0, as a deliberate hash change with its own CHANGELOG entry.
+
+### Tests
+
+Test count: 732 (v1.0.0) -> 742 (v1.0.1). Net delta: +10.
+
+- `tests/test_checks.py`: +7 (raise-terminal pass, raise-branch
+  guard, no double report with R3, call-site narrowing pass,
+  collapse guard, generator and procedure contract, procedure
+  advisory).
+- `tests/test_documented_limits.py`: +3 (one per new documented
+  limit).
+- `tests/test_action.py`: two tests rewritten in place, no count
+  change.
+
+---
+
 ## [1.0.0] - 2026-05-11
 
 ### Self-attestation (al-Basirah / G12.0; canonical mushaf chain closing)

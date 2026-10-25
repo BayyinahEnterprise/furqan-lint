@@ -54,6 +54,36 @@ def test_missing_return_path_fires_d24(failing_dir: Path) -> None:
 
 
 @pytest.mark.unit
+def test_raise_terminal_paths_pass_d24(clean_dir: Path) -> None:
+    """v1.0.1: ``raise`` / ``sys.exit`` / ``os._exit`` end a path;
+    they are not a fall-through (raise-terminal false positive)."""
+    module = translate_file(clean_dir / "raise_terminal_paths.py")
+    diags = check_python_module(module)
+    assert _by_checker(diags, "all_paths_return") == []
+
+
+@pytest.mark.unit
+def test_raise_branch_with_fall_through_still_fires_d24(failing_dir: Path) -> None:
+    """v1.0.1 true-positive guard: a raising branch must not mask a
+    sibling path that falls through."""
+    module = translate_file(failing_dir / "raise_branch_with_fall_through.py")
+    diags = check_python_module(module)
+    d24 = _by_checker(diags, "all_paths_return")
+    assert len(d24) == 1
+    assert "classify" in str(d24[0])
+
+
+@pytest.mark.unit
+def test_zero_return_function_with_raise_is_not_double_reported() -> None:
+    """v1.0.1: a function with no explicit ``return`` stays in R3's
+    jurisdiction; modelling ``raise`` as terminal must not make D24
+    report it as well."""
+    source = "def f(x: int) -> int:\n" "    if x:\n" "        raise ValueError(x)\n"
+    diags = check_python_module(translate_source(source))
+    assert _by_checker(diags, "all_paths_return") == []
+
+
+@pytest.mark.unit
 def test_nested_missing_return_fires_d24(failing_dir: Path) -> None:
     module = translate_file(failing_dir / "nested_missing_return.py")
     diags = check_python_module(module)
@@ -94,6 +124,79 @@ def test_optional_propagated_passes_d11(clean_dir: Path) -> None:
     module = translate_file(clean_dir / "optional_propagated.py")
     diags = check_python_module(module)
     assert _by_checker(diags, "status_coverage") == []
+
+
+@pytest.mark.unit
+def test_optional_narrowed_at_call_site_passes_d11(clean_dir: Path) -> None:
+    """v1.0.1: an explicitly handled None arm is not a status
+    collapse (None-guard, ``or`` default, rebind, walrus, ``==``)."""
+    module = translate_file(clean_dir / "optional_narrowed_at_call_site.py")
+    diags = check_python_module(module)
+    assert _by_checker(diags, "status_coverage") == []
+    assert _by_checker(diags, "all_paths_return") == []
+
+
+@pytest.mark.unit
+def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
+    """v1.0.1 true-positive guard: unhandled None arms still fire,
+    one diagnostic per function."""
+    module = translate_file(failing_dir / "optional_collapse_still_reported.py")
+    diags = check_python_module(module)
+    s = _by_checker(diags, "status_coverage")
+    named = sorted(
+        name
+        for name in (
+            "leaky",
+            "late_guard",
+            "ordered",
+            "guard_without_exit",
+            "has_letter_a",
+            "in_alphabet",
+        )
+        if any(f"function '{name}'" in str(d) for d in s)
+    )
+    assert named == [
+        "guard_without_exit",
+        "has_letter_a",
+        "in_alphabet",
+        "late_guard",
+        "leaky",
+        "ordered",
+    ]
+    assert len(s) == 6
+
+
+@pytest.mark.unit
+def test_generators_and_procedures_have_no_return_contract(clean_dir: Path) -> None:
+    """v1.0.1: generators and ``-> None`` procedures are translated
+    without a value-return contract, so D24 and D11 stay silent."""
+    module = translate_file(clean_dir / "generator_and_procedure_shapes.py")
+    diags = check_python_module(module)
+    assert _by_checker(diags, "all_paths_return") == []
+    assert _by_checker(diags, "status_coverage") == []
+    by_name = {fn.name: fn for fn in module.functions}
+    for name in ("evens", "chained", "record"):
+        assert by_name[name].return_type is None
+
+
+@pytest.mark.unit
+def test_procedure_calling_optional_producer_is_advisory_not_error() -> None:
+    """v1.0.1: a ``-> None`` procedure that calls an Optional producer
+    cannot collapse a status into its return value. D11 used to report
+    an S1 error here; it now emits only its informational S2 advisory
+    (exit 0), the shape upstream designed for effectful functions."""
+    source = (
+        "from typing import Optional\n"
+        "def find_name(uid: int) -> Optional[str]:\n"
+        "    return 'alice' if uid == 1 else None\n"
+        "def log_name(uid: int) -> None:\n"
+        "    name = find_name(uid)\n"
+        "    print(name)\n"
+    )
+    s = _by_checker(check_python_module(translate_source(source)), "status_coverage")
+    assert len(s) == 1
+    assert not isinstance(s[0], Marad)
+    assert "S2" in str(s[0])
 
 
 @pytest.mark.unit

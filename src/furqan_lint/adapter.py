@@ -205,11 +205,33 @@ def _translate_function(
             )
         )
 
+    # v1.0.1: generators and ``-> None`` procedures carry no
+    # value-return contract. A generator's annotation describes what it
+    # yields, and falling off its end (or a bare ``return``) just stops
+    # iteration; a ``-> None`` procedure may fall through or return
+    # early by design. Translating either with a return type made D24
+    # report "missing return" and D11 report "status collapse" on
+    # correct code, so both are translated as having no return-type
+    # contract (the same treatment as an unannotated function).
     return_type = None
-    if node.returns is not None:
+    if (
+        node.returns is not None
+        and not _is_generator(node)
+        and not _is_none_annotation(node.returns)
+    ):
         return_type = _translate_return_annotation(node.returns, filename)
 
-    statements = _translate_body(node.body, filename)
+    # v1.0.1: an unconditional exit (``raise``, ``sys.exit(...)``,
+    # ``os._exit(...)``, ``os.abort()``) is a terminal path, not a
+    # fall-through. It is modelled as terminal ONLY in functions that
+    # contain at least one explicit ``return``: functions with zero
+    # returns stay entirely in R3's (zero_return) jurisdiction, so
+    # their diagnostics are unchanged and never double-reported.
+    statements = _translate_body(
+        node.body,
+        filename,
+        exit_is_terminal=_contains_return(node),
+    )
     calls = _extract_calls(node, filename)
 
     return FunctionDef(
@@ -609,6 +631,7 @@ def _annotation_name(node: ast.expr) -> str:
 def _translate_body(
     body: list[ast.stmt],
     filename: str,
+    exit_is_terminal: bool = False,
 ) -> list[ReturnStmt | IfStmt]:
     """Translate a Python statement list into Furqan ``ReturnStmt``
     and ``IfStmt`` nodes (the only statement shapes Furqan's AST has).
@@ -635,14 +658,36 @@ def _translate_body(
       can recognise total matches; the conservative shape is fine
       for now (it under-claims completeness, never over-claims).
 
-    Anything else (assignments, expression statements, ``raise``,
+    * ``raise`` and statement-level ``sys.exit(...)``,
+      ``os._exit(...)``, ``os.abort()`` -> when ``exit_is_terminal``
+      is set, a ``ReturnStmt`` whose value is the ``__raise__``
+      marker. An exit is a terminal path, not a fall-through, so D24
+      must not report a missing return on it (v1.0.1; the same
+      "propagation is an exit" reading the try-handler chain already
+      uses). ``return_none`` only matches ``__none__``, so the marker
+      never reads as a None return. ``exit_is_terminal`` is False for
+      functions with no explicit ``return`` (R3 owns those).
+      Not recognised (documented limits): bare ``exit()`` / ``quit()``
+      (site builtins, absent under ``python -S``), ``assert False``
+      (stripped under ``python -O``), aliased imports such as
+      ``from sys import exit``, and user functions annotated
+      ``NoReturn``.
+
+    Anything else (assignments, other expression statements,
     ``import``, ``pass``, ``break``, ``continue``, ``global``,
     ``nonlocal``) is silently skipped: the checkers wired into the
     runner do not inspect these forms.
     """
     result: list[ReturnStmt | IfStmt] = []
+
+    def _sub(stmts: list[ast.stmt]) -> list[ReturnStmt | IfStmt]:
+        return _translate_body(stmts, filename, exit_is_terminal)
+
     for node in body:
-        if isinstance(node, ast.Return):
+        if exit_is_terminal and (isinstance(node, ast.Raise) or _is_exit_call(node)):
+            sp = _span(filename, node.lineno, node.col_offset)
+            result.append(ReturnStmt(value=IdentExpr(name="__raise__", span=sp), span=sp))
+        elif isinstance(node, ast.Return):
             result.append(
                 ReturnStmt(
                     value=_translate_expression(node.value, filename),
@@ -653,21 +698,21 @@ def _translate_body(
             result.append(
                 IfStmt(
                     condition=_translate_expression(node.test, filename),
-                    body=tuple(_translate_body(node.body, filename)),
+                    body=tuple(_sub(node.body)),
                     span=_span(filename, node.lineno, node.col_offset),
-                    else_body=tuple(_translate_body(node.orelse, filename)),
+                    else_body=tuple(_sub(node.orelse)),
                 )
             )
         elif isinstance(node, ast.For | ast.AsyncFor | ast.While):
-            inner = _translate_body(node.body, filename)
+            inner = _sub(node.body)
             # for/while-else clauses run when the loop terminates
             # without break. They are equally "may run" for our
             # purposes. Splice into the maybe-runs IfStmt body.
-            inner.extend(_translate_body(node.orelse, filename))
+            inner.extend(_sub(node.orelse))
             if inner:
                 result.append(_maybe_runs_if(inner, node, filename))
         elif isinstance(node, ast.With | ast.AsyncWith):
-            result.extend(_translate_body(node.body, filename))
+            result.extend(_sub(node.body))
         elif isinstance(node, ast.Try):
             # v0.3.5: model try/except control flow correctly.
             # Pre-v0.3.5 spliced ``try.body`` and ``orelse`` as
@@ -693,10 +738,8 @@ def _translate_body(
             # fall-through.
             #
             # finally always runs and is spliced unconditionally.
-            success_body = tuple(
-                _translate_body(node.body, filename) + _translate_body(node.orelse, filename)
-            )
-            handler_chain = _build_try_handler_chain(node.handlers, filename)
+            success_body = tuple(_sub(node.body) + _sub(node.orelse))
+            handler_chain = _build_try_handler_chain(node.handlers, filename, exit_is_terminal)
             if success_body or handler_chain:
                 sp = _span(filename, node.lineno, node.col_offset)
                 result.append(
@@ -707,13 +750,65 @@ def _translate_body(
                         else_body=handler_chain,
                     )
                 )
-            result.extend(_translate_body(node.finalbody, filename))
+            result.extend(_sub(node.finalbody))
         elif isinstance(node, ast.Match):
             for case in node.cases:
-                inner = _translate_body(case.body, filename)
+                inner = _sub(case.body)
                 if inner:
                     result.append(_maybe_runs_if(inner, case, filename))
     return result
+
+
+_EXIT_CALLS: frozenset[tuple[str, str]] = frozenset(
+    {("sys", "exit"), ("os", "_exit"), ("os", "abort")}
+)
+
+
+def _is_exit_call(node: ast.stmt) -> bool:
+    """True for a statement-level ``sys.exit(...)``, ``os._exit(...)``
+    or ``os.abort()`` call written with the module-qualified name.
+    Aliased imports and builtins ``exit()`` / ``quit()`` are not
+    recognised (documented limit; see ``_translate_body``)."""
+    if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)):
+        return False
+    func = node.value.func
+    return (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and (func.value.id, func.attr) in _EXIT_CALLS
+    )
+
+
+def _own_body_has(node: ast.AST, kinds: tuple[type, ...]) -> bool:
+    """True iff ``node``'s own body (not nested defs, classes or
+    lambdas) contains a node of one of ``kinds``."""
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda):
+            continue
+        if isinstance(child, kinds) or _own_body_has(child, kinds):
+            return True
+    return False
+
+
+def _is_generator(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """True iff the function is a generator (``yield`` or
+    ``yield from`` in its own body). Generator expressions and
+    comprehensions do not count: they create their own scope."""
+    return _own_body_has(node, (ast.Yield, ast.YieldFrom))
+
+
+def _is_none_annotation(node: ast.expr) -> bool:
+    """True for a bare ``-> None`` annotation, including the string
+    forward-reference form ``-> "None"``."""
+    if isinstance(node, ast.Constant):
+        return node.value is None or node.value == "None"
+    return False
+
+
+def _contains_return(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """True iff the function's own body (not nested defs or classes)
+    contains at least one ``return`` statement."""
+    return _own_body_has(node, (ast.Return,))
 
 
 def _maybe_runs_if(
@@ -738,6 +833,7 @@ def _maybe_runs_if(
 def _build_try_handler_chain(
     handlers: list[ast.ExceptHandler],
     filename: str,
+    exit_is_terminal: bool = False,
 ) -> tuple[IfStmt | ReturnStmt, ...]:
     """Build a right-folded ``IfStmt`` chain for a list of
     ``ast.ExceptHandler`` nodes, suitable for use as the
@@ -762,10 +858,10 @@ def _build_try_handler_chain(
     """
     if not handlers:
         return ()
-    last_body = tuple(_translate_body(handlers[-1].body, filename))
+    last_body = tuple(_translate_body(handlers[-1].body, filename, exit_is_terminal))
     accum = last_body
     for handler in reversed(handlers[:-1]):
-        h_body = tuple(_translate_body(handler.body, filename))
+        h_body = tuple(_translate_body(handler.body, filename, exit_is_terminal))
         sp = _span(filename, handler.lineno, handler.col_offset)
         accum = (
             IfStmt(
@@ -797,6 +893,7 @@ def _extract_calls(
     Phase 2 fix for Phase 1 Gap 5.
     """
     calls: list[CallRef] = []
+    narrowed = _narrowed_call_ids(node)
 
     def _walk(n: ast.AST, is_root: bool) -> None:
         # Stop at any nested FunctionDef / AsyncFunctionDef /
@@ -806,7 +903,7 @@ def _extract_calls(
         # methods get extracted at module level).
         if not is_root and isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             return
-        if isinstance(n, ast.Call):
+        if isinstance(n, ast.Call) and id(n) not in narrowed:
             name = _call_name(n)
             if name:
                 calls.append(
@@ -829,6 +926,214 @@ def _extract_calls(
 
     _walk(node, is_root=True)
     return calls
+
+
+# ---------------------------------------------------------------------------
+# v1.0.1: call-site narrowing for D11 (status coverage)
+# ---------------------------------------------------------------------------
+#
+# D11 reports a caller that receives ``X | None`` from a producer and
+# declares a bare ``X``. That is correct when the None arm is silently
+# dropped, and wrong when the caller handles it explicitly at the call
+# site. The shapes below handle the None arm explicitly; their call is
+# withheld from D11. Deliberately conservative: anything not listed
+# here still reaches D11 (documented limits: ``assert x is not None``,
+# which ``python -O`` strips; narrowing more than one statement away
+# from the binding; and storing the Optional in a container).
+
+
+# Equality and identity are defined for None on either side. Membership
+# is not: ``x in None`` raises, and so does ``None in "abc"``. Ordering
+# raises on None. Only the operators below narrow.
+_NONE_SAFE_COMPARE = (ast.Eq, ast.NotEq, ast.Is, ast.IsNot)
+
+
+def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
+    """Return ``id()`` of every ``ast.Call`` in ``fn``'s own body whose
+    possible ``None`` result is explicitly handled at the call site:
+
+    * ``call(...) or default``: the call is the left operand of ``or``.
+    * ``call(...) == value`` (also ``!=``, ``is``, ``is not``):
+      comparisons that are defined for None and yield a bool. Ordering
+      and membership (``in``, ``not in``) can raise on None and stay
+      visible.
+    * ``x = call(...)`` immediately followed by ``if x is None:`` or
+      ``if not x:`` whose body ends the path (``return``, ``raise``,
+      ``continue``, ``break``, ``sys.exit``) or rebinds ``x``.
+    * ``x = call(...)`` immediately followed by ``if x is not None:``
+      or ``if x:`` where every later read of ``x`` is inside that
+      ``if`` body.
+    * The walrus forms of the two guard shapes:
+      ``if (x := call(...)) is None: <exit>`` and
+      ``if (x := call(...)) is not None: ...``.
+    """
+    out: set[int] = set()
+    loads = _name_loads(fn)
+
+    for n in _own_nodes(fn):
+        if (
+            isinstance(n, ast.BoolOp)
+            and isinstance(n.op, ast.Or)
+            and isinstance(n.values[0], ast.Call)
+        ):
+            out.add(id(n.values[0]))
+        if isinstance(n, ast.Compare) and all(isinstance(op, _NONE_SAFE_COMPARE) for op in n.ops):
+            for operand in (n.left, *n.comparators):
+                if isinstance(operand, ast.Call):
+                    out.add(id(operand))
+        if isinstance(n, ast.If):
+            walrus = _walrus_guard_call(n, loads)
+            if walrus is not None:
+                out.add(id(walrus))
+        for block in _stmt_blocks(n):
+            for i, stmt in enumerate(block[:-1]):
+                bound = _bound_call(stmt)
+                if bound is None:
+                    continue
+                var, call = bound
+                if _guards(block[i + 1], var, loads):
+                    out.add(id(call))
+    return out
+
+
+def _own_nodes(fn: ast.AST) -> list[ast.AST]:
+    """Every node in ``fn``'s own body (not nested defs/classes/lambdas)."""
+    out: list[ast.AST] = []
+
+    def _walk(n: ast.AST) -> None:
+        for child in ast.iter_child_nodes(n):
+            if isinstance(
+                child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda
+            ):
+                continue
+            out.append(child)
+            _walk(child)
+
+    out.append(fn)
+    _walk(fn)
+    return out
+
+
+def _stmt_blocks(n: ast.AST) -> list[list[ast.stmt]]:
+    blocks = []
+    for field in ("body", "orelse", "finalbody"):
+        value = getattr(n, field, None)
+        if isinstance(value, list) and value and isinstance(value[0], ast.stmt):
+            blocks.append(value)
+    for handler in getattr(n, "handlers", []) or []:
+        blocks.append(handler.body)
+    for case in getattr(n, "cases", []) or []:
+        blocks.append(case.body)
+    return blocks
+
+
+def _bound_call(stmt: ast.stmt) -> tuple[str, ast.Call] | None:
+    """``x = call(...)`` or ``x: T = call(...)`` -> (``x``, call)."""
+    if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+        target, value = stmt.targets[0], stmt.value
+    elif isinstance(stmt, ast.AnnAssign) and stmt.value is not None:
+        target, value = stmt.target, stmt.value
+    else:
+        return None
+    if isinstance(target, ast.Name) and isinstance(value, ast.Call):
+        return target.id, value
+    return None
+
+
+def _name_loads(fn: ast.AST) -> dict[str, list[ast.Name]]:
+    out: dict[str, list[ast.Name]] = {}
+    for n in _own_nodes(fn):
+        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
+            out.setdefault(n.id, []).append(n)
+    return out
+
+
+def _is_none_test(test: ast.expr, var: str, negated: bool) -> bool:
+    """``x is None`` / ``not x`` (negated=False: the None branch) or
+    ``x is not None`` / ``x`` (negated=True: the not-None branch)."""
+    if isinstance(test, ast.Compare) and len(test.ops) == 1 and _is_name(test.left, var):
+        op, right = test.ops[0], test.comparators[0]
+        is_none = isinstance(right, ast.Constant) and right.value is None
+        return is_none and isinstance(op, ast.IsNot if negated else ast.Is)
+    if negated:
+        return _is_name(test, var)
+    return (
+        isinstance(test, ast.UnaryOp)
+        and isinstance(test.op, ast.Not)
+        and _is_name(test.operand, var)
+    )
+
+
+def _is_name(node: ast.AST, var: str) -> bool:
+    return isinstance(node, ast.Name) and node.id == var
+
+
+def _ends_path(body: list[ast.stmt]) -> bool:
+    last = body[-1]
+    return isinstance(last, ast.Return | ast.Raise | ast.Continue | ast.Break) or _is_exit_call(
+        last
+    )
+
+
+def _rebinds(body: list[ast.stmt], var: str) -> bool:
+    return any(_bound_name(s) == var for s in body)
+
+
+def _bound_name(stmt: ast.stmt) -> str | None:
+    if (
+        isinstance(stmt, ast.Assign)
+        and len(stmt.targets) == 1
+        and isinstance(stmt.targets[0], ast.Name)
+    ):
+        return stmt.targets[0].id
+    if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+        return stmt.target.id
+    return None
+
+
+def _inside(node: ast.AST, region: ast.AST) -> bool:
+    return any(node is sub for sub in ast.walk(region))
+
+
+def _guards(nxt: ast.stmt, var: str, loads: dict[str, list[ast.Name]]) -> bool:
+    if not isinstance(nxt, ast.If):
+        return False
+    if _is_none_test(nxt.test, var, negated=False):
+        return _ends_path(nxt.body) or _rebinds(nxt.body, var)
+    if _is_none_test(nxt.test, var, negated=True):
+        uses = loads.get(var, [])
+        return all(_inside(u, nxt.test) or any(_inside(u, s) for s in nxt.body) for u in uses)
+    return False
+
+
+def _walrus_guard_call(node: ast.If, loads: dict[str, list[ast.Name]]) -> ast.Call | None:
+    test = node.test
+    target: ast.NamedExpr | None = None
+    if (
+        isinstance(test, ast.Compare)
+        and len(test.ops) == 1
+        and isinstance(test.left, ast.NamedExpr)
+    ):
+        target = test.left
+        right = test.comparators[0]
+        if not (isinstance(right, ast.Constant) and right.value is None):
+            return None
+        is_none_branch = isinstance(test.ops[0], ast.Is)
+        if not (is_none_branch or isinstance(test.ops[0], ast.IsNot)):
+            return None
+    elif isinstance(test, ast.NamedExpr):
+        target, is_none_branch = test, False
+    else:
+        return None
+    if not (isinstance(target.target, ast.Name) and isinstance(target.value, ast.Call)):
+        return None
+    var = target.target.id
+    if is_none_branch:
+        return target.value if _ends_path(node.body) else None
+    uses = loads.get(var, [])
+    if all(any(_inside(u, s) for s in node.body) for u in uses):
+        return target.value
+    return None
 
 
 def _call_name(node: ast.Call) -> str | None:

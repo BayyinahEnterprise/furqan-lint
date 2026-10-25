@@ -85,6 +85,10 @@ _README_TOPIC_KEYWORDS: dict[str, tuple[str, ...] | None] = {
     "numpy_divergence_neurogolf_convention": ("numpy_divergence", "NeuroGolf", "_build.py"),
     "intermediates_excluded": ("intermediates", "graph.value_info", "intermediate tensor"),
     "registry_pin_window": ("onnx>=1.14", "op registry", "op-registry"),
+    # Python documented_limits (v1.0.1).
+    "optional_stored_in_container": ("Optional stored in a container",),
+    "exit_alias_not_terminal": ("Terminal-call recognition",),
+    "optional_guard_not_adjacent": ("None handled away from the call site",),
 }
 
 

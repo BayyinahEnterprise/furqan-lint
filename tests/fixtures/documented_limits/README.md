@@ -58,6 +58,28 @@ drift, a v0.6.1-style corrective is required.
   used as a closure-like return value, not part of the module's
   public contract. README registers this under "Local classes
   inside any function or method body."
+- **`optional_stored_in_container.py`.** (v1.0.1) A call to an
+  Optional producer whose result is placed straight into a container
+  (`return {"name": find_name(uid)}`, typed `dict[str, str | None]`)
+  keeps the None arm, yet D11 still reports it: D11 does not follow
+  values through containers. furqan-lint's own
+  `gate11/rust_signature_canonicalization._function_signature_dict`
+  is this shape, and it is the one diagnostic left when furqan-lint
+  checks its own `src/`. README registers this under "Optional
+  stored in a container."
+- **`exit_alias_not_terminal.py`.** (v1.0.1) D24 treats `raise`,
+  `sys.exit(...)`, `os._exit(...)` and `os.abort()` as ending a path.
+  `from sys import exit` aliases, calls to user functions annotated
+  `NoReturn`, and `assert False` still look like a fall-through and
+  are reported. The fix needs import alias tracking and `NoReturn`
+  resolution. README registers this under "Terminal-call
+  recognition."
+- **`optional_guard_not_adjacent.py`.** (v1.0.1) D11 withholds a call
+  only when None is handled at the call site or by a guard on the
+  very next statement. A guard further down, and `assert x is not
+  None`, are not seen; the assert is left visible on purpose because
+  `python -O` strips it. README registers this under "None handled
+  away from the call site."
 
 ## How to retire a fixture
 

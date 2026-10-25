@@ -129,3 +129,53 @@ def test_local_class_in_function_methods_not_collected() -> None:
 
 # ---------------------------------------------------------------------------
 # Redundant None arms in PEP 604 unions (v0.3.4 / round-7 Observation 2)
+
+
+# ---------------------------------------------------------------------------
+# Optional stored in a container (v1.0.1)
+# ---------------------------------------------------------------------------
+
+
+def test_optional_stored_in_container_still_fires_d11() -> None:
+    """D11 does not track values through containers: returning
+    ``{"name": find_name(uid)}`` keeps the None arm but is still
+    reported. Documented in README "Remaining limitations"."""
+    result = _run_check("optional_stored_in_container.py")
+    assert result.returncode == 1
+    assert "status_coverage" in result.stdout
+    assert "function 'describe'" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Terminal calls D24 does not recognise (v1.0.1)
+# ---------------------------------------------------------------------------
+
+
+def test_exit_alias_not_terminal_still_fires_d24() -> None:
+    """``from sys import exit``, a ``NoReturn`` helper and
+    ``assert False`` end the path at runtime, but D24 recognises only
+    ``raise`` and the ``sys.exit`` / ``os._exit`` / ``os.abort``
+    spellings, so all three are reported. Documented in README
+    "Remaining limitations"."""
+    result = _run_check("exit_alias_not_terminal.py")
+    assert result.returncode == 1
+    for name in ("aliased_exit", "via_noreturn_helper", "assert_false"):
+        assert f"[all_paths_return] function '{name}'" in result.stdout
+    assert result.stdout.count("[all_paths_return]") == 3
+
+
+# ---------------------------------------------------------------------------
+# None handled away from the call site (v1.0.1)
+# ---------------------------------------------------------------------------
+
+
+def test_optional_guard_not_adjacent_still_fires_d11() -> None:
+    """A None-guard that is not the statement right after the binding,
+    and ``assert x is not None`` (stripped by ``python -O``), are not
+    seen as handling None, so D11 still reports both. Documented in
+    README "Remaining limitations"."""
+    result = _run_check("optional_guard_not_adjacent.py")
+    assert result.returncode == 1
+    for name in ("guard_two_lines_down", "asserted"):
+        assert f"[status_coverage] function '{name}'" in result.stdout
+    assert result.stdout.count("[status_coverage]") == 2
