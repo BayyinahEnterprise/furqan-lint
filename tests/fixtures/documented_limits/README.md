@@ -69,9 +69,9 @@ drift, a v0.6.1-style corrective is required.
   stored in a container."
 - **`exit_alias_not_terminal.py`.** (v1.0.1) D24 treats `raise`,
   `sys.exit(...)`, `os._exit(...)` and `os.abort()` as ending a path.
-  `from sys import exit` aliases, calls to user functions annotated
-  `NoReturn`, and `assert False` still look like a fall-through and
-  are reported. The fix needs import alias tracking and `NoReturn`
+  `from sys import exit` aliases, bare `exit()` / `quit()`, calls to
+  user functions annotated `NoReturn`, and `assert False` still look
+  like a fall-through and are reported. The fix needs import alias tracking and `NoReturn`
   resolution. README registers this under "Terminal-call
   recognition."
 - **`optional_guard_not_adjacent.py`.** (v1.0.1) D11 withholds a call
@@ -80,6 +80,22 @@ drift, a v0.6.1-style corrective is required.
   None`, are not seen; the assert is left visible on purpose because
   `python -O` strips it. README registers this under "None handled
   away from the call site."
+- **`terminal_recognition_false_negatives.py`.** (v1.0.1) Terminal
+  recognition is syntactic: a `raise` inside `with
+  contextlib.suppress(...)` and `sys.exit()` on a parameter named
+  `sys` count as ending the path, so D24 is silent although the
+  function can fall through. README registers this under "Terminal
+  recognition is syntactic."
+- **`raise_terminal_remaining_false_positives.py`.** (v1.0.1)
+  `for ... else: raise`, `while True:` ending in `raise`, and `try` /
+  `finally` with no `except` never fall through, yet D24 reports them.
+  The `except*` blind spot is pinned inline in
+  `tests/test_documented_limits.py`. README registers this under
+  "Raise shapes D24 still misreads."
+- **`none_procedure_returning_value.py`.** (v1.0.1) A `-> None`
+  function that returns a value passes: `-> None` is translated
+  without a return type and no checker compares values against it.
+  README registers this under "`-> None` carries no value contract."
 
 ## How to retire a fixture
 

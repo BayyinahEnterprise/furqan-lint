@@ -2,7 +2,7 @@
 
 v1.0.1 true-positive guard for the narrowing fix. Each function below
 receives ``str | None`` and returns a bare ``str`` or ``bool`` without
-explicitly handling None where it was received. Expected: six D11
+explicitly handling None where it was received. Expected: twelve D11
 diagnostics, one per function.
 """
 
@@ -44,3 +44,49 @@ def has_letter_a(uid: int) -> bool:
 
 def in_alphabet(uid: int) -> bool:
     return find_name(uid) in "abc"  # ``None in "abc"`` raises TypeError
+
+
+# v1.0.1 review round: shapes that look like a guard but still let
+# None out. Each must keep firing.
+
+
+def break_leaks(uids: list[int]) -> str:
+    name = ""
+    for uid in uids:
+        name = find_name(uid)
+        if name is None:
+            break  # leaves the loop, name is still None below
+    return name
+
+
+def walrus_continue_leaks(uids: list[int]) -> str:
+    name = ""
+    for uid in uids:
+        if (name := find_name(uid)) is None:
+            continue
+    return name
+
+
+def returns_the_none(uid: int) -> str:
+    name = find_name(uid)
+    if name is None:
+        return name  # hands the None straight back
+    return name
+
+
+def or_none_default(uid: int) -> str:
+    return find_name(uid) or None
+
+
+def rebinds_to_none(uid: int) -> str:
+    name = find_name(uid)
+    if name is None:
+        name = None
+    return name
+
+
+def closure_reads_after_guard(uid: int) -> str:
+    name = find_name(uid)
+    if name is not None:
+        print(name)
+    return (lambda: name)()

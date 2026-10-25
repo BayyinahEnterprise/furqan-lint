@@ -2,7 +2,8 @@
 
 v1.0.1 treats ``raise``, ``sys.exit(...)``, ``os._exit(...)`` and
 ``os.abort()`` as ending a path. Recognition is syntactic on the
-``module.attr`` spelling, so the shapes below still look like a
+``module.attr`` spelling, so the shapes below (an imported ``exit``,
+a ``NoReturn`` helper, ``assert False``, bare ``quit()``) still look like a
 fall-through and D24 reports each function, although none of them can
 return None. Pinned so that widening recognition (import alias
 tracking, ``typing.NoReturn`` resolution) is a deliberate, recorded
@@ -35,3 +36,9 @@ def assert_false(code: int) -> int:
     if code == 0:
         return 0
     assert False, code
+
+
+def bare_quit(code: int) -> int:
+    if code == 0:
+        return 0
+    quit(code)

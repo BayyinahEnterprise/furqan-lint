@@ -952,14 +952,18 @@ def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
     """Return ``id()`` of every ``ast.Call`` in ``fn``'s own body whose
     possible ``None`` result is explicitly handled at the call site:
 
-    * ``call(...) or default``: the call is the left operand of ``or``.
+    * ``call(...) or default``: the call is the left operand of ``or``
+      and the last operand is a literal that cannot be None.
     * ``call(...) == value`` (also ``!=``, ``is``, ``is not``):
       comparisons that are defined for None and yield a bool. Ordering
       and membership (``in``, ``not in``) can raise on None and stay
       visible.
     * ``x = call(...)`` immediately followed by ``if x is None:`` or
-      ``if not x:`` whose body ends the path (``return``, ``raise``,
-      ``continue``, ``break``, ``sys.exit``) or rebinds ``x``.
+      ``if not x:`` whose body ends the path or rebinds ``x`` to a
+      literal that cannot be None. Ending the path means ``raise``,
+      ``sys.exit``, or a ``return`` that does not read ``x``;
+      ``continue`` / ``break`` count only when every read of ``x`` is
+      in the rest of the same loop body.
     * ``x = call(...)`` immediately followed by ``if x is not None:``
       or ``if x:`` where every later read of ``x`` is inside that
       ``if`` body.
@@ -975,6 +979,7 @@ def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
             isinstance(n, ast.BoolOp)
             and isinstance(n.op, ast.Or)
             and isinstance(n.values[0], ast.Call)
+            and _non_none_expr(n.values[-1])
         ):
             out.add(id(n.values[0]))
         if isinstance(n, ast.Compare) and all(isinstance(op, _NONE_SAFE_COMPARE) for op in n.ops):
@@ -991,7 +996,11 @@ def _narrowed_call_ids(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
                 if bound is None:
                     continue
                 var, call = bound
-                if _guards(block[i + 1], var, loads):
+                in_loop = isinstance(n, ast.For | ast.AsyncFor | ast.While) and block is n.body
+                reads_stay_in_block = in_loop and all(
+                    any(_inside(u, s) for s in block[i + 1 :]) for u in loads.get(var, [])
+                )
+                if _guards(block[i + 1], var, loads, loop_exit_ok=reads_stay_in_block):
                     out.add(id(call))
     return out
 
@@ -1041,8 +1050,11 @@ def _bound_call(stmt: ast.stmt) -> tuple[str, ast.Call] | None:
 
 
 def _name_loads(fn: ast.AST) -> dict[str, list[ast.Name]]:
+    """Every read of each name in ``fn``, nested lambdas and defs
+    included: a closure that reads the name after the guard must
+    count as a read outside the guarded region."""
     out: dict[str, list[ast.Name]] = {}
-    for n in _own_nodes(fn):
+    for n in ast.walk(fn):
         if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
             out.setdefault(n.id, []).append(n)
     return out
@@ -1068,15 +1080,78 @@ def _is_name(node: ast.AST, var: str) -> bool:
     return isinstance(node, ast.Name) and node.id == var
 
 
-def _ends_path(body: list[ast.stmt]) -> bool:
+def _ends_path(body: list[ast.stmt], var: str, loop_exit_ok: bool = False) -> bool:
+    """The None branch's last statement leaves without leaking ``var``.
+
+    ``return`` counts only when its value does not read ``var``
+    (``if x is None: return x`` hands the None straight back).
+    ``continue`` / ``break`` leave only the loop body, so they count
+    only when every read of ``var`` is inside that loop body
+    (``loop_exit_ok``)."""
     last = body[-1]
-    return isinstance(last, ast.Return | ast.Raise | ast.Continue | ast.Break) or _is_exit_call(
-        last
+    if isinstance(last, ast.Return):
+        return last.value is None or not _reads(last.value, var)
+    if isinstance(last, ast.Continue | ast.Break):
+        return loop_exit_ok
+    return isinstance(last, ast.Raise) or _is_exit_call(last)
+
+
+def _reads(node: ast.AST, var: str) -> bool:
+    return any(_is_name(n, var) for n in ast.walk(node))
+
+
+def _non_none_expr(node: ast.expr) -> bool:
+    """Expressions that cannot evaluate to None: non-None literals,
+    container displays and comprehensions, f-strings."""
+    if isinstance(node, ast.Constant):
+        return node.value is not None
+    return isinstance(
+        node,
+        ast.List
+        | ast.Tuple
+        | ast.Dict
+        | ast.Set
+        | ast.ListComp
+        | ast.SetComp
+        | ast.DictComp
+        | ast.JoinedStr,
     )
 
 
 def _rebinds(body: list[ast.stmt], var: str) -> bool:
-    return any(_bound_name(s) == var for s in body)
+    """``var`` is rebound at the top level of the None branch to a
+    value that cannot be None, and nothing in the branch binds it to
+    anything else."""
+    if not any(_bound_name(stmt) == var for stmt in body):
+        return False
+    for n in ast.walk(ast.Module(body=body, type_ignores=[])):
+        if not _binding_is_non_none(n, var):
+            return False
+    return True
+
+
+def _binding_is_non_none(n: ast.AST, var: str) -> bool:
+    """False when ``n`` binds ``var`` to something that may be None."""
+    if isinstance(n, ast.Assign):
+        if any(_is_name(t, var) for t in n.targets):
+            return _non_none_expr(n.value)
+        return True
+    if isinstance(n, ast.AnnAssign):
+        if _is_name(n.target, var):
+            return n.value is not None and _non_none_expr(n.value)
+        return True
+    if isinstance(n, ast.AugAssign | ast.NamedExpr):
+        return not _is_name(n.target, var)
+    return not _binds_target(n, var)
+
+
+def _binds_target(n: ast.AST, var: str) -> bool:
+    targets: list[ast.AST] = []
+    if isinstance(n, ast.For | ast.AsyncFor):
+        targets.append(n.target)
+    elif isinstance(n, ast.With | ast.AsyncWith):
+        targets.extend(i.optional_vars for i in n.items if i.optional_vars is not None)
+    return any(_is_name(x, var) for t in targets for x in ast.walk(t))
 
 
 def _bound_name(stmt: ast.stmt) -> str | None:
@@ -1095,11 +1170,16 @@ def _inside(node: ast.AST, region: ast.AST) -> bool:
     return any(node is sub for sub in ast.walk(region))
 
 
-def _guards(nxt: ast.stmt, var: str, loads: dict[str, list[ast.Name]]) -> bool:
+def _guards(
+    nxt: ast.stmt,
+    var: str,
+    loads: dict[str, list[ast.Name]],
+    loop_exit_ok: bool = False,
+) -> bool:
     if not isinstance(nxt, ast.If):
         return False
     if _is_none_test(nxt.test, var, negated=False):
-        return _ends_path(nxt.body) or _rebinds(nxt.body, var)
+        return _ends_path(nxt.body, var, loop_exit_ok) or _rebinds(nxt.body, var)
     if _is_none_test(nxt.test, var, negated=True):
         uses = loads.get(var, [])
         return all(_inside(u, nxt.test) or any(_inside(u, s) for s in nxt.body) for u in uses)
@@ -1129,7 +1209,7 @@ def _walrus_guard_call(node: ast.If, loads: dict[str, list[ast.Name]]) -> ast.Ca
         return None
     var = target.target.id
     if is_none_branch:
-        return target.value if _ends_path(node.body) else None
+        return target.value if _ends_path(node.body, var) else None
     uses = loads.get(var, [])
     if all(any(_inside(u, s) for s in node.body) for u in uses):
         return target.value

@@ -32,8 +32,11 @@ collapse. The twelfth is a fourth shape, an Optional stored in a
 container. A linter whose job is to catch code that misreports
 itself cannot ship reports that misreport the code. v1.0.1 fixes
 the three shapes, adds a true-positive guard fixture beside each
-fix so the fix cannot widen into a false negative, and pins the
-fourth shape and the edges of each fix as documented limits.
+fix to catch a fix that widens into a false negative, and pins the
+fourth shape and the edges of each fix as documented limits. An
+independent review of the first cut found five such widenings in
+the D11 narrowing; they are closed below and each now has a guard
+case.
 Self-check on `src/`: 12 diagnostics to 1, and that one is the
 documented `optional_stored_in_container` limit.
 
@@ -44,8 +47,9 @@ fixtures report the same diagnostics on both.
 ### Fixed
 
 - **D24 raise-terminal false positive.** The adapter skipped
-  `raise` statements, so a function ending in `raise` (or
-  `else: raise`) looked like it fell through and D24 reported a
+  `raise` statements, so a function ending in `raise` (or in an
+  `if` / `else` whose last branch raises, or an `except` that
+  re-raises) looked like it fell through and D24 reported a
   missing return on code that cannot fall through. `raise`,
   `sys.exit(...)`, `os._exit(...)` and `os.abort()` now end a path.
   This applies only in functions with at least one explicit
@@ -62,22 +66,29 @@ fixtures report the same diagnostics on both.
   procedure that calls an Optional producer now gets D11's
   informational S2 advisory (exit 0) instead of an S1 error, the
   shape upstream D11 already uses for functions with no declared
-  return. Clean fixture: `generator_and_procedure_shapes`.
+  return. Generators that call an Optional producer get the same S2
+  advisory, for the same reason. Clean fixture: `generator_and_procedure_shapes`.
 - **D11 call-site narrowing.** D11 reported every call to an
   Optional producer from a caller declaring a bare return type,
   even when the caller handled None. A call is now withheld from
-  D11 when None is handled at the call site: the left operand of
-  `or`; an operand of `==`, `!=`, `is` or `is not`; a walrus guard
-  (`if (x := f()) is None: <exit>`); or a binding followed on the
-  next statement by a None-guard that ends the path (`return`,
-  `raise`, `continue`, `break`, `sys.exit`), rebinds the name, or
-  encloses every later read. Membership (`in`, `not in`) and
-  ordering comparisons stay visible because they can raise on None
-  (`None in "abc"` raises `TypeError`). Clean fixture:
-  `optional_narrowed_at_call_site`. Guard fixture:
-  `optional_collapse_still_reported` (six functions that still
-  fire: `leaky`, `late_guard`, `ordered`, `guard_without_exit`,
-  `has_letter_a`, `in_alphabet`).
+  D11 when None is handled at the call site or on the next
+  statement: the left operand of an `or` whose last operand is a
+  literal that cannot be None; an operand of `==`, `!=`, `is` or
+  `is not`; a walrus guard (`if (x := f()) is None: raise ...`); or a
+  binding followed on the next statement by a None-guard that
+  raises, exits, returns without reading the name, rebinds the name
+  to a non-None literal, or encloses every later read of the name
+  (reads inside closures included). `continue` / `break` count only
+  when every read stays in the rest of the same loop body.
+  Membership (`in`, `not in`) and ordering comparisons stay visible
+  because they can raise on None (`None in "abc"` raises
+  `TypeError`). Clean fixture: `optional_narrowed_at_call_site`.
+  Guard fixture: `optional_collapse_still_reported`, twelve
+  functions that still fire: `leaky`, `late_guard`, `ordered`,
+  `guard_without_exit`, `has_letter_a`, `in_alphabet`, and the
+  review-round shapes `break_leaks`, `walrus_continue_leaks`,
+  `returns_the_none`, `or_none_default`, `rebinds_to_none`,
+  `closure_reads_after_guard`.
 
 ### Limitations introduced
 
@@ -92,6 +103,18 @@ fixtures report the same diagnostics on both.
 - `optional_guard_not_adjacent`: a None-guard that is not the
   statement right after the binding, and `assert x is not None`
   (stripped by `python -O`), are not seen; D11 still reports them.
+- `terminal_recognition_false_negatives`: recognition is
+  syntactic, so a `raise` inside `with contextlib.suppress(...)` and
+  `sys.exit()` on a local named `sys` count as ending the path; D24
+  is silent although the function can fall through.
+- `raise_terminal_remaining_false_positives`: `for ... else: raise`,
+  `while True:` ending in `raise`, and `try` / `finally` with no
+  `except` still draw D24. Pre-existing and newly documented:
+  `try` / `except*` is not translated, so D24 never sees returns
+  inside it (pinned inline, Python 3.11+).
+- `none_procedure_returning_value`: a `-> None` function that
+  returns a value is not reported. v1.0.0 sometimes reported it, but
+  only by accident, through D24's fall-through rule.
 
 Each is registered in the README `Remaining limitations` section,
 in `tests/fixtures/documented_limits/README.md`, and pinned in
@@ -142,14 +165,15 @@ v1.1.0, as a deliberate hash change with its own CHANGELOG entry.
 
 ### Tests
 
-Test count: 732 (v1.0.0) -> 742 (v1.0.1). Net delta: +10.
+Test count: 732 (v1.0.0) -> 746 (v1.0.1). Net delta: +14.
 
 - `tests/test_checks.py`: +7 (raise-terminal pass, raise-branch
-  guard, no double report with R3, call-site narrowing pass,
+  guard, no double report with R3 (run with the source tree so R3
+  actually executes), call-site narrowing pass,
   collapse guard, generator and procedure contract, procedure
   advisory).
-- `tests/test_documented_limits.py`: +3 (one per new documented
-  limit).
+- `tests/test_documented_limits.py`: +7 (one per new documented
+  limit fixture, plus the inline `except*` pin).
 - `tests/test_action.py`: two tests rewritten in place, no count
   change.
 

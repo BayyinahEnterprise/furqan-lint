@@ -6,6 +6,7 @@ or inline source and asserts the expected diagnostic shape.
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from pathlib import Path
@@ -79,8 +80,9 @@ def test_zero_return_function_with_raise_is_not_double_reported() -> None:
     jurisdiction; modelling ``raise`` as terminal must not make D24
     report it as well."""
     source = "def f(x: int) -> int:\n" "    if x:\n" "        raise ValueError(x)\n"
-    diags = check_python_module(translate_source(source))
+    diags = check_python_module(translate_source(source), ast.parse(source))
     assert _by_checker(diags, "all_paths_return") == []
+    assert len(_by_checker(diags, "zero_return_path")) == 1
 
 
 @pytest.mark.unit
@@ -139,31 +141,32 @@ def test_optional_narrowed_at_call_site_passes_d11(clean_dir: Path) -> None:
 @pytest.mark.unit
 def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
     """v1.0.1 true-positive guard: unhandled None arms still fire,
-    one diagnostic per function."""
+    one diagnostic per function. Includes the review-round shapes that
+    resemble a guard but let None out (``break`` / ``continue`` out of
+    a loop, ``return x`` in the None branch, ``or None``, rebinding to
+    None, a closure read after the guard)."""
     module = translate_file(failing_dir / "optional_collapse_still_reported.py")
     diags = check_python_module(module)
     s = _by_checker(diags, "status_coverage")
-    named = sorted(
-        name
-        for name in (
+    expected = sorted(
+        [
             "leaky",
             "late_guard",
             "ordered",
             "guard_without_exit",
             "has_letter_a",
             "in_alphabet",
-        )
-        if any(f"function '{name}'" in str(d) for d in s)
+            "break_leaks",
+            "walrus_continue_leaks",
+            "returns_the_none",
+            "or_none_default",
+            "rebinds_to_none",
+            "closure_reads_after_guard",
+        ]
     )
-    assert named == [
-        "guard_without_exit",
-        "has_letter_a",
-        "in_alphabet",
-        "late_guard",
-        "leaky",
-        "ordered",
-    ]
-    assert len(s) == 6
+    named = sorted(name for name in expected if any(f"function '{name}'" in str(d) for d in s))
+    assert named == expected
+    assert len(s) == len(expected)
 
 
 @pytest.mark.unit

@@ -89,6 +89,9 @@ _README_TOPIC_KEYWORDS: dict[str, tuple[str, ...] | None] = {
     "optional_stored_in_container": ("Optional stored in a container",),
     "exit_alias_not_terminal": ("Terminal-call recognition",),
     "optional_guard_not_adjacent": ("None handled away from the call site",),
+    "terminal_recognition_false_negatives": ("Terminal recognition is syntactic",),
+    "raise_terminal_remaining_false_positives": ("Raise shapes D24 still misreads",),
+    "none_procedure_returning_value": ("carries no value contract",),
 }
 
 
