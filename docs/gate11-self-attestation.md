@@ -22,9 +22,15 @@ furqan-lint manifest verify-self \
   --expected-issuer "https://token.actions.githubusercontent.com"
 ```
 
-The ``--expected-identity`` pattern MUST be configured for
-production verification per the CASM-V-035 default refuse-
-without-policy discipline (at-Tawbah T02). The pattern
+From v1.0.2 the identity policy defaults to the release
+workflow at the requested version's tag
+(``.../release.yml@refs/tags/v<VERSION>``, issuer
+``https://token.actions.githubusercontent.com``), so the bare
+``furqan-lint manifest verify-self`` command verifies the installed
+release; pass ``--expected-identity`` to require a different
+signer. The policy is never "any identity" unless
+``--allow-any-identity`` is given (CASM-V-035 refuse-without-policy
+discipline, at-Tawbah T02). The pattern
 should match the BayyinahEnterprise GitHub Actions release
 workflow's Sigstore-OIDC signing identity (canonical
 identity-rooted-in-release-yml convention) or the project
@@ -39,6 +45,29 @@ furqan-lint manifest verify-self --version 1.0.0 \
   --expected-issuer "https://token.actions.githubusercontent.com"
 ```
 
+## How verification works (v1.0.2)
+
+1. Download ``self_manifest.json`` and ``self_manifest.bundle`` from
+   the version's GitHub Release (CASM-V-072 (a) if missing).
+2. Parse the manifest (CASM-V-072 (a) if unparseable).
+3. Verify the bare Sigstore bundle over the exact bytes of
+   ``self_manifest.json``, against the identity policy, using the
+   verifier's own trust-root loading (step 4) and Sigstore check
+   (step 6). Identity failures surface as CASM-V-030..036; anything
+   else as CASM-V-072 (c).
+4. When verifying the installed version, compare the attested
+   ``checker_set_hash`` with the installed package's pinned sources
+   (CASM-V-072 (b) on drift).
+
+Up to v1.0.1 the subcommand routed through the nine-step source
+verifier instead, which expects a CASM ``{manifest, sigstore_bundle}``
+wrapper and checks a source file's hash and surface (steps 7-8). The
+release workflow publishes a bare Sigstore bundle over the raw JSON,
+so verify-self failed on every real release ("bundle missing
+'manifest' field"). v1.0.1 was the first release whose workflow
+reached the signing step; its assets are pinned as test fixtures in
+``tests/fixtures/gate11/release_v1_0_1/``.
+
 ## What is attested
 
 The gate11 self-manifest covers:
@@ -48,9 +77,7 @@ The gate11 self-manifest covers:
   ``PINNED_CHECKER_SOURCES_SELF`` tuple (Form A
   checker_set_hash per H-6 corrective at v0.11.2 at-Tawbah)
 * The linter version + name + ``module_identity.language ==
-  "python"`` (Python wheel substrate; dispatch routes via
-  function-local ``_LANGUAGE_DISPATCH`` -> ``_verify_python``
-  per al-Mursalat T04 + an-Naziat F-NA-3 closure)
+  "python"`` (Python wheel substrate)
 * The signing identity (a Sigstore-issued certificate from
   the GitHub Actions ambient-OIDC flow at release time)
 * The signing time (logged in Sigstore's Certificate

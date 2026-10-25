@@ -607,9 +607,11 @@ def cmd_manifest_verify_self(args: list[str]) -> int:  # noqa: PLR0915
     Verifies furqan-lint's own gate11 self-attestation manifest.
     Downloads the signed self-manifest + Sigstore bundle from the
     convention-based GitHub Release URL derived from the version
-    (default: the installed furqan-lint version), then verifies
-    via the function-local _LANGUAGE_DISPATCH -> _verify_python
-    path per al-Mursalat T04 + an-Naziat F-NA-3 substrate-actual.
+    (default: the installed furqan-lint version), verifies the
+    Sigstore signature over the published JSON bytes with the
+    release workflow's identity pinned (v1.0.2; see
+    ``_verify_self_signature``), then compares the attested
+    checker_set_hash with the installed package.
 
     Recursive closure of the structural-honesty thesis: the
     verifier verifies the verifier's own release.
@@ -626,7 +628,6 @@ def cmd_manifest_verify_self(args: list[str]) -> int:  # noqa: PLR0915
         (c) signature-verification-unexpected (Sigstore failure
             not covered by CASM-V-030..036)
     """
-    import argparse as _argparse
     import importlib.metadata as _md
     import json as _json
     import tempfile as _tempfile
@@ -690,63 +691,44 @@ def cmd_manifest_verify_self(args: list[str]) -> int:  # noqa: PLR0915
         )
         return 1
 
-    # Verify checker_set_hash matches the installed pinned source list:
-    from furqan_lint.gate11.self_manifest import (
-        compute_self_checker_set_hash,
+    # v1.0.2: verify the Sigstore signature FIRST, over the exact bytes
+    # the release workflow signed, before trusting anything the manifest
+    # says. The release workflow (release.yml, al-Basirah T06) runs
+    # ``python -m sigstore sign --bundle self_manifest.bundle
+    # self_manifest.json``: the signed artifact is the JSON file's raw
+    # bytes and ``self_manifest.bundle`` is a bare Sigstore bundle. Up to
+    # v1.0.1 this handler instead routed through ``verification.verify``,
+    # which reads a CASM ``{manifest, sigstore_bundle}`` wrapper and runs
+    # steps 7-8 (source hash and Python surface) against the manifest
+    # file itself, so it failed on every real release with "bundle
+    # missing 'manifest' field". The identity policy defaults to the
+    # release workflow at this version's tag.
+    default_identity = (
+        "https://github.com/BayyinahEnterprise/furqan-lint/"
+        f".github/workflows/release.yml@refs/tags/v{requested_version}"
     )
-
-    installed_hash = compute_self_checker_set_hash()
-    manifest_hash = _manifest.linter_substrate_attestation.get("checker_set_hash")
-    # The manifest's hash is over the substrate AT RELEASE TIME; the
-    # installed-hash is computed over the substrate of the currently-
-    # installed furqan-lint. Drift between these is CASM-V-072 sub-
-    # condition (b).
-    # Drift detected -- this is sub-condition (b) for the
-    # particular case where the installed substrate diverges
-    # from what the manifest attests. For self-verification
-    # against a different version (--version override), this
-    # is expected; only fail when verifying against installed
-    # version.
-    if manifest_hash != installed_hash and requested_version == _md.version("furqan-lint"):
-        print(
-            f"CASM-V-072: self-attestation-failure sub-condition "
-            f"(b) checker-set-hash-drift: manifest claims "
-            f"{manifest_hash!r}, installed pinned source list "
-            f"computes {installed_hash!r}",
-            file=sys.stderr,
-        )
-        return 1
-
-    # Route through the verify_bundle six-kwarg pattern via the
-    # function-local _LANGUAGE_DISPATCH in verification.verify;
-    # manifest.module_identity['language'] == 'python' so dispatch
-    # routes to _verify_python per al-Mursalat T04 + an-Naziat F-NA-3:
+    default_issuer = "https://token.actions.githubusercontent.com"
     trust_config = _trust_config_from_path(
         opts["trust_config_path"]  # type: ignore[arg-type]
     )
-    _namespace = _argparse.Namespace(
-        bundle_path=bundle_local,
-        module_path=manifest_local,
-        trust_config=trust_config,
-        trust_config_path=opts["trust_config_path"],
-        expected_identity=opts["expected_identity"],
-        expected_issuer=opts["expected_issuer"],
-        allow_any_identity=bool(opts["allow_any_identity"]),
-        force_refresh=bool(opts["force_refresh"]),
-    )
-
-    from furqan_lint.gate11 import verification as _verification
-
     try:
-        result = _verification.verify(_manifest, _namespace)
+        signed_by = _verify_self_signature(
+            manifest=_manifest,
+            manifest_bytes=manifest_local.read_bytes(),
+            bundle_path=bundle_local,
+            trust_config=trust_config,
+            expected_identity=opts["expected_identity"] or default_identity,  # type: ignore[arg-type]
+            expected_issuer=opts["expected_issuer"] or default_issuer,  # type: ignore[arg-type]
+            allow_any_identity=bool(opts["allow_any_identity"]),
+            force_refresh=bool(opts["force_refresh"]),
+        )
     except CasmIndeterminateError as e:
         print(f"INDETERMINATE: {e}", file=sys.stderr)
         return 2
     except CasmVerificationError as e:
-        # Per F-BA standing rule: surface as CASM-V-072 sub-condition
-        # (c) when the underlying failure is not already a typed
-        # CASM-V-030..036 identity-path error. Pass-through
-        # otherwise.
+        # Per F-BA standing rule: identity-path errors pass through as
+        # their own CASM-V-030..036 codes; anything else is CASM-V-072
+        # sub-condition (c).
         if e.code in {
             "CASM-V-030",
             "CASM-V-031",
@@ -765,11 +747,79 @@ def cmd_manifest_verify_self(args: list[str]) -> int:  # noqa: PLR0915
         )
         return 1
 
+    # Verify checker_set_hash matches the installed pinned source list:
+    from furqan_lint.gate11.self_manifest import (
+        compute_self_checker_set_hash,
+    )
+
+    installed_hash = compute_self_checker_set_hash()
+    manifest_hash = _manifest.linter_substrate_attestation.get("checker_set_hash")
+    # The manifest's hash is over the substrate AT RELEASE TIME; the
+    # installed-hash is computed over the substrate of the currently-
+    # installed furqan-lint. Drift between these is CASM-V-072 sub-
+    # condition (b), checked only when verifying the installed version
+    # (verifying another release's manifest is expected to differ).
+    if manifest_hash != installed_hash and requested_version == _md.version("furqan-lint"):
+        print(
+            f"CASM-V-072: self-attestation-failure sub-condition "
+            f"(b) checker-set-hash-drift: manifest claims "
+            f"{manifest_hash!r}, installed pinned source list "
+            f"computes {installed_hash!r}",
+            file=sys.stderr,
+        )
+        return 1
+
     print(f"CASM-OK  furqan-lint@{requested_version} self-attestation")
-    print(f"  signed_by: {result.signed_by}")
-    if result.manifest is not None:
-        print(f"  signed_at: {result.manifest.issued_at}")
+    print(f"  signed_by: {signed_by}")
+    print(f"  signed_at: {_manifest.issued_at}")
+    print(f"  checker_set_hash: {manifest_hash}")
     return 0
+
+
+def _verify_self_signature(
+    *,
+    manifest: Manifest,
+    manifest_bytes: bytes,
+    bundle_path: Path,
+    trust_config: TrustConfig,
+    expected_identity: str | None,
+    expected_issuer: str | None,
+    allow_any_identity: bool,
+    force_refresh: bool,
+) -> str:
+    """Verify a release's self-manifest signature (v1.0.2).
+
+    ``bundle_path`` is a bare Sigstore bundle over ``manifest_bytes``,
+    the exact bytes of ``self_manifest.json`` as published. Reuses the
+    nine-step verifier's trust-root loading (step 4) and Sigstore
+    verification with identity policy (step 6), so error codes and the
+    refuse-without-policy default are shared; steps 7-8 do not apply
+    (the manifest attests the installed package, not a source file).
+    Returns the signer identity.
+    """
+    import json as _json
+
+    from furqan_lint.gate11.verification import Verifier
+
+    try:
+        raw = _json.loads(bundle_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise CasmVerificationError("CASM-V-010", f"self_manifest.bundle is not JSON: {e}") from e
+    if not isinstance(raw, dict) or ("messageSignature" not in raw and "dsseEnvelope" not in raw):
+        raise CasmVerificationError(
+            "CASM-V-010",
+            "self_manifest.bundle is not a Sigstore bundle " "(no messageSignature / dsseEnvelope)",
+        )
+    verifier = Verifier(trust_config=trust_config)
+    trusted_root = verifier.step4_load_trust_root(force_refresh=force_refresh)
+    return verifier.step6_verify_sigstore(
+        Bundle(manifest=manifest, sigstore_bundle=raw),
+        manifest_bytes,
+        trusted_root,
+        expected_identity=expected_identity,
+        expected_issuer=expected_issuer,
+        allow_any_identity=allow_any_identity,
+    )
 
 
 def dispatch_manifest(args: list[str]) -> int:

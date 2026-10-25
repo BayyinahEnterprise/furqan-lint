@@ -19,6 +19,66 @@ introduced this convention.
 
 ---
 
+## [1.0.2] - 2026-10-25
+
+### Fixed: `manifest verify-self` could not verify a real release
+
+v1.0.1 was the first release whose workflow reached the self-attestation
+signing step. Its signature is valid (verified independently with
+`sigstore verify identity` against `release.yml@refs/tags/v1.0.1`, and
+rejected for altered bytes or another identity), but
+`furqan-lint manifest verify-self --version 1.0.1` failed with
+"bundle missing 'manifest' field".
+
+Cause: the release workflow runs
+`python -m sigstore sign --bundle self_manifest.bundle self_manifest.json`,
+so the signed artifact is the raw JSON bytes and the bundle is a bare
+Sigstore bundle. `verify-self` instead routed both files through the
+nine-step source verifier, which reads a CASM
+`{manifest, sigstore_bundle}` wrapper and runs steps 7-8 (source hash and
+Python surface) against the manifest file as if it were source code.
+
+Now `verify-self`:
+
+1. verifies the bare Sigstore bundle over the exact published bytes
+   first, reusing the verifier's step 4 trust root and step 6 identity
+   policy, so error codes stay CASM-V-030..036 and CASM-V-072 (c);
+2. defaults the identity policy to the release workflow at the
+   requested version's tag (issuer GitHub Actions), so the bare command
+   verifies the installed release, while `--expected-identity` still
+   overrides and `--allow-any-identity` remains explicit;
+3. then compares the attested `checker_set_hash` with the installed
+   package (CASM-V-072 (b)), only after the signature holds.
+
+The published v1.0.1 assets are pinned byte for byte in
+`tests/fixtures/gate11/release_v1_0_1/` (sha256 `639d00ae...e08b5` and
+`81342542...951bc`). `tests/test_gate11_verify_self_real_release.py`
+pins the verified bytes and identity offline, and runs real Sigstore
+verification of those assets, plus both negative controls, when the
+network is available.
+
+Naskh: the v1.0.0 T05 pin `test_verify_self_handler_routes_through_verify_bundle_dispatch`
+asserted the route through `verification.verify`; it is amended to pin
+the working route (shared step 4 / step 6). `gate11/cli.py` is a pinned
+checker source, so the Form A hash literal moves from
+`sha256:48ca888d...f297` (v1.0.1) to `sha256:acc694a3...423c`
+(`V0_13_0_CHECKER_SET_HASH`, previous literal kept in a comment).
+`docs/gate11-self-attestation.md` documents the verification steps.
+
+### Tests
+
+Test count: 762 (v1.0.1) -> 772 (v1.0.2). Net delta: +10.
+
+- `tests/test_gate11_verify_self_real_release.py`: +10 (new; published
+  asset hashes, exact bytes and default identity, identity override,
+  three failure mappings, non-Sigstore bundle rejected, drift after a
+  valid signature, route pin, real Sigstore verification with negative
+  controls).
+- `tests/test_gate11_verify_self_subcommand.py`: one test amended in
+  place (Naskh), no count change.
+
+---
+
 ## [1.0.1] - 2026-10-25
 
 ### Honesty corrective: false positives on furqan-lint's own source

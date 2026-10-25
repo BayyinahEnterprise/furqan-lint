@@ -19,6 +19,7 @@ import pytest
 pytest.importorskip("rfc8785")
 
 from furqan_lint.gate11.cli import (
+    _verify_self_signature,
     cmd_manifest_verify_self,
     dispatch_manifest,
 )
@@ -43,26 +44,22 @@ def test_verify_self_subcommand_routed_by_dispatch_manifest() -> None:
 
 
 def test_verify_self_handler_routes_through_verify_bundle_dispatch() -> None:
-    """T05 closure: cmd_manifest_verify_self routes through
-    verification.verify (which contains the function-local
-    _LANGUAGE_DISPATCH per al-Mursalat T04 + an-Naziat F-NA-3
-    closure). Mirror of test_module_level_verify_dispatches_python_to_facade
-    structural pattern.
+    """T05 closure, amended in v1.0.2 (Naskh).
 
-    Structural-honesty test: read cmd_manifest_verify_self source
-    and assert it invokes verification.verify (which then
-    dispatches to _verify_python because manifest.module_identity
-    ['language'] == 'python' for self-manifests)."""
+    v1.0.0 pinned that cmd_manifest_verify_self invokes
+    ``verification.verify`` (the nine-step source verifier). That route
+    could not verify a real release: the release workflow publishes a
+    bare Sigstore bundle over the raw manifest bytes, not a CASM
+    wrapper, and steps 7-8 assume a source file. The amended pin keeps
+    the substrate-of-record intent (one shared Sigstore code path, the
+    Verifier's step 4 trust root and step 6 identity-policy check) and
+    names the route that works; see
+    ``tests/test_gate11_verify_self_real_release.py``."""
     source = inspect.getsource(cmd_manifest_verify_self)
-    assert "from furqan_lint.gate11 import verification" in source, (
-        "T05 substrate-of-record violation: cmd_manifest_verify_self "
-        "does not import verification module"
-    )
-    assert "_verification.verify(_manifest, _namespace)" in source, (
-        "T05 substrate-of-record violation: cmd_manifest_verify_self "
-        "does not invoke verification.verify; dispatch consolidation "
-        "via function-local _LANGUAGE_DISPATCH regression"
-    )
+    assert "_verify_self_signature(" in source
+    helper = inspect.getsource(_verify_self_signature)
+    assert "step4_load_trust_root" in helper
+    assert "step6_verify_sigstore" in helper
 
 
 def test_verify_self_default_uses_installed_version() -> None:
