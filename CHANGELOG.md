@@ -132,7 +132,7 @@ release time).
 
 ### Tests
 
-Test count: 762 (v1.0.1) -> 778 (v1.0.2). Net delta: +16.
+Test count: 762 (v1.0.1) -> 780 (v1.0.2). Net delta: +18.
 
 - `tests/test_gate11_verify_self_real_release.py`: +10 (new; published
   asset hashes, exact bytes and default identity, identity override,
