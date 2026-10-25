@@ -688,6 +688,18 @@ and a test in `tests/test_documented_limits.py` pinning the current
 behaviour, so any change (in either direction) is intentional rather
 than silent.
 
+**What a PASS means.** furqan-lint's checks are syntactic heuristics
+over each function's AST, not a semantic proof. A PASS means no
+checker matched a known-bad shape; it does not mean the code is free
+of the defect class. In particular, D11's call-site narrowing (the
+rules that decide a producer's None was handled) is built to fail
+closed: when a rule cannot establish that the None is gone, the call
+stays visible and D11 reports. Four independent verification rounds
+in v1.0.1 tried to make D11 miss a None that execution proves reaches
+the caller; every leak found was fixed or is listed below. The list
+below is the known boundary, not a guarantee that nothing lies beyond
+it.
+
 - **`self.method()` calls.** The adapter resolves `self.foo()` to the
   bare method name `foo`, the same as a plain `foo()` call. This is
   not a bug today but will need revisiting if the adapter ever stores

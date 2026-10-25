@@ -188,6 +188,11 @@ fixtures report the same diagnostics on both.
   disables guard narrowing for the whole function. Frames reached by
   other routes (a traceback, a helper module) are documented in the
   README, not detected.
+- **README states what a PASS means.** The `Remaining limitations`
+  section now opens by saying the checks are syntactic heuristics,
+  not a semantic proof, that D11 narrowing fails closed, and that the
+  limits list is the known boundary rather than a guarantee
+  (corrective re-audit, mandatory gate 4).
 - **Verification round four: no HIGH or MEDIUM finding.** A fourth
   fresh-context round read every narrowing rule end to end and found
   two LOW, contrived gaps, both pinned as documented limits: a guard
