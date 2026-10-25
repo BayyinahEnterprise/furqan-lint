@@ -51,9 +51,10 @@ from furqan_lint.gate11.checker_set_hash import (
 # changed; all three are pinned entries. Previous literal (v1.0.0):
 # sha256:7800b8bf55b105eaea66e927dd4d6cc04c66661d008d9ef5d194bcad3aef6cad
 # v1.0.2 Naskh update: gate11/cli.py (verify-self verifies the bare
-# Sigstore bundle over the published manifest bytes). Previous literal
+# Sigstore bundle over the published manifest bytes; the Go manifest
+# builder raises instead of returning None). Previous literal
 # (v1.0.1): sha256:48ca888da7437a4bb886f49b4d681ab85924ffcaed9b0a32931e9c2eaa29f297
-V0_13_0_CHECKER_SET_HASH = "sha256:acc694a3e491404ff2a1545824f431fb5b9c4f363f5ca4a575294dd8f301423c"
+V0_13_0_CHECKER_SET_HASH = "sha256:5b3d1ff1b69ef5e859cb07ab7ad9fa0a1023147cdfc3b45c7a392894e4fc2a29"
 
 
 def test_v0_13_0_onnx_verification_module_in_checker_source_files() -> None:

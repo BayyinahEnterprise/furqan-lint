@@ -61,19 +61,41 @@ Naskh: the v1.0.0 T05 pin `test_verify_self_handler_routes_through_verify_bundle
 asserted the route through `verification.verify`; it is amended to pin
 the working route (shared step 4 / step 6). `gate11/cli.py` is a pinned
 checker source, so the Form A hash literal moves from
-`sha256:48ca888d...f297` (v1.0.1) to `sha256:acc694a3...423c`
+`sha256:48ca888d...f297` (v1.0.1) to `sha256:5b3d1ff1...2a29`
 (`V0_13_0_CHECKER_SET_HASH`, previous literal kept in a comment).
 `docs/gate11-self-attestation.md` documents the verification steps.
 
+### Fixed: self-check regression shipped in v1.0.1
+
+The v1.0.1 entry reports the self-check on `src/` as 1 error (the
+documented `optional_stored_in_container` limit) plus 1 informational
+note. That was true for the D11/D24 corrective (PR #29), but PR #30,
+merged into the same release, added two more errors: in
+`gate11/cli.py`, `cmd_manifest_init` and `cmd_manifest_update` checked
+the `Manifest | None` result of `_build_go_manifest` for None inside a
+`try` block, which D11 deliberately does not trust (documented limit
+`guard_inside_try`). The callers were correct, so these were false
+positives, but the released self-check was 3 errors, not 1. The helper
+now raises `_GoManifestUnavailable` (reason printed, exit 1) instead of
+returning None, so there is no None arm to collapse, and the self-check
+is back to 1 error plus 1 note. New gate `tests/test_self_check.py`
+runs furqan-lint over its own `src/` and fails on any S1 finding other
+than the documented one, so the self-check claim cannot drift from the
+code again (it fails on v1.0.1).
+
 ### Tests
 
-Test count: 762 (v1.0.1) -> 772 (v1.0.2). Net delta: +10.
+Test count: 762 (v1.0.1) -> 774 (v1.0.2). Net delta: +12.
 
 - `tests/test_gate11_verify_self_real_release.py`: +10 (new; published
   asset hashes, exact bytes and default identity, identity override,
   three failure mappings, non-Sigstore bundle rejected, drift after a
   valid signature, route pin, real Sigstore verification with negative
   controls).
+- `tests/test_self_check.py`: +1 (new; self-check reports only the
+  documented error).
+- `tests/test_gate11_language_routing.py`: +1 (Go builder failure still
+  exits 1 with a message).
 - `tests/test_gate11_verify_self_subcommand.py`: one test amended in
   place (Naskh), no count change.
 
