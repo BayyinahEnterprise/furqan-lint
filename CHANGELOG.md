@@ -36,8 +36,8 @@ fix to catch a fix that widens into a false negative, and pins the
 fourth shape and the edges of each fix as documented limits. An
 independent review of the first cut found five such widenings in
 the D11 narrowing, the external v1.0.1 audit found a sixth (F-01)
-plus an invalid test specimen (F-02), and two fresh-context
-verification rounds of the audit fixes found eight more. All are closed
+plus an invalid test specimen (F-02), and three fresh-context
+verification rounds of the audit fixes found eleven more. All are closed
 below and each has a guard case.
 Self-check on `src/`: 12 diagnostics to 1 error plus 1
 informational S2 note. The error is the documented
@@ -88,15 +88,16 @@ fixtures report the same diagnostics on both.
   reached on every path. Guards inside a `try` with handlers or a
   `finally`, or inside a `with` block, are not trusted, and only a
   plain `x = <non-None literal>` counts as a rebind. Names read by a
-  nested closure, `global` / `nonlocal` names, and every name in a
-  function that calls `locals` / `vars` / `eval` / `exec` are never
-  narrowed by a guard. `continue` /
+  nested closure, generator expression or `type` alias, `global` /
+  `nonlocal` names, and every name in a function that references
+  `locals` / `vars` / `eval` / `exec` or a frame are never narrowed
+  by a guard. `continue` /
   `break` count only when every read stays in the rest of the same
   loop body.
   Membership (`in`, `not in`) and ordering comparisons stay visible
   because they can raise on None (`None in "abc"` raises
   `TypeError`). Clean fixture: `optional_narrowed_at_call_site`.
-  Guard fixture: `optional_collapse_still_reported`, twenty-six
+  Guard fixture: `optional_collapse_still_reported`, thirty
   functions that still fire: `leaky`, `late_guard`, `ordered`,
   `guard_without_exit`, `has_letter_a`, `in_alphabet`; the
   review-round shapes `break_leaks`, `walrus_continue_leaks`,
@@ -109,7 +110,9 @@ fixtures report the same diagnostics on both.
   `tuple_rebind_to_none`, `match_capture_rebind`; and the round-two
   shapes `late_closure_continue`, `late_closure_positive`,
   `closure_return_fallback`, `global_rebound_after_guard`,
-  `locals_after_guard`.
+  `locals_after_guard`; and the round-three shapes
+  `late_genexp_continue`, `late_genexp_positive`,
+  `frame_locals_after_guard`, `uncalled_locals_alias`.
 
 ### Audit corrections (external v1.0.1 audit, 2026-10-25)
 
@@ -174,6 +177,17 @@ fixtures report the same diagnostics on both.
   nested function bodies are not checked at all (pre-existing, newly
   documented), a `nonlocal` rebind from a nested function, and a
   decorator that swallows the guard's `raise`.
+- **Verification round three (three further D11 false negatives).**
+  A generator expression reads its element expression only when it
+  is iterated, so it is a late-binding scope like a lambda; on
+  Python 3.12+ a `type` alias value is lazy in the same way. Both are
+  now treated as closures. Reading locals through a frame
+  (`sys._getframe().f_locals`) or through an uncalled alias
+  (`peek = locals`) escaped the call-name check; any reference to
+  `locals` / `vars` / `eval` / `exec` or to a frame attribute now
+  disables guard narrowing for the whole function. Frames reached by
+  other routes (a traceback, a helper module) are documented in the
+  README, not detected.
 
 ### Limitations introduced
 
@@ -262,14 +276,14 @@ v1.1.0, as a deliberate hash change with its own CHANGELOG entry.
 
 ### Tests
 
-Test count: 732 (v1.0.0) -> 752 (v1.0.1). Net delta: +20.
+Test count: 732 (v1.0.0) -> 753 (v1.0.1). Net delta: +21.
 
-- `tests/test_checks.py`: +11 (raise-terminal pass, raise-branch
+- `tests/test_checks.py`: +12 (raise-terminal pass, raise-branch
   guard, no double report with R3 (run with the source tree so R3
   actually executes), call-site narrowing pass, collapse guard,
   generator and procedure contract, procedure advisory, audit F-01
   via module API, audit F-01 via CLI, fixture compile gate, inline
-  specimen compile gate).
+  specimen compile gate, `type` alias late scope on 3.12+).
 - `tests/test_documented_limits.py`: +9 (one per new documented
   limit fixture, plus the inline `except*` pin).
 - `tests/test_action.py`: two tests rewritten in place, no count

@@ -756,10 +756,14 @@ than silent.
   suppressed or overridden there; and only a plain `x = <literal>`
   counts as a rebind (tuple unpacking, `match` captures and other
   binding forms are treated as possibly None). A name read by a
-  nested `lambda` / `def` / `class` (a closure reads the variable
-  when it runs, not when it is created), a `global` or `nonlocal`
-  name, and every name in a function that calls `locals()` / `vars()`
-  / `eval()` / `exec()` are never narrowed by a guard. A guard further down,
+  nested `lambda` / `def` / `class`, a generator expression or a
+  `type` alias (these read the variable when they run, not when they
+  are created), a `global` or `nonlocal` name, and every name in a
+  function that references `locals` / `vars` / `eval` / `exec` or a
+  frame (`sys._getframe`, `inspect.currentframe`, `f_locals`) are
+  never narrowed by a guard. Other ways of reaching a frame (for
+  example through a traceback object or a helper in another module)
+  are not detected. A guard further down,
   a None branch with a nested `if` or loop before its exit, a guard
   inside such a `try` even when its exception escapes, and
   `assert x is not None` (stripped by `python -O`), are not seen, so

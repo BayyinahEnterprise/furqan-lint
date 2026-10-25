@@ -150,7 +150,8 @@ def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
     suppressed or overridden by ``finally``; a fallback replaced by
     tuple unpacking or a ``match`` capture), and the round-two shapes
     (a late-binding closure, a global rebound after the guard,
-    ``locals()``)."""
+    ``locals()``), and round three (a late generator expression, frame
+    access, an uncalled ``locals`` alias)."""
     module = translate_file(failing_dir / "optional_collapse_still_reported.py")
     diags = check_python_module(module)
     s = _by_checker(diags, "status_coverage")
@@ -182,6 +183,10 @@ def test_optional_collapse_still_reported_d11(failing_dir: Path) -> None:
             "closure_return_fallback",
             "global_rebound_after_guard",
             "locals_after_guard",
+            "late_genexp_continue",
+            "late_genexp_positive",
+            "frame_locals_after_guard",
+            "uncalled_locals_alias",
         ]
     )
     named = sorted(name for name in expected if any(f"function '{name}'" in str(d) for d in s))
@@ -424,3 +429,32 @@ def test_inline_specimens_are_compiled_before_translation() -> None:
         adapter.translate_source(parse_only)
     with pytest.raises(SyntaxError):
         translate_source(parse_only)
+
+
+@pytest.mark.unit
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="type aliases need Python 3.12")
+def test_type_alias_late_scope_blocks_narrowing() -> None:
+    """v1.0.1 verification round three: a ``type`` alias value is
+    evaluated lazily, like a closure, so a guarded name it reads cannot
+    be narrowed. Inline because the syntax needs Python 3.12."""
+    source = (
+        "from typing import Optional\n"
+        "def find_name(uid: int) -> Optional[str]:\n"
+        "    return {1: 'a'}.get(uid)\n"
+        "def first_name(uids: list[int]) -> str:\n"
+        "    alias = None\n"
+        "    for uid in uids:\n"
+        "        x = find_name(uid)\n"
+        "        if x is None:\n"
+        "            continue\n"
+        "        type A = x\n"
+        "        alias = A\n"
+        "    return alias.__value__\n"
+    )
+    namespace: dict = {}
+    exec(compile(source, "<alias>", "exec"), namespace)
+    assert namespace["first_name"]([1, 2]) is None  # the leak is real
+    s = _by_checker(
+        check_python_module(translate_source(source), ast.parse(source)), "status_coverage"
+    )
+    assert any("function 'first_name'" in str(d) for d in s)

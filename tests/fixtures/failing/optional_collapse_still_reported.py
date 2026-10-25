@@ -2,7 +2,7 @@
 
 v1.0.1 true-positive guard for the narrowing fix. Each function below
 receives ``str | None`` and returns a bare ``str`` or ``bool`` without
-explicitly handling None where it was received. Expected: twenty-six D11
+explicitly handling None where it was received. Expected: thirty D11
 diagnostics, one per function.
 """
 
@@ -241,3 +241,41 @@ def locals_after_guard(uid: int) -> str:
     if name is None:
         return str(locals()["name"])  # dynamic scope access: not trusted
     return name
+
+
+# v1.0.1 verification round three: a generator expression also reads
+# its free names late, and frame access reads locals out of sight.
+
+
+def late_genexp_continue(uids: list[int]) -> str:
+    it = iter(["fallback"])
+    for uid in uids:
+        name = find_name(uid)
+        if name is None:
+            continue
+        it = (name for _ in range(1))  # evaluated at next(), maybe None
+    return next(it)
+
+
+def late_genexp_positive(uids: list[int]) -> str:
+    it = iter(["fallback"])
+    for uid in uids:
+        name = find_name(uid)
+        if name is not None:
+            it = (name for _ in range(1))
+    return next(it)
+
+
+def frame_locals_after_guard(uid: int) -> str:
+    name = find_name(uid)
+    if name is not None:
+        return name
+    return sys._getframe().f_locals["name"]  # the None, read via the frame
+
+
+def uncalled_locals_alias(uid: int) -> str:
+    peek = locals
+    name = find_name(uid)
+    if name is not None:
+        return name
+    return peek()["name"]  # the None, read via an uncalled alias

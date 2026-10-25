@@ -1200,33 +1200,45 @@ def _stores(target: ast.AST, var: str) -> bool:
 
 
 _DYNAMIC_SCOPE_CALLS = frozenset({"locals", "vars", "eval", "exec"})
+_FRAME_ATTRS = frozenset({"_getframe", "currentframe", "f_locals", "f_back", "stack"})
+
+# Scopes that read their free names later than they are created: a
+# closure, a generator expression (its element expression runs on
+# iteration) and, on Python 3.12+, a ``type`` alias (lazy value).
+_LATE_SCOPES: tuple[type, ...] = (
+    ast.Lambda,
+    ast.FunctionDef,
+    ast.AsyncFunctionDef,
+    ast.ClassDef,
+    ast.GeneratorExp,
+    *((ast.TypeAlias,) if hasattr(ast, "TypeAlias") else ()),
+)
 
 
 def _unguardable_names(fn: ast.AST) -> frozenset[str]:
-    """Names a guard cannot vouch for. Returns every name for a
-    function that calls ``locals`` / ``vars`` / ``eval`` / ``exec``.
+    """Names a guard cannot vouch for.
 
-    * Names read inside a nested ``lambda`` / ``def`` / ``class``: a
-      closure reads the variable when it runs, not when it is created,
-      so a later binding to None (the next loop pass, a later
-      assignment) reaches the caller through it. v1.0.1 verification
-      round two: late-binding closures in loops leaked.
+    * Names read inside a nested ``lambda`` / ``def`` / ``class``,
+      generator expression or ``type`` alias (``_LATE_SCOPES``): these
+      read the variable when they run, not when they are created, so
+      a later binding to None (the next loop pass, a later
+      assignment) reaches the caller through them. v1.0.1
+      verification rounds two and three.
+    * Every name, when the function references ``locals`` / ``vars``
+      / ``eval`` / ``exec`` (called or not) or a frame attribute such
+      as ``sys._getframe`` / ``f_locals``.
     * Names declared ``global`` or ``nonlocal``: any call can rebind
       them after the guard."""
     names: set[str] = set()
     for n in ast.walk(fn):
         if isinstance(n, ast.Global | ast.Nonlocal):
             names.update(n.names)
-        if (
-            isinstance(n, ast.Call)
-            and isinstance(n.func, ast.Name)
-            and n.func.id in _DYNAMIC_SCOPE_CALLS
+        if (isinstance(n, ast.Name) and n.id in _DYNAMIC_SCOPE_CALLS) or (
+            isinstance(n, ast.Attribute) and n.attr in _FRAME_ATTRS | _DYNAMIC_SCOPE_CALLS
         ):
-            return _EVERY_NAME
+            return _EVERY_NAME  # any reference, called or not, plus frame access
     for n in ast.walk(fn):
-        if isinstance(n, ast.Lambda | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) and (
-            n is not fn
-        ):
+        if isinstance(n, _LATE_SCOPES) and n is not fn:
             names.update(
                 x.id for x in ast.walk(n) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)
             )
