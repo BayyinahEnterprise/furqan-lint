@@ -275,10 +275,56 @@ what `.pre-commit-hooks.yaml` declares instead of restating its own
 copy of the dependency, so the test and the hook cannot drift
 apart again.
 
+### Gate 11: Rust and Go sign / verify routing
+
+The `gate11-rust-smoke-test` and `gate11-go-smoke-test` CI jobs run
+only on pushes to `main` and had been red there since v0.11.x (Rust)
+and v0.12.0 (Go). The first push to `main` after the v1.0.1 merge
+showed both again. Root causes, all in the CLI and the verifier rather
+than in the per-language canonicalizers:
+
+- **Verify step 8** extracted the live public surface with the Python
+  extractor for every language, so verifying a valid Rust or Go bundle
+  failed with a Python `SyntaxError`. Step 8 now extracts in the
+  manifest's `module_identity.language`, the field that already
+  routes the per-language verifier facade.
+- **`manifest init foo.go`** fell through to the Python builder (only
+  `.rs` was routed), and no Go manifest builder existed. Added
+  `build_manifest_go` and `extract_public_surface_go` in
+  `gate11/go_verification.py`, mirroring the Rust builder.
+- **`manifest update`** routed nothing, so it failed on `.rs` and
+  `.go`. It now routes both, chaining from the existing manifest.
+
+Go public surface, documented as an honest asymmetry in
+`docs/gate11-symmetry.md`: exported top-level functions carry a
+signature fingerprint (CASM-V-051 on change); types, constants,
+variables and receiver-qualified methods are fingerprinted by name and
+kind only (removal is CASM-V-050; a definition change is not detected).
+goast lists methods under their bare name, so a bare name gets a
+signature only when it is exported at top level, and same-named
+candidates are folded into one fingerprint. Kinds stay within the CASM
+v1.0 schema (`function`, `struct`, `trait`, `alias`, `type_alias`,
+`constant`); the schema is unchanged.
+
+The symmetry table's "CLI dispatch by manifest-declared language" row
+was true only for the verify handler; two new rows record the builder
+and step-8 coverage per language, including that ONNX sign / verify is
+not wired in the CLI. Pinned by `tests/test_gate11_language_routing.py`
+(stub signing; real Sigstore signing stays with the smoke-test jobs,
+which need ambient OIDC).
+
+Naskh: `gate11/cli.py`, `gate11/verification.py` and
+`gate11/go_verification.py` are pinned in `_CHECKER_SOURCE_FILES`, so
+the Form A checker-set hash changes:
+`sha256:7800b8bf...6cad` (v1.0.0) to `sha256:48ca888d...f297`
+(`V0_13_0_CHECKER_SET_HASH`, previous literal kept in a comment). No
+module was added, so the pinned file list and its order are unchanged.
+
 ### Attestation note
 
-The Form A `checker_set_hash` carried by gate11 bundles is
-unchanged: no file edited here is in `_CHECKER_SOURCE_FILES`. The
+The Form A `checker_set_hash` carried by gate11 bundles changes only
+through the Gate 11 routing fix above; none of the D24 / D11 / R3
+files edited in this release is in `_CHECKER_SOURCE_FILES`. The
 self-manifest hash over `PINNED_CHECKER_SOURCES_SELF` changes,
 because `zero_return.py` is in that list; it is computed at release
 time, so no literal needed updating. Neither list contains
@@ -290,7 +336,7 @@ v1.1.0, as a deliberate hash change with its own CHANGELOG entry.
 
 ### Tests
 
-Test count: 732 (v1.0.0) -> 753 (v1.0.1). Net delta: +21.
+Test count: 732 (v1.0.0) -> 762 (v1.0.1). Net delta: +30.
 
 - `tests/test_checks.py`: +12 (raise-terminal pass, raise-branch
   guard, no double report with R3 (run with the source tree so R3
@@ -300,6 +346,10 @@ Test count: 732 (v1.0.0) -> 753 (v1.0.1). Net delta: +21.
   specimen compile gate, `type` alias late scope on 3.12+).
 - `tests/test_documented_limits.py`: +9 (one per new documented
   limit fixture, plus the inline `except*` pin).
+- `tests/test_gate11_language_routing.py`: +9 (new; Rust step 8 and
+  drift, Rust update routing, Go init, Go drift and removal, Go update
+  chaining, Go variadic fingerprint, Go schema kinds, Go methods vs
+  functions).
 - `tests/test_action.py`: two tests rewritten in place, no count
   change.
 

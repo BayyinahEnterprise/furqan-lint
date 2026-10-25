@@ -56,7 +56,8 @@ analysis sees terminal coverage across all branches.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from furqan_lint.gate11.verification import (
     TrustConfig,
@@ -135,4 +136,196 @@ def _verify_go(
     )
 
 
-__all__ = ("_verify_go",)
+# ---------------------------------------------------------------------------
+# v1.0.1: Go public surface and manifest builder.
+#
+# Before v1.0.1 the CLI routed only ``.rs`` to a language-specific
+# builder, so ``manifest init foo.go`` fell through to the Python
+# builder and failed with a SyntaxError, and verification step 8 parsed
+# Go source with Python's ``ast``. Both made the Go Gate 11 pipeline
+# unusable end to end (the ``gate11-go-smoke-test`` CI job had been red
+# on ``main`` since v0.12.0). The Go substrate lives in this module,
+# which is already pinned in ``_CHECKER_SOURCE_FILES`` and
+# ``PINNED_CHECKER_SOURCES_SELF``, so every line here is covered by the
+# checker-set hash.
+# ---------------------------------------------------------------------------
+
+_GO_EXTRACTION_METHOD = "goast.go-public-surface@v1.0"
+
+
+def extract_public_surface_go(path: Path | str) -> list[dict[str, str]]:
+    """Return the ASCII-sorted ``public_surface.names`` list for a Go file.
+
+    Exported top-level functions carry a signature fingerprint over
+    their canonical signature (parameters, return types, variadic flag;
+    rules 6-8 in ``go_signature_canonicalization``), so a changed
+    signature is CASM-V-051. Every other exported name goast reports
+    (types, constants, variables, receiver-qualified methods) is tracked
+    by presence only: its fingerprint covers just its name and kind, so
+    its removal is CASM-V-050 but a change to its definition is not
+    detected. Its kind is a CASM v1.0 schema kind read from the source
+    by ``_go_name_kind``. That asymmetry is documented in
+    ``docs/gate11-symmetry.md``.
+
+    Raises whatever ``furqan_lint.go_adapter.parse_file`` raises
+    (``GoExtrasNotInstalled`` without the goast binary, ``GoParseError``
+    on unparseable source).
+    """
+    from furqan_lint.gate11.go_signature_canonicalization import (
+        canonical_signature_fingerprint,
+        canonicalize_function_signature,
+    )
+    from furqan_lint.go_adapter import parse_file
+
+    data: dict[str, Any] = parse_file(path)
+    source = Path(path).read_text(encoding="utf-8")
+    public = list(data.get("public_names", []) or [])
+    top_level = {name for name in public if "." not in name}
+    # goast lists methods in ``functions`` under their bare name (the
+    # receiver-qualified ``Type.Method`` appears only in public_names),
+    # so a bare name can belong to a method, a top-level function, or
+    # both. Only bare names exported at top level get a signature, and
+    # every same-named candidate is folded into one fingerprint, so a
+    # change to any of them is CASM-V-051 (never silently missed).
+    sigs: dict[str, list[dict[str, object]]] = {}
+    for fn in data.get("functions", []) or []:
+        if not fn.get("exported") or fn["name"] not in top_level:
+            continue
+        params = list(fn.get("params", []) or [])
+        is_variadic = bool(params) and str(params[-1].get("type", "")).startswith("...")
+        sigs.setdefault(fn["name"], []).append(
+            canonicalize_function_signature(
+                fn["name"],
+                params,
+                list(fn.get("return_type_names", []) or []),
+                is_variadic=is_variadic,
+            )
+        )
+    entries: dict[str, dict[str, str]] = {}
+    for name, candidates in sigs.items():
+        payload: object = (
+            candidates[0]
+            if len(candidates) == 1
+            else sorted(candidates, key=canonical_signature_fingerprint)
+        )
+        entries[name] = {
+            "name": name,
+            "kind": "function",
+            "signature_fingerprint": canonical_signature_fingerprint(payload),
+        }
+    for name in public:
+        if name not in entries:
+            kind = _go_name_kind(name, source)
+            entries[name] = {
+                "name": name,
+                "kind": kind,
+                "signature_fingerprint": canonical_signature_fingerprint(
+                    {"name": name, "kind": kind, "presence_only": True}
+                ),
+            }
+    return [entries[k] for k in sorted(entries)]
+
+
+def _go_name_kind(name: str, source: str) -> str:
+    """CASM v1.0 schema kind for an exported Go name other than a
+    top-level function: ``function`` for a receiver-qualified method
+    (``Type.Method``), ``struct`` / ``trait`` (interface) /
+    ``alias`` (``type A = B``) / ``type_alias`` (other named types) for
+    a ``type`` declaration, ``constant`` otherwise (``const`` and
+    ``var``). Read from the source text; goast reports only the name."""
+    import re
+
+    if "." in name:
+        return "function"
+    ident = re.escape(name)
+    decl = rf"(?m)^\s*(?:type\s+)?{ident}\s+"
+    if re.search(decl + r"struct\b", source):
+        return "struct"
+    if re.search(decl + r"interface\b", source):
+        return "trait"
+    if re.search(rf"(?m)^\s*(?:type\s+)?{ident}\s*=", source) and re.search(
+        rf"\btype\b[^\n]*\b{ident}\s*=|type\s*\(", source
+    ):
+        return "alias"
+    if re.search(rf"(?m)^\s*type\s+{ident}\b", source):
+        return "type_alias"
+    return "constant"
+
+
+def build_manifest_go(
+    path: Path | str,
+    previous_manifest: Manifest | None = None,
+    *,
+    trust_root: dict[str, str] | None = None,
+    use_placeholder_checker_hash: bool = False,
+) -> Manifest:
+    """Build a CASM v1.0 manifest for a Go source file.
+
+    Mirrors ``rust_manifest.build_manifest_rust``: same chain and
+    attestation fields, ``module_identity.language == "go"`` and
+    ``public_surface.extraction_method == "goast.go-public-surface@v1.0"``.
+    """
+    import datetime
+    import hashlib
+
+    from furqan_lint import __version__ as linter_version
+    from furqan_lint.gate11.checker_set_hash import (
+        compute_checker_set_hash,
+        compute_checker_set_hash_placeholder,
+    )
+    from furqan_lint.gate11.manifest_schema import Manifest as _Manifest
+    from furqan_lint.gate11.module_canonicalization import module_root_hash
+
+    source_path = Path(path)
+    if previous_manifest is None:
+        previous_manifest_hash: str | None = None
+        chain_position = 1
+    else:
+        prev_canonical = previous_manifest.to_canonical_bytes()
+        previous_manifest_hash = "sha256:" + hashlib.sha256(prev_canonical).hexdigest()
+        chain_position = int(previous_manifest.chain.get("chain_position", 0)) + 1
+    checker_hash = (
+        compute_checker_set_hash_placeholder(linter_version)
+        if use_placeholder_checker_hash
+        else compute_checker_set_hash()
+    )
+    issued_at = (
+        datetime.datetime.now(datetime.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+    return _Manifest.from_dict(
+        {
+            "casm_version": "1.0",
+            "module_identity": {
+                "language": "go",
+                "module_path": str(source_path),
+                "module_root_hash": module_root_hash(source_path),
+            },
+            "public_surface": {
+                "names": extract_public_surface_go(source_path),
+                "extraction_method": _GO_EXTRACTION_METHOD,
+                "extraction_substrate": f"furqan-lint v{linter_version}",
+            },
+            "chain": {
+                "previous_manifest_hash": previous_manifest_hash,
+                "chain_position": chain_position,
+            },
+            "linter_substrate_attestation": {
+                "linter_name": "furqan-lint",
+                "linter_version": linter_version,
+                "checker_set_hash": checker_hash,
+            },
+            "trust_root": trust_root
+            or {
+                "trust_root_id": "public-sigstore",
+                "fulcio_url": "https://fulcio.sigstore.dev",
+                "rekor_url": "https://rekor.sigstore.dev",
+            },
+            "issued_at": issued_at,
+        }
+    )
+
+
+__all__ = ("_verify_go", "build_manifest_go", "extract_public_surface_go")

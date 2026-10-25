@@ -45,7 +45,12 @@ from furqan_lint.gate11.checker_set_hash import (
 # absorption P1 timing note). Substrate-extracted at T05
 # implementation time on the v0.13.0-an-naziat-v16 branch atop
 # v0.12.0 substrate `34f45f8`.
-V0_13_0_CHECKER_SET_HASH = "sha256:7800b8bf55b105eaea66e927dd4d6cc04c66661d008d9ef5d194bcad3aef6cad"
+# v1.0.1 Naskh update: gate11/cli.py (Go init routing, Rust/Go update
+# routing), gate11/verification.py (language-aware step 8) and
+# gate11/go_verification.py (Go surface extraction + manifest builder)
+# changed; all three are pinned entries. Previous literal (v1.0.0):
+# sha256:7800b8bf55b105eaea66e927dd4d6cc04c66661d008d9ef5d194bcad3aef6cad
+V0_13_0_CHECKER_SET_HASH = "sha256:48ca888da7437a4bb886f49b4d681ab85924ffcaed9b0a32931e9c2eaa29f297"
 
 
 def test_v0_13_0_onnx_verification_module_in_checker_source_files() -> None:

@@ -245,6 +245,13 @@ def cmd_manifest_init(args: list[str]) -> int:
             except DynamicRustSurfaceError as e:
                 print(f"INDETERMINATE: {e}", file=sys.stderr)
                 return 2
+        elif module_path.suffix == ".go":
+            # v1.0.1: .go previously fell through to the Python
+            # builder and failed with a SyntaxError.
+            go_manifest = _build_go_manifest(module_path, trust_config, opts, previous=None)
+            if go_manifest is None:
+                return 1
+            manifest = go_manifest
         else:
             manifest_dict = _build_manifest_dict(
                 module_path,
@@ -280,6 +287,38 @@ def cmd_manifest_init(args: list[str]) -> int:
     Bundle(manifest=manifest, sigstore_bundle=sg_bundle).write(out_path)
     print(f"CASM-INIT  {out_path}")
     return 0
+
+
+def _build_go_manifest(
+    module_path: Path,
+    trust_config: TrustConfig,
+    opts: dict[str, object],
+    previous: Manifest | None,
+) -> Manifest | None:
+    """Build a Go manifest, or print the reason and return None.
+
+    Missing goast (the ``[go]`` extra) and unparseable Go source are
+    reported, not raised, so the CLI exits 1 with a message instead of
+    a traceback."""
+    from furqan_lint.gate11.go_verification import build_manifest_go
+    from furqan_lint.go_adapter import GoExtrasNotInstalled, GoParseError
+
+    try:
+        return build_manifest_go(
+            module_path,
+            previous_manifest=previous,
+            trust_root={
+                "trust_root_id": trust_config.trust_root_id,
+                "fulcio_url": trust_config.fulcio_url,
+                "rekor_url": trust_config.rekor_url,
+            },
+            use_placeholder_checker_hash=bool(opts.get("use_placeholder_checker_hash")),
+        )
+    except GoExtrasNotInstalled as e:
+        print(f"Go Gate 11 support not installed: {e}", file=sys.stderr)
+    except GoParseError as e:
+        print(f"Go parse error: {e}", file=sys.stderr)
+    return None
 
 
 def cmd_manifest_verify(args: list[str]) -> int:
@@ -421,22 +460,51 @@ def cmd_manifest_update(args: list[str]) -> int:
 
     from furqan_lint import __version__
 
+    # v1.0.1: route on the module's language, as ``init`` does. Before,
+    # ``update`` always used the Python builder, so it failed on .rs and
+    # .go sources.
     try:
-        manifest_dict = _build_manifest_dict(
-            module_path,
-            chain_position=next_position,
-            previous_manifest_hash=prev_hash,
-            trust_config=trust_config,
-            linter_version=__version__,
-        )
+        if module_path.suffix == ".rs":
+            from furqan_lint.gate11.rust_manifest import build_manifest_rust
+            from furqan_lint.gate11.rust_surface_extraction import (
+                DynamicRustSurfaceError,
+            )
+
+            try:
+                manifest = build_manifest_rust(
+                    module_path,
+                    previous_manifest=existing.manifest,
+                    trust_root={
+                        "trust_root_id": trust_config.trust_root_id,
+                        "fulcio_url": trust_config.fulcio_url,
+                        "rekor_url": trust_config.rekor_url,
+                    },
+                )
+            except DynamicRustSurfaceError as e:
+                print(f"INDETERMINATE: {e}", file=sys.stderr)
+                return 2
+        elif module_path.suffix == ".go":
+            go_manifest = _build_go_manifest(
+                module_path, trust_config, opts, previous=existing.manifest
+            )
+            if go_manifest is None:
+                return 1
+            manifest = go_manifest
+        else:
+            manifest_dict = _build_manifest_dict(
+                module_path,
+                chain_position=next_position,
+                previous_manifest_hash=prev_hash,
+                trust_config=trust_config,
+                linter_version=__version__,
+            )
+            manifest = Manifest.from_dict(manifest_dict)
     except DynamicAllError as e:
         print(f"INDETERMINATE: {e}", file=sys.stderr)
         return 2
     except (ModuleCanonicalizationError, CasmSchemaError) as e:
         print(f"{e.code}: {e}", file=sys.stderr)
         return 1
-
-    manifest = Manifest.from_dict(manifest_dict)
 
     try:
         from furqan_lint.gate11.signing import sign_manifest
