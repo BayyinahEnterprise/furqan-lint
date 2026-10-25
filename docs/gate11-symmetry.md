@@ -36,6 +36,8 @@ The parity table:
 | CLI dispatch by manifest-declared language | v0.12.0+ | v0.12.0+ | v0.12.0+ | v0.13.0+ |
 | Opset-policy-mismatch (CASM-V-070) | N/A | N/A | N/A | v0.13.0+ |
 | Dim-param-violation (CASM-V-071) | N/A | N/A | N/A | v0.13.0+ |
+| Manifest builder in the module's language (`manifest init` / `update`) | v0.10.0+ | init v0.11.0+; update v1.0.1+ | v1.0.1+ (before: fell through to the Python builder) | not wired in the CLI |
+| Verify step 8 live surface extraction in the manifest's language | v0.10.0+ | v1.0.1+ (before: Python extractor, SyntaxError) | v1.0.1+ (before: Python extractor, SyntaxError) | not wired in the CLI |
 | Self-attestation (verify-self subcommand; CASM-V-072) | v1.0+ | N/A (no Rust source shipped) | DEFERRED (goast Go binary reproducible-build pending; v1.x candidate) | N/A (no ONNX models shipped) |
 
 The dispatch surface symmetry was closed at v0.12.0
@@ -52,6 +54,18 @@ for ONNX (`_verify_onnx`), closing the canonical mushaf chain
 at the CLI surface. Phase G11.4 Tasdiq al-Bayan operates
 against this four-entry surface as a drift-detection
 invariant rather than adding entries.
+
+The two builder / step-8 rows record a v1.0.1 correction: the
+"CLI dispatch by manifest-declared language" row was true for the
+verify handler, but `manifest init` (Go), `manifest update` (Rust,
+Go) and verify step 8 (Rust, Go) still used the Python pipeline, so
+the `gate11-rust-smoke-test` and `gate11-go-smoke-test` CI jobs had
+been red on `main`. Go public surface is partly presence-only: exported
+top-level functions carry a signature fingerprint (CASM-V-051 on
+change); types, constants, variables and receiver-qualified methods
+are fingerprinted by name and kind only, so their removal is CASM-V-050
+but a change to their definition is not detected. Pinned by
+`tests/test_gate11_language_routing.py`.
 
 ONNX-specific asymmetries (last two rows + the type-shape /
 graph-shape distinction at signature canonicalization) are

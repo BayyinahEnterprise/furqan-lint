@@ -404,7 +404,7 @@ class Verifier:
     # Step 8
     def step8_compare_public_surface(self, manifest: Manifest, module_path: Path) -> None:
         try:
-            current_entries = extract_public_surface(module_path)
+            current_entries = _extract_surface_for(manifest, module_path)
         except DynamicAllError as e:
             raise CasmIndeterminateError(
                 f"public surface is INDETERMINATE because __all__ is " f"dynamic: {e}"
@@ -531,6 +531,36 @@ class Verifier:
 # ---------------------------------------------------------------
 #
 # Module-level ``verify(manifest, args)`` function with a private
+def _extract_surface_for(manifest: Manifest, module_path: Path) -> list[dict[str, Any]]:
+    """Live public-surface extraction in the manifest's own language.
+
+    v1.0.1: step 8 used the Python extractor for every language, so a
+    Rust or Go bundle failed verification with a Python SyntaxError on
+    otherwise valid source (the ``gate11-rust-smoke-test`` and
+    ``gate11-go-smoke-test`` CI jobs). The extractor now follows
+    ``module_identity.language``, the same field that already routes
+    the language-specific verifier facade.
+    """
+    language = manifest.module_identity.get("language")
+    if language == "rust":
+        from furqan_lint.gate11.rust_surface_extraction import (
+            DynamicRustSurfaceError,
+            extract_public_surface_rust,
+        )
+
+        try:
+            return list(extract_public_surface_rust(module_path))
+        except DynamicRustSurfaceError as e:
+            raise CasmIndeterminateError(
+                f"public surface is INDETERMINATE because of a glob re-export: {e}"
+            ) from e
+    if language == "go":
+        from furqan_lint.gate11.go_verification import extract_public_surface_go
+
+        return list(extract_public_surface_go(module_path))
+    return extract_public_surface(module_path)
+
+
 # ``_LANGUAGE_DISPATCH`` table dispatching to per-language facades
 # in ``python_verification.py`` and ``rust_verification.py``. This
 # is purely additive: existing callers using
