@@ -30,9 +30,7 @@ def _bundle(tmp_path: Path, filename: str) -> Path:
     return path
 
 
-def _mock_verifier(
-    monkeypatch: pytest.MonkeyPatch, recorded_path: str
-) -> list[Any]:
+def _mock_verifier(monkeypatch: pytest.MonkeyPatch, recorded_path: str) -> list[Any]:
     calls: list[Any] = []
     manifest = SimpleNamespace(module_identity={"module_path": recorded_path})
     monkeypatch.setattr(
@@ -63,9 +61,7 @@ def test_gate11_bundle_resolves_exact_source_extension(
     assert calls[0].module_path == source
 
 
-def test_gate11_relative_path_does_not_depend_on_cwd(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_gate11_relative_path_does_not_depend_on_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     project = tmp_path / "project"
     project.mkdir()
     source = project / "module.py"
@@ -88,9 +84,7 @@ def test_gate11_orphaned_bundle_fails_closed(
     assert "GATE11-FAIL" in capsys.readouterr().err
 
 
-def test_gate11_force_refresh_propagates(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_gate11_force_refresh_propagates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     source = tmp_path / "module.py"
     source.write_text("def f():\n    return 1\n", encoding="utf-8")
     _bundle(tmp_path, "module.py")
