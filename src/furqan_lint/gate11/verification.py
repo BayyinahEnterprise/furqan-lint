@@ -191,6 +191,11 @@ class Verifier:
             ) from e
 
         trust_root_id = self.trust_config.trust_root_id
+        if trust_root_id not in ("public-sigstore", "staging-sigstore"):
+            raise CasmVerificationError(
+                "CASM-V-021",
+                f"unsupported Sigstore trust_root_id: {trust_root_id!r}",
+            )
         try:
             if trust_root_id == "public-sigstore":
                 return TrustedRoot.production()
@@ -296,20 +301,15 @@ class Verifier:
                 f"could not adapt sigstore_bundle into Sigstore Bundle: {e}",
             ) from e
 
-        # H-5 propagation defense: thread the trusted_root through
-        # to the verifier rather than discarding the argument and
-        # rebuilding internally. Where the lower-level constructor
-        # is unavailable, fall back to .production() / .staging()
-        # which at least wire the rekor client correctly.
-        verifier: Any
+        # Never substitute another trust root if the requested one
+        # cannot be used: a fallback would invalidate caller policy.
         try:
             verifier = SgVerifier(_inner=trusted_root)  # type: ignore[call-arg]
-        except Exception:
-            verifier = (
-                SgVerifier.production()
-                if self.trust_config.trust_root_id == "public-sigstore"
-                else SgVerifier.staging()
-            )
+        except Exception as e:
+            raise CasmVerificationError(
+                "CASM-V-021",
+                f"cannot initialize Sigstore verifier with requested trust root: {e}",
+            ) from e
 
         # C-1 propagation defense: build the explicit Identity
         # policy from caller args.
