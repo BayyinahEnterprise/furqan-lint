@@ -15,7 +15,9 @@ from furqan_lint.gate11.verification import (  # noqa: E402
 )
 
 
-def test_unknown_trust_root_is_rejected_without_loading_staging(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unknown_trust_root_is_rejected_without_loading_staging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from sigstore._internal import trust
 
     calls: list[str] = []
@@ -46,9 +48,7 @@ def test_explicit_trust_root_selection(
 ) -> None:
     from sigstore._internal import trust
 
-    monkeypatch.setattr(
-        trust.TrustedRoot, "production", staticmethod(lambda: "production")
-    )
+    monkeypatch.setattr(trust.TrustedRoot, "production", staticmethod(lambda: "production"))
     monkeypatch.setattr(trust.TrustedRoot, "staging", staticmethod(lambda: "staging"))
     assert Verifier(TrustConfig(trust_root_id=root_id)).step4_load_trust_root() == expected
 
