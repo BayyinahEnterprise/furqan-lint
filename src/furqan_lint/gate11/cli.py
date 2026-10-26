@@ -563,7 +563,7 @@ def cmd_check_gate11(directory: Path, opts: dict[str, object]) -> int:
     for bp in bundles:
         if bp.name.endswith(GATE11_BUNDLE_SUFFIX):
             stem = bp.name[: -len(GATE11_BUNDLE_SUFFIX)]
-            module_path = bp.parent / f"{stem}.py"
+            module_path = bp.parent / stem
         else:
             continue
         if not module_path.is_file():
@@ -575,7 +575,8 @@ def cmd_check_gate11(directory: Path, opts: dict[str, object]) -> int:
             except (BundleParseError, KeyError):
                 pass
         if not module_path.is_file():
-            print(f"GATE11-SKIP  {bp}  module not found", file=sys.stderr)
+            print(f"GATE11-FAIL  {bp}  module not found", file=sys.stderr)
+            overall = max(overall, 1)
             continue
         try:
             _manifest = Bundle.read(bp).manifest
@@ -591,7 +592,7 @@ def cmd_check_gate11(directory: Path, opts: dict[str, object]) -> int:
             expected_identity=opts["expected_identity"],
             expected_issuer=opts["expected_issuer"],
             allow_any_identity=bool(opts["allow_any_identity"]),
-            force_refresh=False,
+            force_refresh=bool(opts["force_refresh"]),
         )
         try:
             result = _verification.verify(_manifest, _namespace)
