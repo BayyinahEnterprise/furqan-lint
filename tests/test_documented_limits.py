@@ -293,3 +293,19 @@ def test_guard_escapes_function_boundary_passes_silently() -> None:
     result = _run_check("guard_escapes_function_boundary.py")
     assert result.returncode == 0
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# R3 completion analysis is conservative (v1.0.2)
+# ---------------------------------------------------------------------------
+
+
+def test_r3_conservative_completion_still_fires() -> None:
+    """``with contextlib.suppress(ValueError): sys.exit()`` and a
+    ``while True`` whose only ``break`` is in a nested loop never
+    return normally, but R3 does not prove it and still reports both.
+    Documented in README "Remaining limitations"."""
+    result = _run_check("r3_conservative_completion.py")
+    assert result.returncode == 1
+    assert "suppress_does_not_catch_exit" in result.stdout
+    assert "inner_break_only" in result.stdout

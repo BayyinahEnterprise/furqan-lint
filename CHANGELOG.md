@@ -83,9 +83,56 @@ runs furqan-lint over its own `src/` and fails on any S1 finding other
 than the documented one, so the self-check claim cannot drift from the
 code again (it fails on v1.0.1).
 
+### Added: the side-street map as a test gate
+
+`bench/sidestreets/` enumerates every function body up to N statements
+from a grammar of Python control flow, executes each on every decision
+path (a counterfactual rerun separates a None from the Optional
+producer from a literal None), and compares the truth with
+furqan-lint's D24 / D11 verdicts. Its horizon is declared in
+`bench/sidestreets/README.md`; programs that hit a bound count as
+truncated, never as agreeing.
+
+Evidence that it sees: on D11 up to 4 statements (17,053 programs) it
+reports 1,768 false negatives for the first v1.0.1 cut (`83ec189`), 32
+for `df7f99d` (the class the external audit reported as F-01) and 0 from
+`f7c7282` on; at 5 statements (423,099 programs) it reports 2 for
+`f7c7282`, the leak the first independent review round found by hand,
+and 0 for the release.
+
+`tests/test_side_street_map.py` holds the release to it: D11 has zero
+false negatives (size 3 in every run; size 4 in the CI `test-full` job,
+enabled by `FURQAN_LINT_SIDE_STREET_MAP=1`), every D24 false negative at
+size 4 is the documented `contextlib.suppress` limit, and a self-test
+shows the map reports leaks when the linter is made blind.
+
+### Fixed: R3 reported functions that cannot fall through
+
+R3 (zero-return) recognised only two non-returning shapes: every path
+ends in `raise`, or the body is exactly one `while True:` without
+`break`. The side-street map found it reporting 564 functions up to
+four statements that never fall through, such as bodies ending in
+`sys.exit()`, statements before an infinite loop, a `finally` that
+exits, and branches that raise on one side and exit on the other. R3
+now uses a small completion analysis: it stays silent only when every
+path raises, calls a recognised exit (`sys.exit` / `os._exit` /
+`os.abort`, the same recognition as D24), or loops in `while True`
+without `break`. `with`, `for`, `match` and `except` handlers that
+might catch are treated as able to complete, so R3 keeps reporting
+them; that conservatism is the documented limit
+`r3_conservative_completion`.
+
+On the map at size 4: R3 over-reports 564 to 222, false negatives
+unchanged (only the documented `contextlib.suppress` shapes). The map
+gate now carries a ratchet: R3 over-reports at size 4 may not rise above
+222. Clean fixture `r3_never_completing_bodies` fails on v1.0.1.
+`zero_return.py` is in `PINNED_CHECKER_SOURCES_SELF`, so the
+self-manifest hash for v1.0.2 differs from v1.0.1's (computed at
+release time).
+
 ### Tests
 
-Test count: 762 (v1.0.1) -> 774 (v1.0.2). Net delta: +12.
+Test count: 762 (v1.0.1) -> 780 (v1.0.2). Net delta: +18.
 
 - `tests/test_gate11_verify_self_real_release.py`: +10 (new; published
   asset hashes, exact bytes and default identity, identity override,
@@ -98,6 +145,11 @@ Test count: 762 (v1.0.1) -> 774 (v1.0.2). Net delta: +12.
   exits 1 with a message).
 - `tests/test_gate11_verify_self_subcommand.py`: one test amended in
   place (Naskh), no count change.
+- `tests/test_checks.py`: +1 (R3 never-completing bodies stay silent).
+- `tests/test_documented_limits.py`: +1 (`r3_conservative_completion`).
+- `tests/test_side_street_map.py`: +4 (new; D11 size 3 and size 4 with
+  zero false negatives, D24 size 4 misses all documented, blind-linter
+  self-test).
 
 ---
 

@@ -94,6 +94,7 @@ _README_TOPIC_KEYWORDS: dict[str, tuple[str, ...] | None] = {
     "none_procedure_returning_value": ("carries no value contract",),
     "comparison_assumed_bool": ("Comparisons are assumed to be bool",),
     "guard_escapes_function_boundary": ("Checks stop at function boundaries",),
+    "r3_conservative_completion": ("R3 completion is conservative",),
 }
 
 

@@ -47,6 +47,7 @@ from dataclasses import dataclass
 
 from furqan_lint.adapter import (
     _is_all_none_union,
+    _is_exit_call,
     _is_generator,
     _is_optional,
     _is_pipe_union_with_none,
@@ -317,53 +318,51 @@ def _build_decorator_alias_map(tree: ast.Module) -> dict[str, str]:
 
 
 def _body_is_non_returning(body: list[ast.stmt]) -> bool:
-    """True iff the body is provably non-returning.
+    """True iff the body provably cannot finish normally.
 
-    Two recognized shapes:
-    1. Every statement on every path is or ends in ``Raise``. The
-       most common form is a body that consists of nothing but a
-       single ``Raise`` statement. Conservative: branching bodies
-       where every branch ends in ``Raise`` are also recognized.
-    2. The body is exactly one ``while True:`` (or ``while 1:`` is
-       NOT recognized in v0.6.0; canonical form only) with no
-       ``break`` reachable from the loop body.
+    v1.0.2: replaces the two hard-coded v0.6.0 shapes (all paths end in
+    ``raise``; the body is exactly one ``while True:`` without
+    ``break``) with a small completion analysis, ``_can_complete``. The
+    side-street map (``bench/sidestreets``) showed R3 reporting 564
+    functions up to four statements that never fall through: bodies
+    ending in ``sys.exit()``, an infinite ``while True`` after other
+    statements, ``try`` / ``finally`` whose ``finally`` exits, and
+    branches that raise on one side and exit on the other.
 
-    Conservative: any other shape is treated as potentially returning.
-    Non-canonical infinite loops, raises hidden inside ``try/except``
-    that swallows them, etc. are NOT recognized. False positives
-    here are bug reports.
+    Sound in the direction that matters: it answers "cannot complete"
+    only when every path raises, calls a recognised exit
+    (``sys.exit`` / ``os._exit`` / ``os.abort``, the same syntactic
+    recognition as D24, with the same documented limits), or loops in
+    ``while True`` with no ``break``. ``with`` (a context manager may
+    suppress), ``for``, ``match``, and ``try`` handlers that might
+    catch are treated as able to complete, so R3 keeps reporting
+    those.
     """
-    if not body:
+    return bool(body) and not _can_complete(body)
+
+
+def _can_complete(stmts: list[ast.stmt]) -> bool:
+    """Can executing ``stmts`` in order reach the end of the block?"""
+    return all(_stmt_can_complete(s) for s in stmts)
+
+
+def _stmt_can_complete(s: ast.stmt) -> bool:
+    if isinstance(s, ast.Raise | ast.Return | ast.Break | ast.Continue) or _is_exit_call(s):
         return False
-
-    # Shape 1: all-raise terminal-statement check.
-    if _all_paths_terminate_in_raise(body):
+    if isinstance(s, ast.If):
+        return _can_complete(s.body) or _can_complete(s.orelse)
+    if isinstance(s, ast.While):
+        if _is_constant_true(s.test):
+            return _contains_break(s.body)
         return True
-
-    # Shape 2: body is exactly one canonical `while True:` with no break.
-    return (
-        len(body) == 1
-        and isinstance(body[0], ast.While)
-        and _is_constant_true(body[0].test)
-        and not _contains_break(body[0].body)
-    )
-
-
-def _all_paths_terminate_in_raise(body: list[ast.stmt]) -> bool:
-    """True iff the body's last statement is ``Raise``, or is an
-    ``If`` whose body and else_body both terminate in ``Raise``
-    recursively. Conservative.
-    """
-    if not body:
-        return False
-    last = body[-1]
-    if isinstance(last, ast.Raise):
-        return True
-    if isinstance(last, ast.If):
-        return _all_paths_terminate_in_raise(last.body) and _all_paths_terminate_in_raise(
-            last.orelse
-        )
-    return False
+    if isinstance(s, ast.Try) or (hasattr(ast, "TryStar") and isinstance(s, ast.TryStar)):
+        if s.finalbody and not _can_complete(s.finalbody):
+            return False
+        body_done = _can_complete(s.body) and _can_complete(s.orelse)
+        if body_done or not s.handlers:
+            return body_done
+        return True  # a handler may catch what the body raises
+    return True  # with, for, match, assignments, expressions, ...
 
 
 def _is_constant_true(node: ast.expr) -> bool:
