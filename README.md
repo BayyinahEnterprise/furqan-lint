@@ -41,10 +41,10 @@ pip install "furqan-lint[rust,go,onnx-runtime,onnx-profile,gate11]"  # all adapt
 ### Install from a specific commit or tag
 
 ```bash
-pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v1.0.1"
+pip install "git+https://github.com/BayyinahEnterprise/furqan-lint.git@v1.0.2"
 ```
 
-Replace `v1.0.1` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
+Replace `v1.0.2` with any tag from the [release history](https://github.com/BayyinahEnterprise/furqan-lint/releases) or `main` for the development tip.
 
 ### Furqan dependency
 
@@ -288,10 +288,11 @@ furqan-lint manifest verify-self \
 Signed self-manifests publish as GitHub Release assets at
 `https://github.com/BayyinahEnterprise/furqan-lint/releases/download/v${VERSION}/self_manifest.json`
 (+ corresponding `.bundle`). The `verify-self` subcommand
-derives the URL from the installed package version and
-dispatches verification through the function-local
-`_LANGUAGE_DISPATCH` -> `_verify_python` path per
-al-Mursalat T04 + an-Naziat F-NA-3 substrate-actual.
+derives the URL from the installed package version, verifies the
+Sigstore signature over the published JSON bytes (identity defaults
+to the release workflow at that version's tag), then compares the
+attested `checker_set_hash` with the installed package. See
+`docs/gate11-self-attestation.md`.
 
 CASM-V-072 (self-attestation-failure) surfaces on three
 sub-conditions: (a) manifest-not-found; (b) checker-set-
@@ -545,7 +546,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: BayyinahEnterprise/furqan-lint@v1.0.1
+      - uses: BayyinahEnterprise/furqan-lint@v1.0.2
         with:
           path: src/
 ```
@@ -565,7 +566,7 @@ Python files:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v1.0.1
+    rev: v1.0.2
     hooks:
       - id: furqan-lint
 ```
@@ -600,7 +601,7 @@ repos:
       - id: mypy
 
   - repo: https://github.com/BayyinahEnterprise/furqan-lint
-    rev: v1.0.1
+    rev: v1.0.2
     hooks:
       - id: furqan-lint
 ```
