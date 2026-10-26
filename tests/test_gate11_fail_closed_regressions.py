@@ -50,7 +50,7 @@ def _mock_verifier(monkeypatch: pytest.MonkeyPatch, recorded_path: str) -> list[
 
 @pytest.mark.parametrize("extension", ["py", "rs", "go", "onnx"])
 def test_gate11_bundle_resolves_exact_source_extension(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extension: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extension: str,
 ) -> None:
     filename = f"module.{extension}"
     source = tmp_path / filename
@@ -63,7 +63,7 @@ def test_gate11_bundle_resolves_exact_source_extension(
 
 
 def test_gate11_relative_path_does_not_depend_on_cwd(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = tmp_path / "project"
     project.mkdir()
@@ -78,7 +78,7 @@ def test_gate11_relative_path_does_not_depend_on_cwd(
 
 
 def test_gate11_orphaned_bundle_fails_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
     _bundle(tmp_path, "missing.py")
     calls = _mock_verifier(monkeypatch, "also-missing.py")
@@ -88,7 +88,7 @@ def test_gate11_orphaned_bundle_fails_closed(
 
 
 def test_gate11_force_refresh_propagates(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = tmp_path / "module.py"
     source.write_text("def f():\n    return 1\n", encoding="utf-8")
