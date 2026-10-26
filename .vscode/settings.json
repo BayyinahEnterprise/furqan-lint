@@ -1,0 +1,69 @@
+{
+  "workbench.colorCustomizations": {
+    "editor.background": "#0A0A0F",
+    "editor.foreground": "#EAECF0",
+    "editorLineNumber.foreground": "#818898",
+    "editorCursor.foreground": "#FBAD60",
+    "editor.selectionBackground": "#2C513B88",
+    "terminal.ansiGreen": "#9BE963",
+    "terminal.ansiBrightGreen": "#9BE963",
+    "terminal.ansiYellow": "#FBAD60",
+    "terminal.ansiBrightYellow": "#FBAD60"
+  },
+  "editor.tokenColorCustomizations": {
+    "comments": "#818898",
+    "strings": "#5EEDED",
+    "numbers": "#FBAD60",
+    "keywords": "#CC7BF4",
+    "functions": "#70B8FF",
+    "types": "#9BE963",
+    "variables": "#9BE963",
+    "textMateRules": [
+      {
+        "scope": [
+          "variable.other.constant",
+          "constant.language",
+          "variable.other.enummember",
+          "entity.other.attribute-name",
+          "meta.object-literal.key"
+        ],
+        "settings": {
+          "foreground": "#FBAD60"
+        }
+      },
+      {
+        "scope": [
+          "entity.name.function",
+          "support.function"
+        ],
+        "settings": {
+          "foreground": "#70B8FF"
+        }
+      },
+      {
+        "scope": [
+          "entity.name.type",
+          "entity.name.class",
+          "variable.other.readwrite"
+        ],
+        "settings": {
+          "foreground": "#9BE963"
+        }
+      }
+    ]
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "enabled": true,
+    "rules": {
+      "variable": "#9BE963",
+      "parameter": "#9BE963",
+      "property": "#FBAD60",
+      "function": "#70B8FF",
+      "method": "#70B8FF",
+      "class": "#9BE963",
+      "enum": "#9BE963",
+      "enumMember": "#FBAD60",
+      "decorator": "#F47B85"
+    }
+  }
+}
