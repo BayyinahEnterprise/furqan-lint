@@ -1,4 +1,5 @@
 """Gate 11 fail-closed regression cases, using isolated mocked signature verification."""
+
 from __future__ import annotations
 
 from pathlib import Path
